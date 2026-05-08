@@ -1,0 +1,18 @@
+telegram:
+  api_id: YOUR_API_ID
+  api_hash: YOUR_API_HASH
+  session_file: ~/.config/tele/session.json
+
+ui:
+  date_format: "15:04"
+  history_limit: 50
+  theme: default
+
+keybindings:
+  chatlist:
+    open: enter
+    search: /
+  chat:
+    reply: r
+    edit: e
+    delete: d

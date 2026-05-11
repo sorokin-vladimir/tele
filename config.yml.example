@@ -1,7 +1,7 @@
 telegram:
   api_id: YOUR_API_ID
   api_hash: YOUR_API_HASH
-  session_file: ~/.config/tele/session.yaml
+  session_file: ~/.config/tele/session.yml
 
 ui:
   date_format: "15:04"

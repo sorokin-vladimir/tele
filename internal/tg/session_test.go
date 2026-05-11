@@ -13,7 +13,7 @@ import (
 
 func TestFileSession_StoreLoad(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "session.yaml")
+	path := filepath.Join(dir, "session.yml")
 
 	s := internaltg.NewFileSession(path)
 	ctx := context.Background()
@@ -27,7 +27,7 @@ func TestFileSession_StoreLoad(t *testing.T) {
 }
 
 func TestFileSession_LoadMissing(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "tele_nonexistent_test_session.yaml")
+	path := filepath.Join(os.TempDir(), "tele_nonexistent_test_session.yml")
 	os.Remove(path)
 
 	s := internaltg.NewFileSession(path)
@@ -38,7 +38,7 @@ func TestFileSession_LoadMissing(t *testing.T) {
 }
 
 func TestFileSession_TildeExpansion(t *testing.T) {
-	s := internaltg.NewFileSession("~/some/session.yaml")
+	s := internaltg.NewFileSession("~/some/session.yml")
 	// Just verify it doesn't panic and the path is expanded
 	assert.NotNil(t, s)
 }

@@ -6,5 +6,4 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ui.date_format", "15:04")
 	v.SetDefault("ui.history_limit", 50)
 	v.SetDefault("ui.theme", "default")
-	v.SetDefault("telegram.session_file", "~/.config/tele/session.yaml")
 }

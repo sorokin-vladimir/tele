@@ -1,6 +1,10 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"path/filepath"
+
+	"github.com/spf13/viper"
+)
 
 type TelegramConfig struct {
 	APIID       int    `mapstructure:"api_id"`
@@ -29,6 +33,9 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+	if cfg.Telegram.SessionFile == "" {
+		cfg.Telegram.SessionFile = filepath.Join(filepath.Dir(path), "session.yml")
 	}
 	return &cfg, nil
 }

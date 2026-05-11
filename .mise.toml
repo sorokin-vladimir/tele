@@ -2,8 +2,8 @@
 go = "1.26.0"
 
 [tasks.dev]
-description = "Run tele (requires config.yaml)"
-run = "go run ./cmd/tele/"
+description = "Run tele (dev config: .config/tele/config.yml)"
+run = "go run ./cmd/tele/ -config .config/tele/config.yml"
 
 [tasks.build]
 description = "Build binary"

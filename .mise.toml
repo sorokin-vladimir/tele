@@ -1,0 +1,34 @@
+[tools]
+go = "1.26.0"
+
+[tasks.dev]
+description = "Run tele (requires config.yaml)"
+run = "go run ./cmd/tele/"
+
+[tasks.build]
+description = "Build binary"
+run = "go build -o ./bin/tele ./cmd/tele/"
+
+[tasks.test]
+description = "Run all tests"
+run = "go test ./..."
+
+[tasks.test-v]
+description = "Run all tests verbose"
+run = "go test -v ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.check]
+description = "Full check: vet + lint + test"
+run = ["go vet ./...", "golangci-lint run ./...", "go test ./..."]
+
+[tasks.tidy]
+description = "Tidy go modules"
+run = "go mod tidy"

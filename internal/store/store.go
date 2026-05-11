@@ -1,0 +1,10 @@
+package store
+
+type Store interface {
+	GetChat(id int64) (Chat, bool)
+	SetChat(chat Chat)
+	Chats() []Chat
+	Messages(chatID int64) []Message
+	SetMessages(chatID int64, msgs []Message)
+	AppendMessage(msg Message)
+}

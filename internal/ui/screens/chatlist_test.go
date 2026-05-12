@@ -20,6 +20,7 @@ func makeTestChats() []store.Chat {
 
 func TestChatList_View_ShowsChats(t *testing.T) {
 	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
 	m.SetChats(makeTestChats())
 	view := m.View()
 	assert.Contains(t, view, "Alice")

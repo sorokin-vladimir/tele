@@ -76,9 +76,9 @@ func (ml *MessageList) View() string {
 		ts := timeStyle.Render(msg.Date.Format("15:04"))
 		text := fmt.Sprintf("%s %s", ts, msg.Text)
 		if msg.IsOut {
-			lines = append(lines, outMsgStyle.Width(ml.viewWidth).Render(text))
+			lines = append(lines, outMsgStyle.Inline(true).Width(ml.viewWidth).MaxWidth(ml.viewWidth).Render(text))
 		} else {
-			lines = append(lines, inMsgStyle.Width(ml.viewWidth).Render(text))
+			lines = append(lines, inMsgStyle.Inline(true).Width(ml.viewWidth).MaxWidth(ml.viewWidth).Render(text))
 		}
 	}
 	for len(lines) < ml.viewHeight {

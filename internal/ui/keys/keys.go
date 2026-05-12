@@ -11,8 +11,9 @@ const (
 )
 
 const (
-	ActionSwitchFocus Action = "switch_focus"
-	ActionQuit        Action = "quit"
+	ActionFocusLeft  Action = "focus_left"
+	ActionFocusRight Action = "focus_right"
+	ActionQuit       Action = "quit"
 )
 
 // ActionMsg wraps an Action as a bubbletea message.
@@ -24,7 +25,8 @@ type KeyMap map[Context]map[string]Action
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		ContextGlobal: {
-			"tab":    ActionSwitchFocus,
+			"ctrl+h": ActionFocusLeft,
+			"ctrl+l": ActionFocusRight,
 			"ctrl+c": ActionQuit,
 			"ctrl+q": ActionQuit,
 		},

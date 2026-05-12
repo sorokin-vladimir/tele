@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/gotd/td/tg"
+	"go.uber.org/zap"
+
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -17,6 +19,7 @@ func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
 		return nil, fmt.Errorf("not connected")
 	}
 
+	c.log.Debug("GetDialogs start")
 	var chats []store.Chat
 	err := WithRetry(ctx, func() error {
 		result, err := api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
@@ -26,9 +29,11 @@ func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
 			OffsetPeer: &tg.InputPeerEmpty{},
 		})
 		if err != nil {
+			c.log.Error("MessagesGetDialogs failed", zap.Error(err))
 			return err
 		}
 		chats = c.parseDialogs(result)
+		c.log.Debug("GetDialogs done", zap.Int("count", len(chats)))
 		return nil
 	})
 	return chats, err

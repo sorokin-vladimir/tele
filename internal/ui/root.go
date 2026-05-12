@@ -28,32 +28,45 @@ const (
 	FocusChat
 )
 
-type RootModel struct {
-	screen    Screen
-	focus     Focus
-	width     int
-	height    int
-	chatList  *screens.ChatListModel
-	chat      *screens.ChatModel
-	login     screens.LoginModel
-	statusBar *components.StatusBar
-	vimState  *keys.VimState
-	keyMap    keys.KeyMap
-	tgClient  internaltg.Client
-	st        store.Store
+// borderSize is the number of characters each border side adds (1 per side = 2 total per axis).
+const borderSize = 1
+
+type chatHistoryMsg struct {
+	chatID   int64
+	messages []store.Message
 }
 
-func NewRootModel(client internaltg.Client, st store.Store) RootModel {
+type RootModel struct {
+	screen        Screen
+	focus         Focus
+	width         int
+	height        int
+	chatList      *screens.ChatListModel
+	chat          *screens.ChatModel
+	login         screens.LoginModel
+	statusBar     *components.StatusBar
+	vimState      *keys.VimState
+	keyMap        keys.KeyMap
+	tgClient      internaltg.Client
+	st            store.Store
+	currentChatID int64
+	historyLimit  int
+	verbose       bool
+}
+
+func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
 	return RootModel{
-		screen:    ScreenLogin,
-		focus:     FocusChatList,
-		chatList:  screens.NewChatListModel(),
-		chat:      screens.NewChatModel(80, 24),
-		statusBar: components.NewStatusBar(80),
-		vimState:  keys.NewVimState(),
-		keyMap:    keys.DefaultKeyMap(),
-		tgClient:  client,
-		st:        st,
+		screen:       ScreenLogin,
+		focus:        FocusChatList,
+		chatList:     screens.NewChatListModel(),
+		chat:         screens.NewChatModel(80, 24),
+		statusBar:    components.NewStatusBar(80),
+		vimState:     keys.NewVimState(),
+		keyMap:       keys.DefaultKeyMap(),
+		tgClient:     client,
+		st:           st,
+		historyLimit: historyLimit,
+		verbose:      verbose,
 	}
 }
 
@@ -66,12 +79,21 @@ func (m RootModel) WithScreen(s Screen) RootModel {
 	return m
 }
 
+func (m RootModel) WithFocus(f Focus) RootModel {
+	m.focus = f
+	return m
+}
+
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
 func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
 	m.login = lm
 }
 
-func (m RootModel) Init() tea.Cmd { return nil }
+func (m RootModel) Init() tea.Cmd {
+	m.statusBar.SetVerbose(m.verbose)
+	m.statusBar.SetActivePane("chatlist")
+	return nil
+}
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -80,18 +102,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.statusBar.SetWidth(msg.Width)
 		leftW, rightW := layout.SplitHorizontal(msg.Width, msg.Height, 0.30)
-		m.chatList.SetSize(leftW, msg.Height-1)
-		m.chat.SetSize(rightW, msg.Height-1)
+		paneH := msg.Height - 1
+		m.chatList.SetSize(leftW-2*borderSize, paneH-2*borderSize)
+		m.chat.SetSize(rightW-2*borderSize, paneH-2*borderSize)
 		return m, nil
 
 	case screens.TransitionToMainMsg:
 		m.screen = ScreenMain
+		m.statusBar.SetVerbose(m.verbose)
+		m.statusBar.SetActivePane("chatlist")
 		if m.st != nil {
 			m.chatList.SetChats(m.st.Chats())
 		}
 		return m, nil
 
 	case screens.OpenChatMsg:
+		m.currentChatID = msg.Chat.ID
 		m.chat.SetChat(&msg.Chat)
 		if m.st != nil {
 			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
@@ -99,14 +125,35 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = FocusChat
 		m.chatList.SetFocused(false)
 		m.chat.SetFocused(true)
+		if m.tgClient != nil {
+			client := m.tgClient
+			peer := msg.Chat.Peer
+			chatID := msg.Chat.ID
+			limit := m.historyLimit
+			return m, func() tea.Msg {
+				msgs, err := client.GetHistory(context.Background(), peer, limit)
+				if err != nil {
+					return nil
+				}
+				return chatHistoryMsg{chatID: chatID, messages: msgs}
+			}
+		}
+		return m, nil
+
+	case chatHistoryMsg:
+		if m.st != nil {
+			m.st.SetMessages(msg.chatID, msg.messages)
+			if msg.chatID == m.currentChatID {
+				m.chat.SetMessages(m.st.Messages(msg.chatID))
+			}
+		}
 		return m, nil
 
 	case store.Event:
 		if msg.Kind == store.EventNewMessage && m.st != nil {
 			m.st.AppendMessage(msg.Message)
-			// refresh messages for the active chat if it matches
-			if m.chat != nil {
-				// will be refreshed on next OpenChatMsg; Phase 2 adds live refresh
+			if msg.Message.ChatID == m.currentChatID {
+				m.chat.SetMessages(m.st.Messages(m.currentChatID))
 			}
 		}
 		return m, nil
@@ -144,25 +191,32 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m RootModel) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
+	if m.verbose {
+		m.statusBar.SetLastKey(keyStr)
+	}
 
-	// Global bindings checked first
+	// Global bindings always take priority
 	switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
-	case keys.ActionSwitchFocus:
-		if m.focus == FocusChatList {
-			m.focus = FocusChat
-			m.chatList.SetFocused(false)
-			m.chat.SetFocused(true)
-		} else {
-			m.focus = FocusChatList
-			m.chatList.SetFocused(true)
-			m.chat.SetFocused(false)
-		}
-		return m, nil
+	case keys.ActionFocusLeft:
+		return m.focusPane(FocusChatList)
+	case keys.ActionFocusRight:
+		return m.focusPane(FocusChat)
 	case keys.ActionQuit:
 		return m, tea.Quit
 	}
 
-	// Vim processing
+	if m.focus == FocusChatList {
+		// Chatlist uses keymap directly, no vim state machine
+		action := m.keyMap.Resolve(keys.ContextChatList, keyStr)
+		if action != keys.ActionNone {
+			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
+			m.chatList = newPane.(*screens.ChatListModel)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	// Chat pane: route through vim state machine
 	action := m.vimState.Process(keyStr)
 	m.statusBar.SetMode(m.vimState.Mode)
 
@@ -173,17 +227,42 @@ func (m RootModel) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if action != keys.ActionNone {
-		actionMsg := keys.ActionMsg{Action: action}
-		if m.focus == FocusChatList {
-			newPane, cmd := m.chatList.Update(actionMsg)
-			m.chatList = newPane.(*screens.ChatListModel)
-			return m, cmd
-		}
-		newPane, cmd := m.chat.Update(actionMsg)
+		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
 		m.chat = newPane.(*screens.ChatModel)
 		return m, cmd
 	}
 
+	return m, nil
+}
+
+func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
+	if target == m.focus {
+		return m, nil
+	}
+	// Exit insert mode when leaving chat
+	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
+		m.vimState.Mode = keys.ModeNormal
+		m.statusBar.SetMode(keys.ModeNormal)
+		newPane, _ := m.chat.Update(keys.ActionMsg{Action: keys.ActionNormal})
+		m.chat = newPane.(*screens.ChatModel)
+	}
+	if target == FocusChat {
+		// Open the currently highlighted chat (triggers history load + focus switch)
+		if chat, ok := m.chatList.SelectedChat(); ok {
+			return m, func() tea.Msg { return screens.OpenChatMsg{Chat: chat} }
+		}
+		// No chats loaded yet — just switch focus
+	}
+	m.focus = target
+	m.chatList.SetFocused(target == FocusChatList)
+	m.chat.SetFocused(target == FocusChat)
+	if m.verbose {
+		if target == FocusChatList {
+			m.statusBar.SetActivePane("chatlist")
+		} else {
+			m.statusBar.SetActivePane("chat")
+		}
+	}
 	return m, nil
 }
 
@@ -192,9 +271,29 @@ func (m RootModel) View() string {
 		return m.login.View()
 	}
 
-	leftW, _ := layout.SplitHorizontal(m.width, m.height, 0.30)
-	chatListView := lipgloss.NewStyle().Width(leftW).Height(m.height - 1).Render(m.chatList.View())
-	chatView := m.chat.View()
+	leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
+	paneH := m.height - 1
+	innerH := paneH - 2*borderSize
+
+	activeBorder := lipgloss.DoubleBorder()
+	inactiveBorder := lipgloss.NormalBorder()
+
+	chatListBorder, chatBorder := inactiveBorder, inactiveBorder
+	if m.focus == FocusChatList {
+		chatListBorder = activeBorder
+	} else {
+		chatBorder = activeBorder
+	}
+
+	chatListView := lipgloss.NewStyle().
+		Width(leftW - 2*borderSize).Height(innerH).
+		Border(chatListBorder).
+		Render(m.chatList.View())
+
+	chatView := lipgloss.NewStyle().
+		Width(rightW - 2*borderSize).Height(innerH).
+		Border(chatBorder).
+		Render(m.chat.View())
 
 	main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
 	return main + "\n" + m.statusBar.View()

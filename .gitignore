@@ -1,0 +1,8 @@
+# AI tools
+.claude/
+TODO.md
+
+# App config
+.env
+.config/
+*.log

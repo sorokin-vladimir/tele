@@ -23,6 +23,7 @@ var (
 
 func main() {
 	cfgPath := flag.String("config", "~/.config/tele/config.yml", "path to config file")
+	verbose := flag.Bool("v", false, "debug logging")
 	flag.Parse()
 
 	expanded := expandTilde(*cfgPath)
@@ -55,6 +56,9 @@ func main() {
 
 	logCfg := zap.NewProductionConfig()
 	logCfg.OutputPaths = []string{"tele.log"}
+	if *verbose {
+		logCfg.Level.SetLevel(zap.DebugLevel)
+	}
 	log, err := logCfg.Build()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
@@ -62,7 +66,7 @@ func main() {
 	}
 	defer log.Sync() //nolint:errcheck
 
-	a := app.New(cfg, log)
+	a := app.New(cfg, log, *verbose)
 	if err := a.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

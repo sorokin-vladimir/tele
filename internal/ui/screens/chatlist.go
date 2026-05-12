@@ -1,7 +1,6 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,6 +31,13 @@ func NewChatListModel() *ChatListModel {
 
 func (m *ChatListModel) SetChats(chats []store.Chat) { m.chats = chats }
 func (m *ChatListModel) Cursor() int                 { return m.cursor }
+
+func (m *ChatListModel) SelectedChat() (store.Chat, bool) {
+	if len(m.chats) == 0 || m.cursor >= len(m.chats) {
+		return store.Chat{}, false
+	}
+	return m.chats[m.cursor], true
+}
 func (m *ChatListModel) Context() keys.Context       { return keys.ContextChatList }
 func (m *ChatListModel) Focused() bool               { return m.focused }
 func (m *ChatListModel) SetFocused(f bool)           { m.focused = f }
@@ -88,19 +94,17 @@ func (m *ChatListModel) View() string {
 		end = len(m.chats)
 	}
 
-	var sb strings.Builder
-	for i := start; i < end; i++ {
-		w := m.width - 2
-		if w < 1 {
-			w = 1
-		}
-		line := fmt.Sprintf(" %-*s", w, m.chats[i].Title)
-		if i == m.cursor {
-			sb.WriteString(selectedChatStyle.Render(line))
-		} else {
-			sb.WriteString(normalChatStyle.Render(line))
-		}
-		sb.WriteString("\n")
+	w := m.width
+	if w < 1 {
+		w = 1
 	}
-	return sb.String()
+	lines := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		if i == m.cursor {
+			lines = append(lines, selectedChatStyle.Inline(true).Width(w).MaxWidth(w).Render(m.chats[i].Title))
+		} else {
+			lines = append(lines, normalChatStyle.Inline(true).Width(w).MaxWidth(w).Render(m.chats[i].Title))
+		}
+	}
+	return strings.Join(lines, "\n")
 }

@@ -21,12 +21,14 @@ type GotdClient struct {
 	api    *tg.Client
 	events chan store.Event
 	peers  map[int64]store.Peer
+	log    *zap.Logger
 }
 
-func NewGotdClient() *GotdClient {
+func NewGotdClient(log *zap.Logger) *GotdClient {
 	return &GotdClient{
 		events: make(chan store.Event, 64),
 		peers:  make(map[int64]store.Peer),
+		log:    log,
 	}
 }
 
@@ -46,19 +48,24 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
 		UpdateHandler:  manager,
 		SessionStorage: sess,
-		Logger:         zap.NewNop(),
+		Logger:         c.log,
 	})
 
+	c.log.Debug("connecting to telegram")
 	return tc.Run(ctx, func(ctx context.Context) error {
+		c.log.Debug("running auth flow")
 		flow := auth.NewFlow(af, auth.SendCodeOptions{})
 		if err := tc.Auth().IfNecessary(ctx, flow); err != nil {
+			c.log.Error("auth failed", zap.Error(err))
 			return err
 		}
 
 		self, err := tc.Self(ctx)
 		if err != nil {
+			c.log.Error("Self() failed", zap.Error(err))
 			return err
 		}
+		c.log.Info("authenticated", zap.Int64("user_id", self.ID), zap.String("username", self.Username))
 
 		c.mu.Lock()
 		c.api = tc.API()
@@ -66,6 +73,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 
 		return manager.Run(ctx, tc.API(), self.ID, updates.AuthOptions{
 			OnStart: func(ctx context.Context) {
+				c.log.Debug("updates manager started, signalling ready")
 				close(readyCh)
 			},
 		})

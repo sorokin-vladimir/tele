@@ -10,28 +10,37 @@ import (
 )
 
 func TestRoot_InitialScreen_Login(t *testing.T) {
-	m := ui.NewRootModel(nil, nil)
+	m := ui.NewRootModel(nil, nil, 50, false)
 	assert.Equal(t, ui.ScreenLogin, m.CurrentScreen())
 }
 
-func TestRoot_Tab_SwitchesFocus(t *testing.T) {
-	m := ui.NewRootModel(nil, nil)
+func TestRoot_CtrlL_FocusesChat(t *testing.T) {
+	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusChat, root.CurrentFocus())
 }
 
+func TestRoot_CtrlH_FocusesChatList(t *testing.T) {
+	m := ui.NewRootModel(nil, nil, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+	m = m.WithFocus(ui.FocusChat)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	root := newM.(ui.RootModel)
+	assert.Equal(t, ui.FocusChatList, root.CurrentFocus())
+}
+
 func TestRoot_TransitionToMain(t *testing.T) {
-	m := ui.NewRootModel(nil, nil)
+	m := ui.NewRootModel(nil, nil, 50, false)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.ScreenMain, root.CurrentScreen())
 }
 
 func TestRoot_CtrlC_Quits(t *testing.T) {
-	m := ui.NewRootModel(nil, nil)
+	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	assert.NotNil(t, cmd)

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+	"go.uber.org/zap"
+
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -19,6 +21,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, limit int)
 		return nil, fmt.Errorf("not connected")
 	}
 
+	c.log.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
 	var msgs []store.Message
 	err := WithRetry(ctx, func() error {
@@ -27,9 +30,11 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, limit int)
 			Limit: limit,
 		})
 		if err != nil {
+			c.log.Error("MessagesGetHistory failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 			return err
 		}
 		msgs = parseHistory(result, peer.ID)
+		c.log.Debug("GetHistory done", zap.Int64("peer_id", peer.ID), zap.Int("count", len(msgs)))
 		return nil
 	})
 	return msgs, err
@@ -43,6 +48,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 		return fmt.Errorf("not connected")
 	}
 
+	c.log.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	inputPeer := peerToInput(peer)
 	return WithRetry(ctx, func() error {
 		var buf [8]byte
@@ -56,6 +62,11 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 			Message:  text,
 			RandomID: randomID,
 		})
+		if err != nil {
+			c.log.Error("MessagesSendMessage failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+		} else {
+			c.log.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID))
+		}
 		return err
 	})
 }

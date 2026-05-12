@@ -1,7 +1,10 @@
 package screens
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -108,6 +111,11 @@ func (m *ChatModel) View() string {
 	if m.chat != nil {
 		title = m.chat.Title
 	}
-	divider := "─────────────────────────────────────────"
-	return title + "\n" + divider + "\n" + m.msgList.View() + "\n" + m.composer.View()
+	w := m.width
+	if w < 1 {
+		w = 1
+	}
+	titleLine := lipgloss.NewStyle().Inline(true).Width(w).MaxWidth(w).Render(title)
+	divider := strings.Repeat("─", w)
+	return titleLine + "\n" + divider + "\n" + m.msgList.View() + "\n" + m.composer.View()
 }

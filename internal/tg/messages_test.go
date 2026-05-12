@@ -35,6 +35,22 @@ func TestConvertMessage_Service(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestParseHistory_ChronologicalOrder(t *testing.T) {
+	// Telegram API returns newest-first; parseHistory must reverse to oldest-first.
+	now := time.Now()
+	raw := &tg.MessagesMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{ID: 3, Message: "newest", Date: int(now.Unix())},
+			&tg.Message{ID: 2, Message: "middle", Date: int(now.Add(-time.Minute).Unix())},
+			&tg.Message{ID: 1, Message: "oldest", Date: int(now.Add(-2 * time.Minute).Unix())},
+		},
+	}
+	msgs := parseHistory(raw, 10)
+	require.Len(t, msgs, 3)
+	assert.Equal(t, 1, msgs[0].ID, "oldest message must be first")
+	assert.Equal(t, 3, msgs[2].ID, "newest message must be last")
+}
+
 func TestParseHistory_RetriesOnFloodWait(t *testing.T) {
 	// parseHistory should gracefully handle empty/unknown result types
 	// and return nil rather than panic.

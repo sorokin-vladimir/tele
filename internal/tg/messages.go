@@ -13,7 +13,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, limit int) ([]store.Message, error) {
+func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error) {
 	c.mu.RLock()
 	api := c.api
 	c.mu.RUnlock()
@@ -21,13 +21,14 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, limit int)
 		return nil, fmt.Errorf("not connected")
 	}
 
-	c.log.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("limit", limit))
+	c.log.Debug("GetHistory", zap.Int64("peer_id", peer.ID), zap.Int("offsetID", offsetID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
 	var msgs []store.Message
 	err := WithRetry(ctx, func() error {
 		result, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer:  inputPeer,
-			Limit: limit,
+			Peer:     inputPeer,
+			Limit:    limit,
+			OffsetID: offsetID,
 		})
 		if err != nil {
 			c.log.Error("MessagesGetHistory failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
@@ -127,5 +128,26 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		Text:     msg.Message,
 		Date:     time.Unix(int64(msg.Date), 0),
 		IsOut:    msg.Out,
+		Entities: convertEntities(msg.Entities),
 	}, true
+}
+
+func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {
+	if len(entities) == 0 {
+		return nil
+	}
+	out := make([]store.MessageEntity, 0, len(entities))
+	for _, e := range entities {
+		switch v := e.(type) {
+		case *tg.MessageEntityBold:
+			out = append(out, store.MessageEntity{Type: "bold", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityItalic:
+			out = append(out, store.MessageEntity{Type: "italic", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityCode:
+			out = append(out, store.MessageEntity{Type: "code", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityPre:
+			out = append(out, store.MessageEntity{Type: "pre", Offset: v.Offset, Length: v.Length})
+		}
+	}
+	return out
 }

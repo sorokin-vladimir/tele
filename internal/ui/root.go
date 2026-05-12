@@ -131,7 +131,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			chatID := msg.Chat.ID
 			limit := m.historyLimit
 			return m, func() tea.Msg {
-				msgs, err := client.GetHistory(context.Background(), peer, limit)
+				msgs, err := client.GetHistory(context.Background(), peer, 0, limit)
 				if err != nil {
 					return nil
 				}

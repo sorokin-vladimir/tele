@@ -97,3 +97,45 @@ func TestPeerToInput_AllTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertEntities_AllSupportedTypes(t *testing.T) {
+	entities := []tg.MessageEntityClass{
+		&tg.MessageEntityBold{Offset: 0, Length: 5},
+		&tg.MessageEntityItalic{Offset: 6, Length: 4},
+		&tg.MessageEntityCode{Offset: 11, Length: 3},
+		&tg.MessageEntityPre{Offset: 15, Length: 10},
+	}
+	got := convertEntities(entities)
+	require.Len(t, got, 4)
+	assert.Equal(t, store.MessageEntity{Type: "bold", Offset: 0, Length: 5}, got[0])
+	assert.Equal(t, store.MessageEntity{Type: "italic", Offset: 6, Length: 4}, got[1])
+	assert.Equal(t, store.MessageEntity{Type: "code", Offset: 11, Length: 3}, got[2])
+	assert.Equal(t, store.MessageEntity{Type: "pre", Offset: 15, Length: 10}, got[3])
+}
+
+func TestConvertEntities_SkipsUnknownTypes(t *testing.T) {
+	entities := []tg.MessageEntityClass{
+		&tg.MessageEntityBold{Offset: 0, Length: 3},
+		&tg.MessageEntityURL{Offset: 4, Length: 10},
+	}
+	got := convertEntities(entities)
+	require.Len(t, got, 1)
+	assert.Equal(t, "bold", got[0].Type)
+}
+
+func TestConvertEntities_Nil(t *testing.T) {
+	got := convertEntities(nil)
+	assert.Empty(t, got)
+}
+
+func TestConvertMessage_PopulatesEntities(t *testing.T) {
+	raw := &tg.Message{
+		ID:       1,
+		Message:  "hello world",
+		Entities: []tg.MessageEntityClass{&tg.MessageEntityBold{Offset: 0, Length: 5}},
+	}
+	msg, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	require.Len(t, msg.Entities, 1)
+	assert.Equal(t, "bold", msg.Entities[0].Type)
+}

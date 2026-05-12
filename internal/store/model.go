@@ -20,6 +20,12 @@ func (p Peer) IsUser() bool    { return p.Type == PeerUser }
 func (p Peer) IsGroup() bool   { return p.Type == PeerGroup }
 func (p Peer) IsChannel() bool { return p.Type == PeerChannel }
 
+type MessageEntity struct {
+	Type   string // "bold", "italic", "code", "pre" — UTF-16 offsets (Telegram encoding)
+	Offset int
+	Length int
+}
+
 type Chat struct {
 	ID          int64
 	Title       string
@@ -36,6 +42,7 @@ type Message struct {
 	Text     string
 	Date     time.Time
 	IsOut    bool
+	Entities []MessageEntity
 }
 
 type EventKind int

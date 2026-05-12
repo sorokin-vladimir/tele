@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -21,4 +22,19 @@ func TestMessage_Fields(t *testing.T) {
 	assert.Equal(t, 1, m.ID)
 	assert.Equal(t, "hi", m.Text)
 	assert.True(t, m.IsOut)
+}
+
+func TestMessage_HasEntitiesField(t *testing.T) {
+	msg := store.Message{
+		ID:     1,
+		ChatID: 10,
+		Text:   "**bold**",
+		Entities: []store.MessageEntity{
+			{Type: "bold", Offset: 0, Length: 6},
+		},
+	}
+	require.Len(t, msg.Entities, 1)
+	assert.Equal(t, "bold", msg.Entities[0].Type)
+	assert.Equal(t, 0, msg.Entities[0].Offset)
+	assert.Equal(t, 6, msg.Entities[0].Length)
 }

@@ -16,6 +16,11 @@ type SendMsgRequest struct {
 	Text string
 }
 
+type LoadMoreMsg struct {
+	ChatID   int64
+	OffsetID int
+}
+
 type ChatModel struct {
 	chat            *store.Chat
 	msgList         *components.MessageList
@@ -75,9 +80,19 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		case keys.ActionDown:
 			m.msgList.ScrollDown()
 		case keys.ActionUp:
+			atTop := m.msgList.AtTop()
 			m.msgList.ScrollUp()
+			if atTop && m.chat != nil && m.msgList.Count() > 0 {
+				chatID := m.chat.ID
+				offsetID := m.msgList.OldestID()
+				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+			}
 		case keys.ActionGoTop:
-			// lazy load will be triggered here in Phase 2
+			if m.chat != nil && m.msgList.Count() > 0 {
+				chatID := m.chat.ID
+				offsetID := m.msgList.OldestID()
+				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+			}
 		case keys.ActionGoBottom:
 			m.msgList.ScrollDown()
 		case keys.ActionInsert:

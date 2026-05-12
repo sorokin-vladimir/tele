@@ -1,13 +1,30 @@
 package ui_test
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/sorokin-vladimir/tele/internal/store"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
+
+type mockTGClient struct {
+	history []store.Message
+}
+
+func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
+func (m *mockTGClient) GetHistory(_ context.Context, _ store.Peer, _ int, _ int) ([]store.Message, error) {
+	return m.history, nil
+}
+func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string) error { return nil }
+func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
+
+var _ internaltg.Client = (*mockTGClient)(nil)
 
 func TestRoot_InitialScreen_Login(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
@@ -47,4 +64,25 @@ func TestRoot_CtrlC_Quits(t *testing.T) {
 	msg := cmd()
 	_, isQuit := msg.(tea.QuitMsg)
 	assert.True(t, isQuit)
+}
+
+func TestRoot_LoadMoreMsg_DispatchesGetHistory(t *testing.T) {
+	mock := &mockTGClient{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(mock, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+
+	// Set current chat to 1 by sending OpenChatMsg
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
+		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	}})
+	m = newM.(ui.RootModel)
+
+	newM, cmd := m.Update(screens.LoadMoreMsg{ChatID: 1, OffsetID: 5})
+	_ = newM
+	require.NotNil(t, cmd)
+	// cmd should trigger a GetHistory call — verify it returns a non-nil message
+	result := cmd()
+	assert.NotNil(t, result)
 }

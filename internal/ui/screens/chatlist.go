@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,6 +17,16 @@ var (
 	selectedChatStyle = lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
 	normalChatStyle   = lipgloss.NewStyle()
 )
+
+func formatUnread(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	if count > 99 {
+		return "[99+]"
+	}
+	return fmt.Sprintf("[%d]", count)
+}
 
 type ChatListModel struct {
 	chats   []store.Chat
@@ -100,10 +111,30 @@ func (m *ChatListModel) View() string {
 	}
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		if i == m.cursor {
-			lines = append(lines, selectedChatStyle.Inline(true).Width(w).MaxWidth(w).Render(m.chats[i].Title))
+		badge := formatUnread(m.chats[i].UnreadCount)
+		title := m.chats[i].Title
+		var line string
+		if badge == "" {
+			line = title
 		} else {
-			lines = append(lines, normalChatStyle.Inline(true).Width(w).MaxWidth(w).Render(m.chats[i].Title))
+			maxTitle := w - len(badge) - 1
+			if maxTitle < 0 {
+				maxTitle = 0
+			}
+			runes := []rune(title)
+			if len(runes) > maxTitle {
+				runes = runes[:maxTitle]
+			}
+			pad := w - len(runes) - len(badge)
+			if pad < 0 {
+				pad = 0
+			}
+			line = string(runes) + strings.Repeat(" ", pad) + badge
+		}
+		if i == m.cursor {
+			lines = append(lines, selectedChatStyle.Inline(true).Width(w).MaxWidth(w).Render(line))
+		} else {
+			lines = append(lines, normalChatStyle.Inline(true).Width(w).MaxWidth(w).Render(line))
 		}
 	}
 	return strings.Join(lines, "\n")

@@ -49,3 +49,51 @@ func TestMessageList_ScrollUp(t *testing.T) {
 	ml.ScrollUp()
 	assert.Equal(t, 2, ml.ViewStart()) // was 3, now 2
 }
+
+func TestMessageList_AtTop_TrueWhenAtStart(t *testing.T) {
+	ml := components.NewMessageList(3, 40)
+	ml.SetMessages(makeMessages(2)) // fewer than height → viewStart = 0
+	assert.True(t, ml.AtTop())
+}
+
+func TestMessageList_AtTop_FalseAfterScroll(t *testing.T) {
+	ml := components.NewMessageList(3, 40)
+	ml.SetMessages(makeMessages(6)) // viewStart = 3 after SetMessages
+	assert.False(t, ml.AtTop())
+}
+
+func TestMessageList_AtTop_TrueAfterScrollingToStart(t *testing.T) {
+	ml := components.NewMessageList(3, 40)
+	ml.SetMessages(makeMessages(4)) // viewStart = 1
+	ml.ScrollUp()                   // viewStart = 0
+	assert.True(t, ml.AtTop())
+}
+
+func TestMessageList_OldestID_ReturnsFirstMessage(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	ml.SetMessages(makeMessages(5)) // IDs 1..5
+	assert.Equal(t, 1, ml.OldestID())
+}
+
+func TestMessageList_OldestID_ZeroWhenEmpty(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	assert.Equal(t, 0, ml.OldestID())
+}
+
+func TestMessageList_View_RendersEntityStyledText(t *testing.T) {
+	ml := components.NewMessageList(5, 80)
+	msgs := []store.Message{
+		{
+			ID:     1,
+			ChatID: 1,
+			Text:   "hello",
+			Date:   time.Now(),
+			Entities: []store.MessageEntity{
+				{Type: "bold", Offset: 0, Length: 5},
+			},
+		},
+	}
+	ml.SetMessages(msgs)
+	view := ml.View()
+	assert.Contains(t, stripANSI(view), "hello")
+}

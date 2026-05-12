@@ -49,3 +49,31 @@ func TestChatList_Context(t *testing.T) {
 	m := screens.NewChatListModel()
 	assert.Equal(t, keys.ContextChatList, m.Context())
 }
+
+func TestChatList_ShowsUnreadBadge(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Alice", UnreadCount: 3},
+		{ID: 2, Title: "Bob", UnreadCount: 0},
+	})
+	view := m.View()
+	assert.Contains(t, view, "[3]")
+	assert.NotContains(t, view, "[0]")
+}
+
+func TestChatList_Badge99Plus(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Spam", UnreadCount: 150}})
+	view := m.View()
+	assert.Contains(t, view, "[99+]")
+}
+
+func TestChatList_NoBadgeWhenZero(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Quiet", UnreadCount: 0}})
+	view := m.View()
+	assert.NotContains(t, view, "[")
+}

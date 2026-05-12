@@ -36,6 +36,11 @@ type chatHistoryMsg struct {
 	messages []store.Message
 }
 
+type historyChunkMsg struct {
+	chatID   int64
+	messages []store.Message
+}
+
 type RootModel struct {
 	screen        Screen
 	focus         Focus
@@ -146,6 +151,36 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.chatID == m.currentChatID {
 				m.chat.SetMessages(m.st.Messages(msg.chatID))
 			}
+		}
+		return m, nil
+
+	case screens.LoadMoreMsg:
+		if m.st == nil || m.tgClient == nil {
+			return m, nil
+		}
+		chat, ok := m.st.GetChat(msg.ChatID)
+		if !ok {
+			return m, nil
+		}
+		client := m.tgClient
+		peer := chat.Peer
+		offsetID := msg.OffsetID
+		limit := m.historyLimit
+		chatID := msg.ChatID
+		return m, func() tea.Msg {
+			msgs, err := client.GetHistory(context.Background(), peer, offsetID, limit)
+			if err != nil {
+				return nil
+			}
+			return historyChunkMsg{chatID: chatID, messages: msgs}
+		}
+
+	case historyChunkMsg:
+		if m.st != nil && msg.chatID == m.currentChatID && len(msg.messages) > 0 {
+			existing := m.st.Messages(msg.chatID)
+			combined := append(msg.messages, existing...)
+			m.st.SetMessages(msg.chatID, combined)
+			m.chat.SetMessages(m.st.Messages(msg.chatID))
 		}
 		return m, nil
 

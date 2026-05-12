@@ -44,6 +44,13 @@ func (ml *MessageList) SetMessages(msgs []store.Message) {
 func (ml *MessageList) Count() int        { return len(ml.messages) }
 func (ml *MessageList) ViewStart() int    { return ml.viewStart }
 func (ml *MessageList) SetHasMore(v bool) { ml.hasMore = v }
+func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 }
+func (ml *MessageList) OldestID() int {
+	if len(ml.messages) == 0 {
+		return 0
+	}
+	return ml.messages[0].ID
+}
 
 func (ml *MessageList) ScrollUp() {
 	if ml.viewStart > 0 {
@@ -74,7 +81,8 @@ func (ml *MessageList) View() string {
 	lines := make([]string, 0, ml.viewHeight)
 	for _, msg := range visible {
 		ts := timeStyle.Render(msg.Date.Format("15:04"))
-		text := fmt.Sprintf("%s %s", ts, msg.Text)
+		rendered := RenderEntities(msg.Text, msg.Entities)
+		text := fmt.Sprintf("%s %s", ts, rendered)
 		if msg.IsOut {
 			lines = append(lines, outMsgStyle.Inline(true).Width(ml.viewWidth).MaxWidth(ml.viewWidth).Render(text))
 		} else {

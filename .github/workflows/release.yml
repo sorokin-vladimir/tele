@@ -29,14 +29,14 @@ jobs:
             goos: darwin
             goarch: arm64
             artifact: tele-darwin-arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            artifact: tele-windows-amd64.exe
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
-            artifact: tele-windows-arm64.exe
+          # - os: windows-latest
+          #   goos: windows
+          #   goarch: amd64
+          #   artifact: tele-windows-amd64.exe
+          # - os: windows-latest
+          #   goos: windows
+          #   goarch: arm64
+          #   artifact: tele-windows-arm64.exe
 
     runs-on: ${{ matrix.os }}
 

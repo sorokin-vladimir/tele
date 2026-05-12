@@ -2,6 +2,8 @@ package tg
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/gotd/td/tg"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -13,6 +15,13 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event)
 		msg, ok := convertMessage(upd.Message, peerID)
 		if !ok {
 			return nil
+		}
+		if user, ok := e.Users[msg.SenderID]; ok {
+			name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+			if name == "" {
+				name = fmt.Sprintf("User %d", user.ID)
+			}
+			msg.SenderName = name
 		}
 		select {
 		case events <- store.Event{Kind: store.EventNewMessage, Message: msg}:

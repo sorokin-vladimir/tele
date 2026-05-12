@@ -61,20 +61,24 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 			m.filter()
 		}
 		return m, nil
-	case tea.KeyRunes:
-		switch string(km.Runes) {
-		case "j":
-			if m.cursor < len(m.results)-1 {
-				m.cursor++
-			}
-		case "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		default:
-			m.query += string(km.Runes)
-			m.filter()
+	case tea.KeyDown:
+		if m.cursor < len(m.results)-1 {
+			m.cursor++
 		}
+		return m, nil
+	case tea.KeyUp:
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		return m, nil
+	case tea.KeySpace:
+		m.query += " "
+		m.filter()
+		return m, nil
+	case tea.KeyRunes:
+		m.query += string(km.Runes)
+		m.filter()
+		return m, nil
 	}
 	return m, nil
 }

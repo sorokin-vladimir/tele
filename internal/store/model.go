@@ -36,13 +36,14 @@ type Chat struct {
 }
 
 type Message struct {
-	ID       int
-	ChatID   int64
-	SenderID int64
-	Text     string
-	Date     time.Time
-	IsOut    bool
-	Entities []MessageEntity
+	ID         int
+	ChatID     int64
+	SenderID   int64
+	SenderName string
+	Text       string
+	Date       time.Time
+	IsOut      bool
+	Entities   []MessageEntity
 }
 
 type EventKind int

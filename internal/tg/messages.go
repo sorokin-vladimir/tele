@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/tg"
@@ -85,23 +86,43 @@ func peerToInput(p store.Peer) tg.InputPeerClass {
 	}
 }
 
+func buildNameMap(users []tg.UserClass) map[int64]string {
+	m := make(map[int64]string, len(users))
+	for _, u := range users {
+		user, ok := u.(*tg.User)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+		if name == "" {
+			name = fmt.Sprintf("User %d", user.ID)
+		}
+		m[user.ID] = name
+	}
+	return m
+}
+
 func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message {
 	var rawMsgs []tg.MessageClass
+	var rawUsers []tg.UserClass
 
 	switch v := result.(type) {
 	case *tg.MessagesMessages:
-		rawMsgs = v.Messages
+		rawMsgs, rawUsers = v.Messages, v.Users
 	case *tg.MessagesMessagesSlice:
-		rawMsgs = v.Messages
+		rawMsgs, rawUsers = v.Messages, v.Users
 	case *tg.MessagesChannelMessages:
-		rawMsgs = v.Messages
+		rawMsgs, rawUsers = v.Messages, v.Users
 	default:
 		return nil
 	}
 
+	nameMap := buildNameMap(rawUsers)
+
 	out := make([]store.Message, 0, len(rawMsgs))
 	for _, raw := range rawMsgs {
 		if msg, ok := convertMessage(raw, chatID); ok {
+			msg.SenderName = nameMap[msg.SenderID]
 			out = append(out, msg)
 		}
 	}

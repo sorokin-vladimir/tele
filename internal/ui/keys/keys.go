@@ -26,7 +26,9 @@ func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		ContextGlobal: {
 			"ctrl+h": ActionFocusLeft,
+			"h":      ActionFocusLeft,
 			"ctrl+l": ActionFocusRight,
+			"l":      ActionFocusRight,
 			"ctrl+c": ActionQuit,
 			"ctrl+q": ActionQuit,
 		},
@@ -42,6 +44,7 @@ func DefaultKeyMap() KeyMap {
 			"k":   ActionUp,
 			"G":   ActionGoBottom,
 			"i":   ActionInsert,
+			"a":   ActionInsert,
 			"esc": ActionNormal,
 		},
 	}

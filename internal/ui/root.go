@@ -197,7 +197,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			existing := m.st.Messages(msg.chatID)
 			combined := append(msg.messages, existing...)
 			m.st.SetMessages(msg.chatID, combined)
-			m.chat.SetMessages(m.st.Messages(msg.chatID))
+			m.chat.PrependMessages(msg.messages) // preserves viewport position
 		}
 		return m, nil
 

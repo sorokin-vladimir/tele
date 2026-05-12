@@ -47,8 +47,16 @@ func NewChatModel(width, height int) *ChatModel {
 	}
 }
 
-func (m *ChatModel) SetChat(chat *store.Chat)         { m.chat = chat }
-func (m *ChatModel) SetMessages(msgs []store.Message) { m.msgList.SetMessages(msgs) }
+func (m *ChatModel) SetChat(chat *store.Chat) {
+	m.chat = chat
+	if chat != nil {
+		m.msgList.SetIsGroup(chat.Peer.Type == store.PeerGroup || chat.Peer.Type == store.PeerChannel)
+	} else {
+		m.msgList.SetIsGroup(false)
+	}
+}
+func (m *ChatModel) SetMessages(msgs []store.Message)       { m.msgList.SetMessages(msgs) }
+func (m *ChatModel) PrependMessages(older []store.Message)  { m.msgList.PrependMessages(older) }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }

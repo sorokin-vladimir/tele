@@ -39,15 +39,15 @@ func TestSearch_FiltersByQuery(t *testing.T) {
 func TestSearch_CursorNavigation(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24)
 	assert.Equal(t, 0, m.Cursor())
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	assert.Equal(t, 1, m.Cursor())
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	assert.Equal(t, 0, m.Cursor())
 }
 
 func TestSearch_CursorClamped(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	assert.Equal(t, 0, m.Cursor())
 }
 
@@ -80,7 +80,22 @@ func TestSearch_BackspaceDeletesQuery(t *testing.T) {
 
 func TestSearch_CursorResetOnFilter(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
 	assert.Equal(t, 0, m.Cursor())
+}
+
+func TestSearch_SpaceInQuery(t *testing.T) {
+	m := screens.NewSearchModel([]store.Chat{
+		{ID: 1, Title: "John Doe"},
+		{ID: 2, Title: "Alice"},
+	}, 80, 24)
+	// Type "John" then space — "john " is a substring of "john doe"
+	for _, r := range "John" {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	view := m.View()
+	assert.Contains(t, view, "John Doe")
+	assert.NotContains(t, view, "Alice")
 }

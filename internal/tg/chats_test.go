@@ -2,6 +2,7 @@ package tg
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
@@ -35,4 +36,23 @@ func TestConvertChannel_ToChat(t *testing.T) {
 	assert.Equal(t, int64(300), chat.ID)
 	assert.Equal(t, store.PeerChannel, chat.Peer.Type)
 	assert.Equal(t, int64(99), chat.Peer.AccessHash)
+}
+
+func TestParseDialogs_UnreadCount(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
+	dialog := &tg.Dialog{
+		Peer:        &tg.PeerUser{UserID: 7},
+		TopMessage:  1,
+		UnreadCount: 5,
+	}
+	msg := &tg.Message{ID: 1, Date: int(time.Now().Unix())}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{msg},
+		Users:    []tg.UserClass{user},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, 5, chats[0].UnreadCount)
 }

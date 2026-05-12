@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gen2brain/beeep"
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -17,21 +19,57 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
+// Notifier sends OS desktop notifications.
+type Notifier interface {
+	Notify(title, body string) error
+}
+
+type beeepNotifier struct{}
+
+func (b beeepNotifier) Notify(title, body string) error {
+	return beeep.Notify(title, body, "")
+}
+
+func truncate(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n]) + "…"
+}
+
+func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64) {
+	if evt.Kind != store.EventNewMessage {
+		return
+	}
+	if evt.Message.ChatID == currentChatID {
+		return
+	}
+	chat, ok := st.GetChat(evt.Message.ChatID)
+	if !ok {
+		return
+	}
+	_ = notifier.Notify(chat.Title, truncate(evt.Message.Text, 100))
+}
+
 type App struct {
-	cfg     *config.Config
-	log     *zap.Logger
-	st      store.Store
-	client  *internaltg.GotdClient
-	verbose bool
+	cfg           *config.Config
+	log           *zap.Logger
+	st            store.Store
+	client        *internaltg.GotdClient
+	verbose       bool
+	notifier      Notifier
+	currentChatID int64
 }
 
 func New(cfg *config.Config, log *zap.Logger, verbose bool) *App {
 	return &App{
-		cfg:     cfg,
-		log:     log,
-		st:      store.NewMemory(),
-		client:  internaltg.NewGotdClient(log),
-		verbose: verbose,
+		cfg:      cfg,
+		log:      log,
+		st:       store.NewMemory(),
+		client:   internaltg.NewGotdClient(log),
+		verbose:  verbose,
+		notifier: beeepNotifier{},
 	}
 }
 
@@ -51,6 +89,9 @@ func (a *App) Run() error {
 	// Build bubbletea model
 	root := ui.NewRootModel(a.client, a.st, a.cfg.UI.HistoryLimit, a.verbose)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
+	root.SetOnChatOpen(func(id int64) {
+		atomic.StoreInt64(&a.currentChatID, id)
+	})
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 
@@ -92,6 +133,7 @@ func (a *App) Run() error {
 			case evt := <-a.client.Updates():
 				a.log.Debug("incoming update", zap.Int("kind", int(evt.Kind)))
 				prog.Send(evt)
+				maybeNotify(a.notifier, a.st, evt, atomic.LoadInt64(&a.currentChatID))
 			}
 		}
 	}()

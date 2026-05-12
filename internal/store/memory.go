@@ -1,6 +1,10 @@
 package store
 
-import "sync"
+import (
+	"sort"
+	"sync"
+	"time"
+)
 
 type memoryStore struct {
 	mu       sync.RWMutex
@@ -35,7 +39,20 @@ func (s *memoryStore) Chats() []Chat {
 	for _, c := range s.chats {
 		out = append(out, c)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Pinned != out[j].Pinned {
+			return out[i].Pinned
+		}
+		return lastMsgTime(out[i]).After(lastMsgTime(out[j]))
+	})
 	return out
+}
+
+func lastMsgTime(c Chat) time.Time {
+	if c.LastMessage == nil {
+		return time.Time{}
+	}
+	return c.LastMessage.Date
 }
 
 func (s *memoryStore) Messages(chatID int64) []Message {

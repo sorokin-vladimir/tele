@@ -24,6 +24,7 @@ type Chat struct {
 	ID          int64
 	Title       string
 	Peer        Peer
+	Pinned      bool
 	UnreadCount int
 	LastMessage *Message
 }

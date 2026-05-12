@@ -35,7 +35,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if cfg.Telegram.SessionFile == "" {
-		cfg.Telegram.SessionFile = filepath.Join(filepath.Dir(path), "session.yml")
+		cfg.Telegram.SessionFile = filepath.Join(filepath.Dir(path), "session.json")
 	}
 	return &cfg, nil
 }

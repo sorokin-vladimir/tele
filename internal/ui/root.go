@@ -57,6 +57,8 @@ type RootModel struct {
 	currentChatID int64
 	historyLimit  int
 	verbose       bool
+	searchModel   *screens.SearchModel
+	onChatOpen    func(int64)
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -89,9 +91,16 @@ func (m RootModel) WithFocus(f Focus) RootModel {
 	return m
 }
 
+func (m RootModel) SearchActive() bool { return m.searchModel != nil }
+
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
 func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
 	m.login = lm
+}
+
+// SetOnChatOpen registers a callback invoked whenever the user opens a chat.
+func (m *RootModel) SetOnChatOpen(fn func(int64)) {
+	m.onChatOpen = fn
 }
 
 func (m RootModel) Init() tea.Cmd {
@@ -121,8 +130,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case screens.CloseSearchMsg:
+		m.searchModel = nil
+		return m, nil
+
 	case screens.OpenChatMsg:
+		m.searchModel = nil
 		m.currentChatID = msg.Chat.ID
+		if m.onChatOpen != nil {
+			m.onChatOpen(msg.Chat.ID)
+		}
 		m.chat.SetChat(&msg.Chat)
 		if m.st != nil {
 			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
@@ -230,6 +247,12 @@ func (m RootModel) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetLastKey(keyStr)
 	}
 
+	if m.searchModel != nil {
+		newSearch, cmd := m.searchModel.Update(msg)
+		m.searchModel = newSearch
+		return m, cmd
+	}
+
 	// Global bindings always take priority
 	switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
 	case keys.ActionFocusLeft:
@@ -238,6 +261,13 @@ func (m RootModel) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.focusPane(FocusChat)
 	case keys.ActionQuit:
 		return m, tea.Quit
+	}
+
+	if keyStr == "/" {
+		if m.st != nil {
+			m.searchModel = screens.NewSearchModel(m.st.Chats(), m.width, m.height)
+		}
+		return m, nil
 	}
 
 	if m.focus == FocusChatList {
@@ -331,5 +361,14 @@ func (m RootModel) View() string {
 		Render(m.chat.View())
 
 	main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
-	return main + "\n" + m.statusBar.View()
+	mainView := main + "\n" + m.statusBar.View()
+	if m.searchModel != nil {
+		// lipgloss.Place fills the terminal with spaces as background; transparent overlay is not supported in terminal.
+		return lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			m.searchModel.View(),
+		)
+	}
+	return mainView
 }

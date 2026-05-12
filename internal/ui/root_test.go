@@ -86,3 +86,38 @@ func TestRoot_LoadMoreMsg_DispatchesGetHistory(t *testing.T) {
 	result := cmd()
 	assert.NotNil(t, result)
 }
+
+func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	root := newM.(ui.RootModel)
+	assert.True(t, root.SearchActive())
+}
+
+func TestRoot_CloseSearchMsg_DeactivatesSearch(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newM.(ui.RootModel)
+	require.True(t, m.SearchActive())
+	newM, _ = m.Update(screens.CloseSearchMsg{})
+	m = newM.(ui.RootModel)
+	assert.False(t, m.SearchActive())
+}
+
+func TestRoot_SearchOpenChatMsg_ClosesSearch(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1}})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newM.(ui.RootModel)
+	newM, _ = m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	m = newM.(ui.RootModel)
+	assert.False(t, m.SearchActive())
+}

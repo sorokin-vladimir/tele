@@ -40,8 +40,44 @@ func NewChatListModel() *ChatListModel {
 	return &ChatListModel{}
 }
 
-func (m *ChatListModel) SetChats(chats []store.Chat) { m.chats = chats }
+func (m *ChatListModel) SetChats(chats []store.Chat) {
+	// preserve unread counts accumulated since last store sync
+	oldUnread := make(map[int64]int, len(m.chats))
+	for _, c := range m.chats {
+		if c.UnreadCount > 0 {
+			oldUnread[c.ID] = c.UnreadCount
+		}
+	}
+
+	var selectedID int64
+	if m.cursor < len(m.chats) {
+		selectedID = m.chats[m.cursor].ID
+	}
+	m.chats = chats
+	for i, c := range m.chats {
+		if n, ok := oldUnread[c.ID]; ok {
+			m.chats[i].UnreadCount = n
+		}
+	}
+	m.cursor = 0
+	for i, c := range m.chats {
+		if c.ID == selectedID {
+			m.cursor = i
+			break
+		}
+	}
+}
 func (m *ChatListModel) Cursor() int                 { return m.cursor }
+func (m *ChatListModel) Chats() []store.Chat         { return m.chats }
+
+func (m *ChatListModel) IncrementUnread(chatID int64) {
+	for i := range m.chats {
+		if m.chats[i].ID == chatID {
+			m.chats[i].UnreadCount++
+			return
+		}
+	}
+}
 
 func (m *ChatListModel) SelectedChat() (store.Chat, bool) {
 	if len(m.chats) == 0 || m.cursor >= len(m.chats) {

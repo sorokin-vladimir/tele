@@ -7,4 +7,6 @@ type Store interface {
 	Messages(chatID int64) []Message
 	SetMessages(chatID int64, msgs []Message)
 	AppendMessage(msg Message)
+	UpdateMessageID(chatID int64, oldID, newID int)
+	RemoveMessage(chatID int64, msgID int)
 }

@@ -79,4 +79,33 @@ func (s *memoryStore) AppendMessage(msg Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages[msg.ChatID] = append(s.messages[msg.ChatID], msg)
+	if chat, ok := s.chats[msg.ChatID]; ok {
+		m := msg
+		chat.LastMessage = &m
+		s.chats[msg.ChatID] = chat
+	}
+}
+
+func (s *memoryStore) UpdateMessageID(chatID int64, oldID, newID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	msgs := s.messages[chatID]
+	for i := range msgs {
+		if msgs[i].ID == oldID {
+			msgs[i].ID = newID
+			return
+		}
+	}
+}
+
+func (s *memoryStore) RemoveMessage(chatID int64, msgID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	msgs := s.messages[chatID]
+	for i, m := range msgs {
+		if m.ID == msgID {
+			s.messages[chatID] = append(msgs[:i], msgs[i+1:]...)
+			return
+		}
+	}
 }

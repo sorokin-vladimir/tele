@@ -77,3 +77,33 @@ func TestChatList_NoBadgeWhenZero(t *testing.T) {
 	view := m.View()
 	assert.NotContains(t, view, "[")
 }
+
+func TestChatList_SetChats_PreservesCursorByID(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetChats(makeTestChats()) // [A(1), B(2), C(3)], cursor at 0 (A)
+	assert.Equal(t, 0, m.Cursor())
+
+	// Reorder: A moves to index 1. Cursor must follow A to index 1.
+	m.SetChats([]store.Chat{
+		{ID: 2, Title: "Bob"},
+		{ID: 1, Title: "Alice"},
+		{ID: 3, Title: "Charlie"},
+	})
+	assert.Equal(t, 1, m.Cursor()) // cursor followed A(id=1) to its new position
+}
+
+func TestChatList_SetChats_CursorClampsWhenChatRemoved(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetChats(makeTestChats()) // [A(1), B(2), C(3)]
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionDown})
+	m = newPane.(*screens.ChatListModel)
+	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionDown}) // cursor -> 2 (C)
+	m = newPane.(*screens.ChatListModel)
+	assert.Equal(t, 2, m.Cursor())
+
+	m.SetChats([]store.Chat{
+		{ID: 1, Title: "Alice"},
+		{ID: 2, Title: "Bob"},
+	})
+	assert.Equal(t, 0, m.Cursor())
+}

@@ -9,7 +9,8 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event) {
+// shouldSuppress is called for every incoming message; it must be non-blocking.
+func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event, shouldSuppress func(id int) bool) {
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewMessage) error {
 		peerID := extractPeerID(upd.Message)
 		msg, ok := convertMessage(upd.Message, peerID)
@@ -23,10 +24,12 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event)
 			}
 			msg.SenderName = name
 		}
+		if shouldSuppress(msg.ID) {
+			return nil
+		}
 		select {
 		case events <- store.Event{Kind: store.EventNewMessage, Message: msg}:
-		default:
-			// drop if buffer full
+		default: // drop if buffer full
 		}
 		return nil
 	})

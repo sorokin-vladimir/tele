@@ -42,35 +42,43 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string) error {
+func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string) (int, error) {
 	c.mu.RLock()
 	api := c.api
 	c.mu.RUnlock()
 	if api == nil {
-		return fmt.Errorf("not connected")
+		return 0, fmt.Errorf("not connected")
 	}
 
 	c.log.Debug("SendMessage", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
 	inputPeer := peerToInput(peer)
-	return WithRetry(ctx, func() error {
+	var realID int
+	err := WithRetry(ctx, func() error {
 		var buf [8]byte
 		if _, err := rand.Read(buf[:]); err != nil {
 			return err
 		}
 		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
 
-		_, err := api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+		updates, err := api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
 			Peer:     inputPeer,
 			Message:  text,
 			RandomID: randomID,
 		})
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
-		} else {
-			c.log.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID))
+			return err
 		}
-		return err
+		realID = extractSentMessageID(updates, randomID)
+		if realID != 0 {
+			c.suppressMu.Lock()
+			c.suppressIDs[realID] = struct{}{}
+			c.suppressMu.Unlock()
+		}
+		c.log.Debug("SendMessage ok", zap.Int64("peer_id", peer.ID), zap.Int("real_id", realID))
+		return nil
 	})
+	return realID, err
 }
 
 func peerToInput(p store.Peer) tg.InputPeerClass {
@@ -151,6 +159,22 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		IsOut:    msg.Out,
 		Entities: convertEntities(msg.Entities),
 	}, true
+}
+
+func extractSentMessageID(updates tg.UpdatesClass, randomID int64) int {
+	if short, ok := updates.(*tg.UpdateShortSentMessage); ok {
+		return short.ID
+	}
+	upds, ok := updates.(*tg.Updates)
+	if !ok {
+		return 0
+	}
+	for _, u := range upds.Updates {
+		if mid, ok := u.(*tg.UpdateMessageID); ok && mid.RandomID == randomID {
+			return mid.ID
+		}
+	}
+	return 0
 }
 
 func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {

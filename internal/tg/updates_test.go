@@ -14,7 +14,7 @@ import (
 func TestSetupDispatcher_NewMessage(t *testing.T) {
 	events := make(chan store.Event, 1)
 	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events)
+	setupDispatcher(&dispatcher, events, func(int) bool { return false })
 
 	ctx := context.Background()
 	rawMsg := &tg.Message{
@@ -45,7 +45,7 @@ func TestSetupDispatcher_NewMessage(t *testing.T) {
 func TestSetupDispatcher_ServiceMessageIgnored(t *testing.T) {
 	events := make(chan store.Event, 1)
 	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, events)
+	setupDispatcher(&dispatcher, events, func(int) bool { return false })
 
 	ctx := context.Background()
 	// UpdateNewMessage wrapping a service message should not emit an event.
@@ -62,6 +62,77 @@ func TestSetupDispatcher_ServiceMessageIgnored(t *testing.T) {
 		t.Fatal("unexpected event for service message")
 	case <-time.After(100 * time.Millisecond):
 		// expected: no event
+	}
+}
+
+func TestSetupDispatcher_SuppressesID(t *testing.T) {
+	events := make(chan store.Event, 1)
+	dispatcher := tg.NewUpdateDispatcher()
+	suppressed := map[int]bool{7: true}
+	setupDispatcher(&dispatcher, events, func(id int) bool {
+		return suppressed[id]
+	})
+
+	ctx := context.Background()
+	rawMsg := &tg.Message{
+		ID:      7,
+		PeerID:  &tg.PeerUser{UserID: 1},
+		Message: "echo",
+		Date:    int(time.Now().Unix()),
+	}
+	err := dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{&tg.UpdateNewMessage{Message: rawMsg, Pts: 1, PtsCount: 1}},
+	})
+	require.NoError(t, err)
+
+	select {
+	case <-events:
+		t.Fatal("suppressed message must not reach events channel")
+	case <-time.After(100 * time.Millisecond):
+		// expected: no event
+	}
+}
+
+func TestSetupDispatcher_SuppressesID_ConsumeOnce(t *testing.T) {
+	events := make(chan store.Event, 2)
+	dispatcher := tg.NewUpdateDispatcher()
+	suppressed := map[int]bool{7: true}
+	setupDispatcher(&dispatcher, events, func(id int) bool {
+		if suppressed[id] {
+			delete(suppressed, id)
+			return true
+		}
+		return false
+	})
+
+	ctx := context.Background()
+	rawMsg := &tg.Message{
+		ID:      7,
+		PeerID:  &tg.PeerUser{UserID: 1},
+		Message: "echo",
+		Date:    int(time.Now().Unix()),
+	}
+	handle := func() {
+		_ = dispatcher.Handle(ctx, &tg.Updates{
+			Updates: []tg.UpdateClass{&tg.UpdateNewMessage{Message: rawMsg, Pts: 1, PtsCount: 1}},
+		})
+	}
+
+	// First delivery: suppressed
+	handle()
+	select {
+	case <-events:
+		t.Fatal("first delivery must be suppressed")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Second delivery of the same ID: must pass through
+	handle()
+	select {
+	case evt := <-events:
+		assert.Equal(t, store.EventNewMessage, evt.Kind)
+	case <-time.After(time.Second):
+		t.Fatal("second delivery must not be suppressed")
 	}
 }
 

@@ -17,18 +17,21 @@ import (
 
 // GotdClient wraps the gotd telegram client and implements the Client interface
 type GotdClient struct {
-	mu     sync.RWMutex
-	api    *tg.Client
-	events chan store.Event
-	peers  map[int64]store.Peer
-	log    *zap.Logger
+	mu          sync.RWMutex
+	api         *tg.Client
+	events      chan store.Event
+	peers       map[int64]store.Peer
+	log         *zap.Logger
+	suppressMu  sync.Mutex
+	suppressIDs map[int]struct{}
 }
 
 func NewGotdClient(log *zap.Logger) *GotdClient {
 	return &GotdClient{
-		events: make(chan store.Event, 64),
-		peers:  make(map[int64]store.Peer),
-		log:    log,
+		events:      make(chan store.Event, 64),
+		peers:       make(map[int64]store.Peer),
+		log:         log,
+		suppressIDs: make(map[int]struct{}),
 	}
 }
 
@@ -38,7 +41,15 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	sess := NewFileSession(cfg.Telegram.SessionFile)
 
 	dispatcher := tg.NewUpdateDispatcher()
-	setupDispatcher(&dispatcher, c.events)
+	setupDispatcher(&dispatcher, c.events, func(id int) bool {
+		c.suppressMu.Lock()
+		defer c.suppressMu.Unlock()
+		if _, ok := c.suppressIDs[id]; ok {
+			delete(c.suppressIDs, id)
+			return true
+		}
+		return false
+	})
 
 	// updates.New does not return an error — confirmed via go doc.
 	manager := updates.New(updates.Config{

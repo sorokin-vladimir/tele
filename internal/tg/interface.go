@@ -11,7 +11,7 @@ import (
 type Client interface {
 	GetDialogs(ctx context.Context) ([]store.Chat, error)
 	GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error)
-	SendMessage(ctx context.Context, peer store.Peer, text string) error
+	SendMessage(ctx context.Context, peer store.Peer, text string) (int, error)
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }

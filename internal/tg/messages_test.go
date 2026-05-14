@@ -139,3 +139,41 @@ func TestConvertMessage_PopulatesEntities(t *testing.T) {
 	require.Len(t, msg.Entities, 1)
 	assert.Equal(t, "bold", msg.Entities[0].Type)
 }
+
+func TestExtractSentMessageID_Updates(t *testing.T) {
+	updates := &tg.Updates{
+		Updates: []tg.UpdateClass{
+			&tg.UpdateMessageID{ID: 42, RandomID: int64(999)},
+		},
+	}
+	assert.Equal(t, 42, extractSentMessageID(updates, int64(999)))
+}
+
+func TestExtractSentMessageID_WrongRandomID(t *testing.T) {
+	updates := &tg.Updates{
+		Updates: []tg.UpdateClass{
+			&tg.UpdateMessageID{ID: 42, RandomID: int64(111)},
+		},
+	}
+	assert.Equal(t, 0, extractSentMessageID(updates, int64(999)))
+}
+
+func TestExtractSentMessageID_ShortSent(t *testing.T) {
+	updates := &tg.UpdateShortSentMessage{ID: 77}
+	assert.Equal(t, 77, extractSentMessageID(updates, 0))
+}
+
+func TestExtractSentMessageID_UnknownType(t *testing.T) {
+	assert.Equal(t, 0, extractSentMessageID(&tg.UpdateShort{}, 0))
+}
+
+func TestExtractSentMessageID_MultipleUpdates_MatchesCorrectOne(t *testing.T) {
+	updates := &tg.Updates{
+		Updates: []tg.UpdateClass{
+			&tg.UpdateMessageID{ID: 11, RandomID: int64(111)},
+			&tg.UpdateMessageID{ID: 22, RandomID: int64(222)},
+			&tg.UpdateMessageID{ID: 33, RandomID: int64(333)},
+		},
+	}
+	assert.Equal(t, 22, extractSentMessageID(updates, int64(222)))
+}

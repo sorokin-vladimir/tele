@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -36,6 +37,12 @@ type chatHistoryMsg struct {
 	messages []store.Message
 }
 
+type sentMsgConfirmedMsg struct {
+	chatID     int64
+	sentinelID int
+	realID     int
+}
+
 type historyChunkMsg struct {
 	chatID   int64
 	messages []store.Message
@@ -59,6 +66,7 @@ type RootModel struct {
 	verbose       bool
 	searchModel   *screens.SearchModel
 	onChatOpen    func(int64)
+	nextSentinel  int
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -77,8 +85,9 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	}
 }
 
-func (m RootModel) CurrentScreen() Screen { return m.screen }
-func (m RootModel) CurrentFocus() Focus   { return m.focus }
+func (m RootModel) CurrentScreen() Screen             { return m.screen }
+func (m RootModel) CurrentFocus() Focus               { return m.focus }
+func (m RootModel) ChatList() *screens.ChatListModel  { return m.chatList }
 
 // WithScreen returns a copy with the given screen set (used in tests and app init).
 func (m RootModel) WithScreen(s Screen) RootModel {
@@ -207,6 +216,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Message.ChatID == m.currentChatID {
 				m.chat.SetMessages(m.st.Messages(m.currentChatID))
 			}
+			m.chatList.SetChats(m.st.Chats())
+			if msg.Message.ChatID != m.currentChatID {
+				m.chatList.IncrementUnread(msg.Message.ChatID)
+			}
 		}
 		return m, nil
 
@@ -214,13 +227,44 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.tgClient == nil {
 			return m, nil
 		}
+		m.nextSentinel--
+		sentinelID := m.nextSentinel
+		sentinel := store.Message{
+			ID:     sentinelID,
+			ChatID: m.currentChatID,
+			Text:   msg.Text,
+			Date:   time.Now(),
+			IsOut:  true,
+		}
+		if m.st != nil {
+			m.st.AppendMessage(sentinel)
+			m.chat.SetMessages(m.st.Messages(m.currentChatID))
+		}
 		client := m.tgClient
 		peer := msg.Peer
 		text := msg.Text
+		chatID := m.currentChatID
 		return m, func() tea.Msg {
-			_ = client.SendMessage(context.Background(), peer, text)
-			return nil
+			realID, err := client.SendMessage(context.Background(), peer, text)
+			if err != nil {
+				realID = 0
+			}
+			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: realID}
 		}
+
+	case sentMsgConfirmedMsg:
+		if m.st == nil {
+			return m, nil
+		}
+		if msg.realID != 0 {
+			m.st.UpdateMessageID(msg.chatID, msg.sentinelID, msg.realID)
+		} else {
+			m.st.RemoveMessage(msg.chatID, msg.sentinelID)
+		}
+		if msg.chatID == m.currentChatID {
+			m.chat.SetMessages(m.st.Messages(msg.chatID))
+		}
+		return m, nil
 
 	case screens.AuthRequestMsg, screens.ConnectedMsg:
 		if m.screen == ScreenLogin {

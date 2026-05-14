@@ -19,12 +19,19 @@ import (
 var (
 	buildAPIID   = "0"
 	buildAPIHash = ""
+	version      = "dev"
 )
 
 func main() {
 	cfgPath := flag.String("config", "~/.config/tele/config.yml", "path to config file")
 	verbose := flag.Bool("v", false, "debug logging")
+	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(version)
+		os.Exit(0)
+	}
 
 	expanded := expandTilde(*cfgPath)
 	cfgPath = &expanded

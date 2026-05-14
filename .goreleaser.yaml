@@ -1,0 +1,51 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/tele/
+    binary: tele
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.buildAPIID={{ .Env.TG_API_ID }}
+      - -X main.buildAPIHash={{ .Env.TG_API_HASH }}
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: tarballs
+    formats: [tar.gz]
+    name_template: "tele_{{ .Os }}_{{ .Arch }}"
+    files:
+      - config.yml.example
+  - id: binaries
+    formats: [binary]
+    name_template: "tele-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+brews:
+  - name: tele
+    ids:
+      - tarballs
+    repository:
+      owner: sorokin-vladimir
+      name: homebrew-tele
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/sorokin-vladimir/tele"
+    description: "TUI Telegram client"
+    install: |
+      bin.install "tele"
+    test: |
+      system "#{bin}/tele", "--version"

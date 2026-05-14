@@ -9,70 +9,23 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            artifact: tele-linux-amd64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            artifact: tele-linux-arm64
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            artifact: tele-darwin-amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-            artifact: tele-darwin-arm64
-          # - os: windows-latest
-          #   goos: windows
-          #   goarch: amd64
-          #   artifact: tele-windows-amd64.exe
-          # - os: windows-latest
-          #   goos: windows
-          #   goarch: arm64
-          #   artifact: tele-windows-arm64.exe
-
-    runs-on: ${{ matrix.os }}
-
+  release:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Build
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          go build \
-            -ldflags "-X main.buildAPIID=${{ secrets.TG_API_ID }} -X main.buildAPIHash=${{ secrets.TG_API_HASH }}" \
-            -o ${{ matrix.artifact }} \
-            ./cmd/tele/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: tele-*
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

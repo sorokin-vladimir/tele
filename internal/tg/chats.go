@@ -119,7 +119,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 		var converted bool
 		switch dlg.Peer.(type) {
 		case *tg.PeerUser:
-			if u, ok := userMap[id]; ok && !u.Bot && !u.Self {
+			if u, ok := userMap[id]; ok {
 				chat, converted = convertUser(u)
 			}
 		case *tg.PeerChat:
@@ -174,9 +174,14 @@ func convertUser(u *tg.User) (store.Chat, bool) {
 	if u == nil {
 		return store.Chat{}, false
 	}
-	name := strings.TrimSpace(u.FirstName + " " + u.LastName)
-	if name == "" {
-		name = fmt.Sprintf("User %d", u.ID)
+	var name string
+	if u.Self {
+		name = "Saved Messages"
+	} else {
+		name = strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if name == "" {
+			name = fmt.Sprintf("User %d", u.ID)
+		}
 	}
 	return store.Chat{
 		ID:    u.ID,

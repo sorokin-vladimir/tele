@@ -21,7 +21,7 @@ func makeMessages(n int) []store.Message {
 }
 
 func TestMessageList_ShowsAll_WhenFewMessages(t *testing.T) {
-	ml := components.NewMessageList(10, 40)
+	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(3))
 	view := ml.View()
 	assert.Contains(t, view, "msg 1")
@@ -45,9 +45,9 @@ func TestMessageList_Count(t *testing.T) {
 func TestMessageList_ScrollUp(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages(makeMessages(6))
-	// after SetMessages viewStart is at tail (only last msg fits); scroll up moves it back
+	// with bubble borders each msg is ~5 lines, none fit in viewHeight=3; viewStart=6
 	ml.ScrollUp()
-	assert.Equal(t, 4, ml.ViewStart()) // was 5, now 4
+	assert.Equal(t, 5, ml.ViewStart()) // was 6, now 5
 }
 
 func TestMessageList_AtTop_TrueWhenAtStart(t *testing.T) {
@@ -64,7 +64,8 @@ func TestMessageList_AtTop_FalseAfterScroll(t *testing.T) {
 
 func TestMessageList_AtTop_TrueAfterScrollingToStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(4)) // viewStart = 3 (each msg is 3 lines, only last fits)
+	ml.SetMessages(makeMessages(4)) // viewStart = 4 (bubble msgs ~5 lines, none fit in 3)
+	ml.ScrollUp()                   // 3
 	ml.ScrollUp()                   // 2
 	ml.ScrollUp()                   // 1
 	ml.ScrollUp()                   // 0
@@ -84,14 +85,14 @@ func TestMessageList_OldestID_ZeroWhenEmpty(t *testing.T) {
 
 func TestMessageList_PrependMessages_PreservesViewStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(1)) // 1 msg × 3 lines = viewHeight → viewStart = 0
+	ml.SetMessages(makeMessages(1)) // 1 msg × ~5 lines > viewHeight=3 → viewStart = 1
 	older := []store.Message{
 		{ID: 10, ChatID: 1, Text: "old1", Date: time.Now()},
 		{ID: 11, ChatID: 1, Text: "old2", Date: time.Now()},
 	}
 	ml.PrependMessages(older)
 	// viewStart shifts by len(older) so the same message stays on screen
-	assert.Equal(t, 2, ml.ViewStart())
+	assert.Equal(t, 3, ml.ViewStart())
 }
 
 func TestMessageList_View_RendersEntityStyledText(t *testing.T) {

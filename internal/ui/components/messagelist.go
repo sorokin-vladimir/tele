@@ -1,6 +1,7 @@
 package components
 
 import (
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -88,14 +89,19 @@ func (ml *MessageList) positionAtBottom() int {
 }
 
 // msgHeight estimates the rendered line count for a single message:
-// 1 header + wrapped text lines + 1 blank separator.
+// 2 border lines + 1 header + wrapped body lines + 1 blank separator.
 func (ml *MessageList) msgHeight(msg store.Message) int {
 	if ml.viewWidth <= 0 {
-		return 3
+		return 5
 	}
-	msgWidth := ml.viewWidth * 3 / 4
-	if msgWidth < 10 {
-		msgWidth = 10
+	maxBubbleW := ml.viewWidth * 3 / 4
+	if maxBubbleW < 10 {
+		maxBubbleW = 10
+	}
+	// Width() in lipgloss v2 is the total outer width; border(2)+padding(2) = 4 overhead
+	maxContentW := maxBubbleW - 4
+	if maxContentW < 4 {
+		maxContentW = 4
 	}
 	h := 1 // header
 	for _, part := range strings.Split(msg.Text, "\n") {
@@ -103,86 +109,129 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 		if len(r) == 0 {
 			h++
 		} else {
-			h += (len(r) + msgWidth - 1) / msgWidth
+			h += (len(r) + maxContentW - 1) / maxContentW
 		}
 	}
-	return h + 1 // +1 blank separator
+	return h + 2 // +2 border lines (top+bottom)
 }
 
-// renderMessage returns the display lines for a single message.
+// renderMessage returns the display lines for a single message bubble.
 func (ml *MessageList) renderMessage(msg store.Message) []string {
 	if ml.viewWidth <= 0 {
 		return []string{""}
 	}
-	msgWidth := ml.viewWidth * 3 / 4
-	if msgWidth < 10 {
-		msgWidth = 10
+	maxBubbleW := ml.viewWidth * 3 / 4
+	if maxBubbleW < 10 {
+		maxBubbleW = 10
 	}
-	leftPad := ml.viewWidth - msgWidth
+	// Width() in lipgloss v2 is the total outer width; border(2)+padding(2) = 4 overhead
+	maxContentW := maxBubbleW - 4
+	if maxContentW < 4 {
+		maxContentW = 4
+	}
 
-	var blockBase lipgloss.Style
-	var tsStyle lipgloss.Style
-	var labelStyle lipgloss.Style
+	var bg color.Color
+	var borderFg color.Color
 	if msg.IsOut {
-		blockBase = lipgloss.NewStyle().Width(msgWidth).Background(outBubbleBg)
-		tsStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Background(outBubbleBg)
-		labelStyle = outNameStyle.Background(outBubbleBg)
+		bg = outBubbleBg
+		borderFg = lipgloss.Color("25")
 	} else {
-		blockBase = lipgloss.NewStyle().Width(msgWidth).Background(inBubbleBg)
-		tsStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Background(inBubbleBg)
-		labelStyle = inNameStyle.Background(inBubbleBg)
+		bg = inBubbleBg
+		borderFg = lipgloss.Color("238")
 	}
 
-	ts := tsStyle.Render(msg.Date.Format("15:04"))
+	tsStyled := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Background(bg).
+		Render(msg.Date.Format("15:04"))
 
-	var lines []string
-
-	// Header: label + time. In group chats show sender name / "You"; in DMs use > / <.
+	// Header: for outgoing messages the header is right-aligned inside the bubble;
+	// for incoming it is left-aligned.
+	var headerStyled string
 	if msg.IsOut {
 		var label string
 		if ml.isGroup {
-			label = labelStyle.Render("You")
+			label = outNameStyle.Background(bg).Render("You")
 		} else {
-			label = labelStyle.Render("<")
+			label = outNameStyle.Background(bg).Render("<")
 		}
-		header := ts + " " + label
-		lines = append(lines, strings.Repeat(" ", leftPad)+blockBase.Align(lipgloss.Right).Render(header))
+		headerStyled = label + "  " + tsStyled
 	} else {
-		var label string
+		var name string
 		if ml.isGroup {
-			name := msg.SenderName
+			name = msg.SenderName
 			if name == "" {
 				name = "?"
 			}
-			label = labelStyle.Render(name)
 		} else {
-			label = labelStyle.Render(">")
+			name = ">"
 		}
-		header := label + " " + ts
-		lines = append(lines, blockBase.Render(header))
+		label := inNameStyle.Background(bg).Render(name)
+		headerStyled = label + "  " + tsStyled
 	}
 
-	// Body: preserve newlines, word-wrap each logical line to msgWidth
-	rendered := RenderEntities(msg.Text, msg.Entities)
-	var bodyStyle lipgloss.Style
-	if msg.IsOut {
-		bodyStyle = blockBase.Align(lipgloss.Right)
-	} else {
-		bodyStyle = blockBase
-	}
-	for _, part := range strings.Split(rendered, "\n") {
-		wrapped := bodyStyle.Render(part)
-		for _, wl := range strings.Split(wrapped, "\n") {
-			if msg.IsOut {
-				lines = append(lines, strings.Repeat(" ", leftPad)+wl)
-			} else {
-				lines = append(lines, wl)
+	// Measure the natural content width so the bubble hugs its content.
+	actualW := lipgloss.Width(headerStyled)
+	if msg.Text != "" {
+		measureStyle := lipgloss.NewStyle().Width(maxContentW)
+		for _, part := range strings.Split(msg.Text, "\n") {
+			if part == "" {
+				continue
+			}
+			for _, wl := range strings.Split(measureStyle.Render(part), "\n") {
+				if w := lipgloss.Width(strings.TrimRight(wl, " ")); w > actualW {
+					actualW = w
+				}
 			}
 		}
+		if actualW > maxContentW {
+			actualW = maxContentW
+		}
+	}
+	if actualW < 1 {
+		actualW = 1
 	}
 
-	// Blank separator between messages (no background)
-	lines = append(lines, "")
+	// Right-align the header line for outgoing messages by padding it on the left.
+	if msg.IsOut {
+		if pad := actualW - lipgloss.Width(headerStyled); pad > 0 {
+			headerStyled = strings.Repeat(" ", pad) + headerStyled
+		}
+	}
+
+	// Body with entity styling.
+	rendered := RenderEntities(msg.Text, msg.Entities)
+	var contentParts []string
+	contentParts = append(contentParts, headerStyled)
+	if msg.Text != "" {
+		contentParts = append(contentParts, strings.Split(rendered, "\n")...)
+	}
+	content := strings.Join(contentParts, "\n")
+
+	// actualW+4 = total outer width: content + padding(1+1) + border(1+1).
+	bubble := lipgloss.NewStyle().
+		Width(actualW+4).
+		Background(bg).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderFg).
+		Padding(0, 1).
+		Render(content)
+
+	lines := strings.Split(bubble, "\n")
+
+	// Outgoing bubbles are right-aligned; incoming stay at the left margin.
+	if msg.IsOut {
+		bubbleW := lipgloss.Width(lines[0])
+		leftPad := ml.viewWidth - bubbleW
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		pad := strings.Repeat(" ", leftPad)
+		for i := range lines {
+			lines[i] = pad + lines[i]
+		}
+	}
+
 	return lines
 }
 

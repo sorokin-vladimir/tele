@@ -65,7 +65,7 @@ func (vs *VimState) Process(key string) Action {
 	case "g":
 		vs.Pending = "g"
 		return ActionNone
-	case "i":
+	case "i", "a":
 		vs.Mode = ModeInsert
 		return ActionInsert
 	case "esc":

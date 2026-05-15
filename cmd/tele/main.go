@@ -110,10 +110,5 @@ func ensureConfig(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(defaultConfig), 0600); err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "Created default config at %s\nEdit it and set telegram.api_id and telegram.api_hash (get them at https://my.telegram.org)\n", path)
-	os.Exit(0)
-	return nil
+	return os.WriteFile(path, []byte(defaultConfig), 0600)
 }

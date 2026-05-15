@@ -38,6 +38,60 @@ func TestConvertChannel_ToChat(t *testing.T) {
 	assert.Equal(t, int64(99), chat.Peer.AccessHash)
 }
 
+func TestConvertUser_Bot(t *testing.T) {
+	user := &tg.User{ID: 101, FirstName: "MyBot", Bot: true, AccessHash: 55}
+	chat, ok := convertUser(user)
+	require.True(t, ok)
+	assert.Equal(t, int64(101), chat.ID)
+	assert.Equal(t, "MyBot", chat.Title)
+	assert.Equal(t, store.PeerUser, chat.Peer.Type)
+	assert.Equal(t, int64(55), chat.Peer.AccessHash)
+}
+
+func TestConvertUser_Self(t *testing.T) {
+	user := &tg.User{ID: 1, FirstName: "Me", Self: true, AccessHash: 7}
+	chat, ok := convertUser(user)
+	require.True(t, ok)
+	assert.Equal(t, "Saved Messages", chat.Title)
+	assert.Equal(t, store.PeerUser, chat.Peer.Type)
+}
+
+func TestParseDialogs_IncludesBots(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	bot := &tg.User{ID: 42, FirstName: "CoolBot", Bot: true, AccessHash: 1}
+	dialog := &tg.Dialog{
+		Peer:       &tg.PeerUser{UserID: 42},
+		TopMessage: 1,
+	}
+	msg := &tg.Message{ID: 1, Date: int(time.Now().Unix())}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{msg},
+		Users:    []tg.UserClass{bot},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, "CoolBot", chats[0].Title)
+}
+
+func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	self := &tg.User{ID: 1, FirstName: "Me", Self: true, AccessHash: 7}
+	dialog := &tg.Dialog{
+		Peer:       &tg.PeerUser{UserID: 1},
+		TopMessage: 1,
+	}
+	msg := &tg.Message{ID: 1, Date: int(time.Now().Unix())}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{msg},
+		Users:    []tg.UserClass{self},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, "Saved Messages", chats[0].Title)
+}
+
 func TestParseDialogs_UnreadCount(t *testing.T) {
 	c := &GotdClient{peers: make(map[int64]store.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}

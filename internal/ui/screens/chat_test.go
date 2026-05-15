@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -42,7 +42,7 @@ func TestChat_SendMessage_EmitsRequest(t *testing.T) {
 	// type text via SetValue shortcut
 	m.SetComposerValue("hello")
 	// press enter
-	newPane, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_ = newPane
 	require.NotNil(t, cmd)
 	msg := cmd()

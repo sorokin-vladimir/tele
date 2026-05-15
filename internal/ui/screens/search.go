@@ -3,8 +3,8 @@ package screens
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -41,11 +41,11 @@ func NewSearchModel(chats []store.Chat, width, height int) *SearchModel {
 func (m *SearchModel) Cursor() int { return m.cursor }
 
 func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
-	switch km.Type {
+	switch km.Code {
 	case tea.KeyEsc:
 		return m, func() tea.Msg { return CloseSearchMsg{} }
 	case tea.KeyEnter:
@@ -71,13 +71,11 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 			m.cursor--
 		}
 		return m, nil
-	case tea.KeySpace:
-		m.query += " "
-		m.filter()
-		return m, nil
-	case tea.KeyRunes:
-		m.query += string(km.Runes)
-		m.filter()
+	default:
+		if km.Text != "" {
+			m.query += km.Text
+			m.filter()
+		}
 		return m, nil
 	}
 	return m, nil

@@ -3,8 +3,8 @@ package screens
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
@@ -35,7 +35,7 @@ type LoginModel struct {
 func NewLoginModel(af *internaltg.AuthFlow) LoginModel {
 	ti := textinput.New()
 	ti.Focus()
-	ti.Width = 40
+	ti.SetWidth(40)
 	return LoginModel{
 		af:    af,
 		input: ti,
@@ -71,8 +71,8 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConnectedMsg:
 		return m, func() tea.Msg { return TransitionToMainMsg{} }
 
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEnter && m.step >= 0 {
+	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEnter && m.step >= 0 {
 			val := m.input.Value()
 			af := m.af
 			go func() {
@@ -88,9 +88,12 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m LoginModel) View() string {
+func (m LoginModel) View() tea.View {
+	var s string
 	if m.step < 0 {
-		return "Connecting...\n"
+		s = "Connecting...\n"
+	} else {
+		s = fmt.Sprintf("%s\n\n%s\n\n%s", m.prompt, m.input.View(), m.err)
 	}
-	return fmt.Sprintf("%s\n\n%s\n\n%s", m.prompt, m.input.View(), m.err)
+	return tea.NewView(s)
 }

@@ -1,7 +1,7 @@
 package layout
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 

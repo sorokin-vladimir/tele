@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -42,7 +42,7 @@ func TestRoot_CtrlL_FocusesChat(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'l', Mod: tea.ModCtrl})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusChat, root.CurrentFocus())
 }
@@ -51,7 +51,7 @@ func TestRoot_CtrlH_FocusesChatList(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m = m.WithFocus(ui.FocusChat)
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'h', Mod: tea.ModCtrl})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusChatList, root.CurrentFocus())
 }
@@ -66,7 +66,7 @@ func TestRoot_TransitionToMain(t *testing.T) {
 func TestRoot_CtrlC_Quits(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	assert.NotNil(t, cmd)
 	msg := cmd()
 	_, isQuit := msg.(tea.QuitMsg)
@@ -99,7 +99,7 @@ func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
 	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	root := newM.(ui.RootModel)
 	assert.True(t, root.SearchActive())
 }
@@ -109,7 +109,7 @@ func TestRoot_CloseSearchMsg_DeactivatesSearch(t *testing.T) {
 	st.SetChat(store.Chat{ID: 1, Title: "Alice"})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	m = newM.(ui.RootModel)
 	require.True(t, m.SearchActive())
 	newM, _ = m.Update(screens.CloseSearchMsg{})
@@ -122,7 +122,7 @@ func TestRoot_SearchOpenChatMsg_ClosesSearch(t *testing.T) {
 	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1}})
 	m := ui.NewRootModel(nil, st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	m = newM.(ui.RootModel)
 	newM, _ = m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
 	m = newM.(ui.RootModel)

@@ -3,7 +3,7 @@ package screens_test
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -16,7 +16,7 @@ func TestLogin_AuthRequest_UpdatesPrompt(t *testing.T) {
 	newM, _ := m.Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPhone})
 	lm := newM.(screens.LoginModel)
 	assert.Equal(t, internaltg.AuthStepPhone, lm.CurrentStep())
-	assert.Contains(t, lm.View(), "phone")
+	assert.Contains(t, lm.View().Content, "phone")
 }
 
 func TestLogin_Connected_EmitsTransition(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLogin_Connected_EmitsTransition(t *testing.T) {
 func TestLogin_InitialView_ShowsConnecting(t *testing.T) {
 	af := internaltg.NewAuthFlow()
 	m := screens.NewLoginModel(af)
-	assert.Contains(t, m.View(), "onnect") // "Connecting..." or "Connect"
+	assert.Contains(t, m.View().Content, "onnect") // "Connecting..." or "Connect"
 }
 
 // ensure tea import is used (Blink cmd returns tea.Cmd)

@@ -3,13 +3,14 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 var (
-	inBubbleBg  = lipgloss.AdaptiveColor{Dark: "237", Light: "252"}
-	outBubbleBg = lipgloss.AdaptiveColor{Dark: "17", Light: "153"}
+	inBubbleBg  = compat.AdaptiveColor{Dark: lipgloss.Color("237"), Light: lipgloss.Color("252")}
+	outBubbleBg = compat.AdaptiveColor{Dark: lipgloss.Color("17"), Light: lipgloss.Color("153")}
 
 	inNameStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 	outNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)

@@ -1,8 +1,8 @@
 package components
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 )
 
 type Composer struct {
@@ -12,11 +12,11 @@ type Composer struct {
 func NewComposer(width int) *Composer {
 	ti := textinput.New()
 	ti.Placeholder = "Write a message..."
-	ti.Width = width
+	ti.SetWidth(width)
 	return &Composer{input: ti}
 }
 
-func (c *Composer) SetWidth(w int)    { c.input.Width = w }
+func (c *Composer) SetWidth(w int)    { c.input.SetWidth(w) }
 func (c *Composer) Focus()            { c.input.Focus() }
 func (c *Composer) Blur()             { c.input.Blur() }
 func (c *Composer) Value() string     { return c.input.Value() }

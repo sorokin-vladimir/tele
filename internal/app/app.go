@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/gen2brain/beeep"
 	"go.uber.org/zap"
 
@@ -93,7 +93,7 @@ func (a *App) Run() error {
 		atomic.StoreInt64(&a.currentChatID, id)
 	})
 
-	prog := tea.NewProgram(root, tea.WithAltScreen())
+	prog := tea.NewProgram(root)
 
 	// Bridge: auth requests + ready signal → bubbletea
 	go func() {

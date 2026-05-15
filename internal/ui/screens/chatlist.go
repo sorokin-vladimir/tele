@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
@@ -145,33 +146,43 @@ func (m *ChatListModel) View() string {
 	if w < 1 {
 		w = 1
 	}
+	// Build lines to w-1 display columns so that the outer lipgloss container's
+	// Width(w) padding never triggers word-wrap (which fires when content >= w).
+	inner := w - 1
+	if inner < 1 {
+		inner = 1
+	}
+
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		badge := formatUnread(m.chats[i].UnreadCount)
 		title := m.chats[i].Title
 		var line string
 		if badge == "" {
-			line = title
+			line = runewidth.Truncate(title, inner, "")
+			lw := runewidth.StringWidth(line)
+			if lw < inner {
+				line += strings.Repeat(" ", inner-lw)
+			}
 		} else {
-			maxTitle := w - len(badge) - 1
-			if maxTitle < 0 {
-				maxTitle = 0
+			badgeW := len(badge) // badge is ASCII only
+			maxTitleW := inner - badgeW - 1
+			if maxTitleW < 0 {
+				maxTitleW = 0
 			}
-			runes := []rune(title)
-			if len(runes) > maxTitle {
-				runes = runes[:maxTitle]
-			}
-			pad := w - len(runes) - len(badge)
+			truncTitle := runewidth.Truncate(title, maxTitleW, "")
+			titleW := runewidth.StringWidth(truncTitle)
+			pad := inner - titleW - badgeW
 			if pad < 0 {
 				pad = 0
 			}
-			line = string(runes) + strings.Repeat(" ", pad) + badge
+			line = truncTitle + strings.Repeat(" ", pad) + badge
 		}
+		style := normalChatStyle
 		if i == m.cursor {
-			lines = append(lines, selectedChatStyle.Inline(true).Width(w).MaxWidth(w).Render(line))
-		} else {
-			lines = append(lines, normalChatStyle.Inline(true).Width(w).MaxWidth(w).Render(line))
+			style = selectedChatStyle
 		}
+		lines = append(lines, style.Inline(true).Render(line))
 	}
 	return strings.Join(lines, "\n")
 }

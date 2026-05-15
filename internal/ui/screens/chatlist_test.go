@@ -75,7 +75,7 @@ func TestChatList_NoBadgeWhenZero(t *testing.T) {
 	m.SetSize(40, 20)
 	m.SetChats([]store.Chat{{ID: 1, Title: "Quiet", UnreadCount: 0}})
 	view := m.View()
-	assert.NotContains(t, view, "[")
+	assert.NotContains(t, view, "[0]")
 }
 
 func TestChatList_SetChats_PreservesCursorByID(t *testing.T) {

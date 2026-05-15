@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
-	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
@@ -85,9 +85,9 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	}
 }
 
-func (m RootModel) CurrentScreen() Screen             { return m.screen }
-func (m RootModel) CurrentFocus() Focus               { return m.focus }
-func (m RootModel) ChatList() *screens.ChatListModel  { return m.chatList }
+func (m RootModel) CurrentScreen() Screen            { return m.screen }
+func (m RootModel) CurrentFocus() Focus              { return m.focus }
+func (m RootModel) ChatList() *screens.ChatListModel { return m.chatList }
 
 // WithScreen returns a copy with the given screen set (used in tests and app init).
 func (m RootModel) WithScreen(s Screen) RootModel {
@@ -274,7 +274,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)
@@ -285,7 +285,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m RootModel) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 	if m.verbose {
 		m.statusBar.SetLastKey(keyStr)
@@ -375,44 +375,50 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m RootModel) View() string {
+func (m RootModel) View() tea.View {
+	var content string
 	if m.screen == ScreenLogin {
-		return m.login.View()
-	}
-
-	leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
-	paneH := m.height - 1
-	innerH := paneH - 2*borderSize
-
-	activeBorder := lipgloss.DoubleBorder()
-	inactiveBorder := lipgloss.NormalBorder()
-
-	chatListBorder, chatBorder := inactiveBorder, inactiveBorder
-	if m.focus == FocusChatList {
-		chatListBorder = activeBorder
+		content = m.login.View().Content
 	} else {
-		chatBorder = activeBorder
+		leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
+		paneH := m.height + 1
+		innerH := paneH - 2*borderSize
+
+		activeBorder := lipgloss.DoubleBorder()
+		inactiveBorder := lipgloss.NormalBorder()
+
+		chatListBorder, chatBorder := inactiveBorder, inactiveBorder
+		if m.focus == FocusChatList {
+			chatListBorder = activeBorder
+		} else {
+			chatBorder = activeBorder
+		}
+
+		chatListWidth := leftW - 2*borderSize + 2
+		chatWidth := rightW - 2*borderSize + 2
+
+		chatListView := lipgloss.NewStyle().
+			Width(chatListWidth).MaxWidth(chatListWidth).Height(innerH).MaxHeight(innerH).
+			Border(chatListBorder).
+			Render(m.chatList.View())
+
+		chatView := lipgloss.NewStyle().
+			Width(chatWidth).MaxWidth(chatWidth).Height(innerH).MaxHeight(innerH).
+			Border(chatBorder).
+			Render(m.chat.View())
+
+		main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
+		content = main + "\n" + m.statusBar.View()
+		if m.searchModel != nil {
+			// lipgloss.Place fills the terminal with spaces as background; transparent overlay is not supported in terminal.
+			content = lipgloss.Place(
+				m.width, m.height,
+				lipgloss.Center, lipgloss.Center,
+				m.searchModel.View(),
+			)
+		}
 	}
-
-	chatListView := lipgloss.NewStyle().
-		Width(leftW - 2*borderSize).Height(innerH).
-		Border(chatListBorder).
-		Render(m.chatList.View())
-
-	chatView := lipgloss.NewStyle().
-		Width(rightW - 2*borderSize).Height(innerH).
-		Border(chatBorder).
-		Render(m.chat.View())
-
-	main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
-	mainView := main + "\n" + m.statusBar.View()
-	if m.searchModel != nil {
-		// lipgloss.Place fills the terminal with spaces as background; transparent overlay is not supported in terminal.
-		return lipgloss.Place(
-			m.width, m.height,
-			lipgloss.Center, lipgloss.Center,
-			m.searchModel.View(),
-		)
-	}
-	return mainView
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }

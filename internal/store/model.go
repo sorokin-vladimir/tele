@@ -27,12 +27,13 @@ type MessageEntity struct {
 }
 
 type Chat struct {
-	ID          int64
-	Title       string
-	Peer        Peer
-	Pinned      bool
-	UnreadCount int
-	LastMessage *Message
+	ID             int64
+	Title          string
+	Peer           Peer
+	Pinned         bool
+	UnreadCount    int
+	ReadInboxMaxID int
+	LastMessage    *Message
 }
 
 type Message struct {

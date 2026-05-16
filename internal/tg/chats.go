@@ -136,6 +136,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 		}
 		chat.Pinned = m.pinned
 		chat.UnreadCount = dlg.UnreadCount
+		chat.ReadInboxMaxID = dlg.ReadInboxMaxID
 		chat.LastMessage = &store.Message{Date: m.lastMsgAt}
 		c.cachePeer(chat.Peer)
 		out = append(out, chat)

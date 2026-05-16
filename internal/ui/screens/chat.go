@@ -1,10 +1,7 @@
 package screens
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -66,9 +63,15 @@ func (m *ChatModel) SetComposerValue(v string)        { m.composer.SetValue(v) }
 func (m *ChatModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	composerHeight := 3
-	m.msgList.SetSize(width, height-composerHeight-1)
+	m.msgList.SetSize(width, height-2) // -1 separator, -1 composer
 	m.composer.SetWidth(width)
+}
+
+func (m *ChatModel) Title() string {
+	if m.chat == nil {
+		return "(no chat)"
+	}
+	return m.chat.Title
 }
 
 func (m *ChatModel) Init() tea.Cmd { return m.composer.Init() }
@@ -130,15 +133,5 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 }
 
 func (m *ChatModel) View() string {
-	title := "(no chat)"
-	if m.chat != nil {
-		title = m.chat.Title
-	}
-	w := m.width
-	if w < 1 {
-		w = 1
-	}
-	titleLine := lipgloss.NewStyle().Inline(true).Width(w).MaxWidth(w).Render(title)
-	divider := strings.Repeat("─", w)
-	return titleLine + "\n" + divider + "\n" + m.msgList.View() + "\n" + m.composer.View()
+	return m.msgList.View() + "\n" + m.composer.View()
 }

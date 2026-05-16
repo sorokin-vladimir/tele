@@ -14,8 +14,10 @@ func TestKeyMap_Resolve_ChatList(t *testing.T) {
 
 func TestKeyMap_Resolve_GlobalFallback(t *testing.T) {
 	km := keys.DefaultKeyMap()
-	assert.Equal(t, keys.ActionFocusLeft, km.Resolve(keys.ContextChatList, "ctrl+h"))
-	assert.Equal(t, keys.ActionFocusRight, km.Resolve(keys.ContextChatList, "ctrl+l"))
+	assert.Equal(t, keys.ActionFocusLeft, km.Resolve(keys.ContextChatList, "1"))
+	assert.Equal(t, keys.ActionFocusRight, km.Resolve(keys.ContextChatList, "2"))
+	assert.Equal(t, keys.ActionFocusLeft, km.Resolve(keys.ContextChatList, "left"))
+	assert.Equal(t, keys.ActionFocusRight, km.Resolve(keys.ContextChatList, "right"))
 }
 
 func TestKeyMap_Resolve_Unknown(t *testing.T) {

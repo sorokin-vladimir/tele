@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -378,7 +379,22 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 func (m RootModel) View() tea.View {
 	var content string
 	if m.screen == ScreenLogin {
-		content = m.login.View().Content
+		loginContent := m.login.View().Content
+		b := lipgloss.RoundedBorder()
+		loginLines := strings.Split(loginContent, "\n")
+		loginContentH := len(loginLines)
+		loginContentW := 0
+		for _, l := range loginLines {
+			if w := lipgloss.Width(l); w > loginContentW {
+				loginContentW = w
+			}
+		}
+		const loginPadV, loginPadH = 1, 3
+		innerW := loginContentW + 2*loginPadH
+		innerH := loginContentH + 2*loginPadV
+		padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
+		loginBox := renderWithTitle(padded, "Telegram", b, innerW+2, innerH+2)
+		content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, loginBox)
 	} else {
 		leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
 		paneH := m.height + 1
@@ -397,28 +413,56 @@ func (m RootModel) View() tea.View {
 		chatListWidth := leftW - 2*borderSize + 2
 		chatWidth := rightW - 2*borderSize + 2
 
-		chatListView := lipgloss.NewStyle().
-			Width(chatListWidth).MaxWidth(chatListWidth).Height(innerH).MaxHeight(innerH).
-			Border(chatListBorder).
-			Render(m.chatList.View())
-
-		chatView := lipgloss.NewStyle().
-			Width(chatWidth).MaxWidth(chatWidth).Height(innerH).MaxHeight(innerH).
-			Border(chatBorder).
-			Render(m.chat.View())
+		chatListView := renderWithTitle(m.chatList.View(), "[1] Chats", chatListBorder, chatListWidth, innerH)
+		chatView := renderWithTitle(m.chat.View(), "[2] "+m.chat.Title(), chatBorder, chatWidth, innerH)
 
 		main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
 		content = main + "\n" + m.statusBar.View()
 		if m.searchModel != nil {
-			// lipgloss.Place fills the terminal with spaces as background; transparent overlay is not supported in terminal.
-			content = lipgloss.Place(
-				m.width, m.height,
-				lipgloss.Center, lipgloss.Center,
-				m.searchModel.View(),
-			)
+			content = overlayCenter(content, m.searchModel.View(), m.width, m.height)
 		}
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+// renderWithTitle renders a bordered box with a title in the top border line.
+// w and h are the total outer dimensions (including the 1-char border on each side).
+func renderWithTitle(content, title string, b lipgloss.Border, w, h int) string {
+	innerW := w - 2
+	innerH := h - 2
+
+	titleStr := " " + title + " "
+	titleW := lipgloss.Width(titleStr)
+	fillW := innerW - titleW
+
+	var top string
+	if fillW >= 2 {
+		rightFill := fillW - 1
+		top = b.TopLeft + b.Top + titleStr + strings.Repeat(b.Top, rightFill) + b.TopRight
+	} else {
+		top = b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight
+	}
+	bottom := b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight
+
+	lines := strings.Split(content, "\n")
+	for len(lines) < innerH {
+		lines = append(lines, strings.Repeat(" ", innerW))
+	}
+	if len(lines) > innerH {
+		lines = lines[:innerH]
+	}
+
+	result := make([]string, 0, innerH+2)
+	result = append(result, top)
+	for _, l := range lines {
+		lw := lipgloss.Width(l)
+		if lw < innerW {
+			l += strings.Repeat(" ", innerW-lw)
+		}
+		result = append(result, b.Left+l+b.Right)
+	}
+	result = append(result, bottom)
+	return strings.Join(result, "\n")
 }

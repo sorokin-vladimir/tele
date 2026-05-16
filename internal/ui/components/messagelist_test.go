@@ -45,9 +45,9 @@ func TestMessageList_Count(t *testing.T) {
 func TestMessageList_ScrollUp(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages(makeMessages(6))
-	// with bubble borders each msg is ~5 lines, none fit in viewHeight=3; viewStart=6
+	// each msg is 3 lines (top border + text + bottom border); viewStart=5
 	ml.ScrollUp()
-	assert.Equal(t, 5, ml.ViewStart()) // was 6, now 5
+	assert.Equal(t, 4, ml.ViewStart()) // was 5, now 4
 }
 
 func TestMessageList_AtTop_TrueWhenAtStart(t *testing.T) {
@@ -85,14 +85,14 @@ func TestMessageList_OldestID_ZeroWhenEmpty(t *testing.T) {
 
 func TestMessageList_PrependMessages_PreservesViewStart(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
-	ml.SetMessages(makeMessages(1)) // 1 msg × ~5 lines > viewHeight=3 → viewStart = 1
+	ml.SetMessages(makeMessages(1)) // 1 msg × 3 lines = viewHeight=3 → viewStart = 0
 	older := []store.Message{
 		{ID: 10, ChatID: 1, Text: "old1", Date: time.Now()},
 		{ID: 11, ChatID: 1, Text: "old2", Date: time.Now()},
 	}
 	ml.PrependMessages(older)
 	// viewStart shifts by len(older) so the same message stays on screen
-	assert.Equal(t, 3, ml.ViewStart())
+	assert.Equal(t, 2, ml.ViewStart())
 }
 
 func TestMessageList_View_RendersEntityStyledText(t *testing.T) {

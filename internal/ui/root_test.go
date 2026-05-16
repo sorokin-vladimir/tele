@@ -38,20 +38,20 @@ func TestRoot_InitialScreen_Login(t *testing.T) {
 	assert.Equal(t, ui.ScreenLogin, m.CurrentScreen())
 }
 
-func TestRoot_CtrlL_FocusesChat(t *testing.T) {
+func TestRoot_2_FocusesChat(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
-	newM, _ := m.Update(tea.KeyPressMsg{Code: 'l', Mod: tea.ModCtrl})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusChat, root.CurrentFocus())
 }
 
-func TestRoot_CtrlH_FocusesChatList(t *testing.T) {
+func TestRoot_1_FocusesChatList(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m = m.WithFocus(ui.FocusChat)
-	newM, _ := m.Update(tea.KeyPressMsg{Code: 'h', Mod: tea.ModCtrl})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusChatList, root.CurrentFocus())
 }

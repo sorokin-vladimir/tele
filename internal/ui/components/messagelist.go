@@ -5,16 +5,12 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 var (
-	inBubbleBg  = compat.AdaptiveColor{Dark: lipgloss.Color("237"), Light: lipgloss.Color("252")}
-	outBubbleBg = compat.AdaptiveColor{Dark: lipgloss.Color("17"), Light: lipgloss.Color("153")}
-
-	inNameStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	outNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	inNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	tsStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
@@ -89,28 +85,33 @@ func (ml *MessageList) positionAtBottom() int {
 }
 
 // msgHeight estimates the rendered line count for a single message:
-// 2 border lines + 1 header + wrapped body lines + 1 blank separator.
+// 2 border lines (top with header title + bottom) + wrapped body lines.
 func (ml *MessageList) msgHeight(msg store.Message) int {
 	if ml.viewWidth <= 0 {
-		return 5
+		return 4
 	}
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
 	}
-	// Width() in lipgloss v2 is the total outer width; border(2)+padding(2) = 4 overhead
+	// border(2)+padding(2) = 4 overhead
 	maxContentW := maxBubbleW - 4
 	if maxContentW < 4 {
 		maxContentW = 4
 	}
-	h := 1 // header
-	for _, part := range strings.Split(msg.Text, "\n") {
-		r := []rune(part)
-		if len(r) == 0 {
-			h++
-		} else {
-			h += (len(r) + maxContentW - 1) / maxContentW
+	h := 0
+	if msg.Text != "" {
+		for _, part := range strings.Split(msg.Text, "\n") {
+			r := []rune(part)
+			if len(r) == 0 {
+				h++
+			} else {
+				h += (len(r) + maxContentW - 1) / maxContentW
+			}
 		}
+	}
+	if h == 0 {
+		h = 1 // at least one content line for empty-text messages
 	}
 	return h + 2 // +2 border lines (top+bottom)
 }
@@ -124,54 +125,23 @@ func (ml *MessageList) renderMessage(msg store.Message) []string {
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
 	}
-	// Width() in lipgloss v2 is the total outer width; border(2)+padding(2) = 4 overhead
+	// border(2)+padding(2) = 4 overhead
 	maxContentW := maxBubbleW - 4
 	if maxContentW < 4 {
 		maxContentW = 4
 	}
 
-	var bg color.Color
 	var borderFg color.Color
 	if msg.IsOut {
-		bg = outBubbleBg
 		borderFg = lipgloss.Color("25")
 	} else {
-		bg = inBubbleBg
 		borderFg = lipgloss.Color("238")
 	}
+	b := lipgloss.RoundedBorder()
+	bs := lipgloss.NewStyle().Foreground(borderFg)
 
-	tsStyled := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Background(bg).
-		Render(msg.Date.Format("15:04"))
-
-	// Header: for outgoing messages the header is right-aligned inside the bubble;
-	// for incoming it is left-aligned.
-	var headerStyled string
-	if msg.IsOut {
-		var label string
-		if ml.isGroup {
-			label = outNameStyle.Background(bg).Render("You")
-		} else {
-			label = outNameStyle.Background(bg).Render("<")
-		}
-		headerStyled = label + "  " + tsStyled
-	} else {
-		var name string
-		if ml.isGroup {
-			name = msg.SenderName
-			if name == "" {
-				name = "?"
-			}
-		} else {
-			name = ">"
-		}
-		label := inNameStyle.Background(bg).Render(name)
-		headerStyled = label + "  " + tsStyled
-	}
-
-	// Measure the natural content width so the bubble hugs its content.
-	actualW := lipgloss.Width(headerStyled)
+	// Measure content width from text only.
+	actualW := 0
 	if msg.Text != "" {
 		measureStyle := lipgloss.NewStyle().Width(maxContentW)
 		for _, part := range strings.Split(msg.Text, "\n") {
@@ -192,47 +162,89 @@ func (ml *MessageList) renderMessage(msg store.Message) []string {
 		actualW = 1
 	}
 
-	// Right-align the header line for outgoing messages by padding it on the left.
-	if msg.IsOut {
-		if pad := actualW - lipgloss.Width(headerStyled); pad > 0 {
-			headerStyled = strings.Repeat(" ", pad) + headerStyled
+	// innerW = actualW (content) + 2 (padding 1 each side).
+	innerW := actualW + 2
+
+	// Timestamp in bottom border — ensure it fits.
+	tsStr := " " + tsStyle.Render(msg.Date.Format("15:04")) + " "
+	tsW := lipgloss.Width(tsStr)
+	if innerW < tsW {
+		innerW = tsW
+		actualW = innerW - 2
+	}
+
+	// Top border: sender/indicator left-aligned for incoming; plain for outgoing.
+	var top string
+	if !msg.IsOut {
+		var senderStyled string
+		if ml.isGroup {
+			name := msg.SenderName
+			if name == "" {
+				name = "?"
+			}
+			senderStyled = inNameStyle.Render(name)
+		} else {
+			senderStyled = inNameStyle.Render(">")
 		}
+		titleStr := " " + senderStyled + " "
+		titleW := lipgloss.Width(titleStr)
+		rightFill := innerW - titleW - 1 // 1 fill char on the left
+		if rightFill < 0 {
+			rightFill = 0
+		}
+		top = bs.Render(b.TopLeft+b.Top) + titleStr + bs.Render(strings.Repeat(b.Top, rightFill)+b.TopRight)
+	} else {
+		top = bs.Render(b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight)
 	}
 
-	// Body with entity styling.
-	rendered := RenderEntities(msg.Text, msg.Entities)
-	var contentParts []string
-	contentParts = append(contentParts, headerStyled)
+	// Bottom border: timestamp right-aligned.
+	tsLeftFill := innerW - tsW
+	if tsLeftFill < 0 {
+		tsLeftFill = 0
+	}
+	bottom := bs.Render(b.BottomLeft+strings.Repeat(b.Bottom, tsLeftFill)) + tsStr + bs.Render(b.BottomRight)
+
+	// Content lines with word wrapping.
+	var sideLines []string
 	if msg.Text != "" {
-		contentParts = append(contentParts, strings.Split(rendered, "\n")...)
+		rendered := RenderEntities(msg.Text, msg.Entities)
+		wrapStyle := lipgloss.NewStyle().Width(actualW)
+		for _, part := range strings.Split(rendered, "\n") {
+			if part == "" {
+				sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+				continue
+			}
+			for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
+				lw := lipgloss.Width(wl)
+				if lw < actualW {
+					wl += strings.Repeat(" ", actualW-lw)
+				}
+				sideLines = append(sideLines, bs.Render(b.Left)+" "+wl+" "+bs.Render(b.Right))
+			}
+		}
+	} else {
+		sideLines = []string{bs.Render(b.Left) + strings.Repeat(" ", innerW) + bs.Render(b.Right)}
 	}
-	content := strings.Join(contentParts, "\n")
 
-	// actualW+4 = total outer width: content + padding(1+1) + border(1+1).
-	bubble := lipgloss.NewStyle().
-		Width(actualW+4).
-		Background(bg).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderFg).
-		Padding(0, 1).
-		Render(content)
-
-	lines := strings.Split(bubble, "\n")
+	allLines := make([]string, 0, len(sideLines)+2)
+	allLines = append(allLines, top)
+	allLines = append(allLines, sideLines...)
+	allLines = append(allLines, bottom)
 
 	// Outgoing bubbles are right-aligned; incoming stay at the left margin.
 	if msg.IsOut {
-		bubbleW := lipgloss.Width(lines[0])
+		bubbleW := lipgloss.Width(allLines[0])
 		leftPad := ml.viewWidth - bubbleW
 		if leftPad < 0 {
 			leftPad = 0
 		}
 		pad := strings.Repeat(" ", leftPad)
-		for i := range lines {
-			lines[i] = pad + lines[i]
+		for i := range allLines {
+			allLines[i] = pad + allLines[i]
 		}
 	}
 
-	return lines
+	return allLines
 }
 
 func (ml *MessageList) View() string {

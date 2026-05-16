@@ -52,9 +52,9 @@ func (vs *VimState) Process(key string) Action {
 	}
 
 	switch key {
-	case "j":
+	case "j", "down":
 		return ActionDown
-	case "k":
+	case "k", "up":
 		return ActionUp
 	case "h":
 		return ActionLeft

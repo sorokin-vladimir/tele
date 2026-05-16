@@ -25,16 +25,21 @@ type KeyMap map[Context]map[string]Action
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		ContextGlobal: {
-			"ctrl+h": ActionFocusLeft,
+			"1":      ActionFocusLeft,
+			"2":      ActionFocusRight,
 			"h":      ActionFocusLeft,
-			"ctrl+l": ActionFocusRight,
 			"l":      ActionFocusRight,
+			"left":   ActionFocusLeft,
+			"right":  ActionFocusRight,
 			"ctrl+c": ActionQuit,
 			"ctrl+q": ActionQuit,
+			"q":      ActionQuit,
 		},
 		ContextChatList: {
 			"j":     ActionDown,
 			"k":     ActionUp,
+			"down":  ActionDown,
+			"up":    ActionUp,
 			"G":     ActionGoBottom,
 			"enter": ActionConfirm,
 			"/":     ActionSearch,

@@ -48,12 +48,15 @@ func (m *ChatModel) SetChat(chat *store.Chat) {
 	m.chat = chat
 	if chat != nil {
 		m.msgList.SetIsGroup(chat.Peer.Type == store.PeerGroup || chat.Peer.Type == store.PeerChannel)
+		m.msgList.SetOutboxReadMaxID(chat.ReadOutboxMaxID)
 	} else {
 		m.msgList.SetIsGroup(false)
+		m.msgList.SetOutboxReadMaxID(0)
 	}
 }
-func (m *ChatModel) SetMessages(msgs []store.Message)            { m.msgList.SetMessages(msgs) }
-func (m *ChatModel) PrependMessages(older []store.Message)       { m.msgList.PrependMessages(older) }
+func (m *ChatModel) SetMessages(msgs []store.Message)      { m.msgList.SetMessages(msgs) }
+func (m *ChatModel) PrependMessages(older []store.Message) { m.msgList.PrependMessages(older) }
+func (m *ChatModel) SetOutboxReadMaxID(id int)             { m.msgList.SetOutboxReadMaxID(id) }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.ScrollToFirstUnread(readMaxID) }
 func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }

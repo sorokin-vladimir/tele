@@ -56,8 +56,15 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		Handler: dispatcher,
 	})
 
+	// outboxHook intercepts UpdateReadHistoryOutbox / UpdateReadChannelOutbox before
+	// the pts-tracking layer. updates.Manager silently drops these when a pts gap is
+	// present (the pending buffer never flushes), so we extract them from the raw
+	// wire message and emit the event immediately, then hand the update on to the
+	// manager as usual.
+	hook := newOutboxHook(manager, c.events, c.log)
+
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
-		UpdateHandler:  manager,
+		UpdateHandler:  hook,
 		SessionStorage: sess,
 		Logger:         c.log,
 	})

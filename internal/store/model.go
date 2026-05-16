@@ -27,13 +27,14 @@ type MessageEntity struct {
 }
 
 type Chat struct {
-	ID             int64
-	Title          string
-	Peer           Peer
-	Pinned         bool
-	UnreadCount    int
-	ReadInboxMaxID int
-	LastMessage    *Message
+	ID              int64
+	Title           string
+	Peer            Peer
+	Pinned          bool
+	UnreadCount     int
+	ReadInboxMaxID  int
+	ReadOutboxMaxID int
+	LastMessage     *Message
 }
 
 type Message struct {
@@ -52,6 +53,7 @@ type EventKind int
 const (
 	EventNewMessage EventKind = iota
 	EventReadInbox
+	EventReadOutbox
 )
 
 type Event struct {

@@ -10,4 +10,5 @@ type Store interface {
 	UpdateMessageID(chatID int64, oldID, newID int)
 	RemoveMessage(chatID int64, msgID int)
 	UpdateChatReadMaxID(chatID int64, maxID int)
+	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
 }

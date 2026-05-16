@@ -8,6 +8,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 

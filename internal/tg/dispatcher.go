@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gotd/td/tg"
+
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -53,6 +54,10 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 		}
 		return nil
 	})
+
+	// OnReadHistoryOutbox / OnReadChannelOutbox are NOT registered here.
+	// They are intercepted before pts-tracking in outboxHook (see client.go),
+	// because pts gaps cause updates.Manager to silently drop these events.
 }
 
 func extractPeerID(raw tg.MessageClass) int64 {

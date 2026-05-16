@@ -9,18 +9,21 @@ import (
 )
 
 var (
-	inNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	tsStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	inNameStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	tsStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	sentStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	readStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
-	messages   []store.Message
-	viewStart  int // index of first (possibly partial) visible message
-	lineOffset int // lines of messages[viewStart] to skip from the top
-	viewHeight int
-	viewWidth  int
-	isGroup    bool
+	messages        []store.Message
+	viewStart       int // index of first (possibly partial) visible message
+	lineOffset      int // lines of messages[viewStart] to skip from the top
+	viewHeight      int
+	viewWidth       int
+	isGroup         bool
+	outboxReadMaxID int
 }
 
 func NewMessageList(height, width int) *MessageList {
@@ -41,7 +44,8 @@ func (ml *MessageList) Count() int        { return len(ml.messages) }
 func (ml *MessageList) ViewStart() int    { return ml.viewStart }
 func (ml *MessageList) LineOffset() int   { return ml.lineOffset }
 func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 && ml.lineOffset == 0 }
-func (ml *MessageList) SetIsGroup(v bool) { ml.isGroup = v }
+func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v }
+func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
 
 // PrependMessages inserts older messages at the front and shifts viewStart so
 // that the currently-visible messages stay on screen.
@@ -252,8 +256,16 @@ func (ml *MessageList) renderMessage(msg store.Message) []string {
 	// innerW = actualW (content) + 2 (padding 1 each side).
 	innerW := actualW + 2
 
-	// Timestamp in bottom border — ensure it fits.
-	tsStr := " " + tsStyle.Render(msg.Date.Format("15:04")) + " "
+	// Timestamp + optional status indicator in bottom border.
+	var statusStr string
+	if msg.IsOut {
+		if msg.ID > 0 && msg.ID <= ml.outboxReadMaxID {
+			statusStr = " " + readStyle.Render("✓✓")
+		} else if msg.ID > 0 {
+			statusStr = " " + sentStyle.Render("✓")
+		}
+	}
+	tsStr := " " + tsStyle.Render(msg.Date.Format("15:04")) + statusStr + " "
 	tsW := lipgloss.Width(tsStr)
 	if innerW < tsW {
 		innerW = tsW

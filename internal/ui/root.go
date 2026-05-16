@@ -247,6 +247,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if chat, ok := m.st.GetChat(msg.ChatID); ok {
 				m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
 			}
+		case store.EventReadOutbox:
+			m.st.UpdateChatOutboxReadMaxID(msg.ChatID, msg.ReadMaxID)
+			if msg.ChatID == m.currentChatID {
+				if chat, ok := m.st.GetChat(msg.ChatID); ok {
+					m.chat.SetOutboxReadMaxID(chat.ReadOutboxMaxID)
+				}
+			}
 		}
 		return m, nil
 

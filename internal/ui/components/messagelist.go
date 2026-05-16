@@ -16,7 +16,8 @@ var (
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
 	messages   []store.Message
-	viewStart  int
+	viewStart  int // index of first (possibly partial) visible message
+	lineOffset int // lines of messages[viewStart] to skip from the top
 	viewHeight int
 	viewWidth  int
 	isGroup    bool
@@ -33,12 +34,13 @@ func (ml *MessageList) SetSize(width, height int) {
 
 func (ml *MessageList) SetMessages(msgs []store.Message) {
 	ml.messages = msgs
-	ml.viewStart = ml.positionAtBottom()
+	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 }
 
 func (ml *MessageList) Count() int        { return len(ml.messages) }
 func (ml *MessageList) ViewStart() int    { return ml.viewStart }
-func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 }
+func (ml *MessageList) LineOffset() int   { return ml.lineOffset }
+func (ml *MessageList) AtTop() bool       { return ml.viewStart == 0 && ml.lineOffset == 0 }
 func (ml *MessageList) SetIsGroup(v bool) { ml.isGroup = v }
 
 // PrependMessages inserts older messages at the front and shifts viewStart so
@@ -58,30 +60,84 @@ func (ml *MessageList) OldestID() int {
 	return ml.messages[0].ID
 }
 
+// ScrollToFirstUnread positions the viewport at the first message with ID > readMaxID.
+// If the remaining messages don't fill the viewport, older messages are pulled in to
+// fill the space (same as positionAtBottom), keeping the first unread visible.
+// Returns false if all messages are already read (nothing to jump to).
+func (ml *MessageList) ScrollToFirstUnread(readMaxID int) bool {
+	for i, msg := range ml.messages {
+		if msg.ID > readMaxID {
+			ml.viewStart = i
+			ml.lineOffset = 0
+			lines := 0
+			for j := i; j < len(ml.messages); j++ {
+				lines += ml.msgHeight(ml.messages[j])
+			}
+			if lines < ml.viewHeight {
+				ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// ScrollUp moves the viewport one line toward older messages.
+// When crossing a message boundary, small messages (h <= viewHeight) are entered at
+// lineOffset=h-2 so at least content+bottom are visible (never bottom-border-only).
+// Large messages are entered at their bottom portion (lineOffset=h-viewHeight).
 func (ml *MessageList) ScrollUp() {
+	if ml.lineOffset > 0 {
+		ml.lineOffset--
+		return
+	}
 	if ml.viewStart > 0 {
 		ml.viewStart--
+		h := ml.msgHeight(ml.messages[ml.viewStart])
+		if h > ml.viewHeight {
+			ml.lineOffset = h - ml.viewHeight
+		} else {
+			// Enter showing content+bottom border; lineOffset=h-1 (bottom-only) is skipped.
+			ml.lineOffset = h - 2
+		}
 	}
 }
 
+// ScrollDown moves the viewport one line toward newer messages.
+// Scrolls line-by-line but skips lineOffset=h-1 (bottom-border-only frame).
+// The at-bottom check (positionAtBottom) is the primary stop condition.
 func (ml *MessageList) ScrollDown() {
-	if bottom := ml.positionAtBottom(); ml.viewStart < bottom {
+	botIdx, botOff := ml.positionAtBottom()
+	if ml.viewStart > botIdx || (ml.viewStart == botIdx && ml.lineOffset >= botOff) {
+		return
+	}
+	h := ml.msgHeight(ml.messages[ml.viewStart])
+	if ml.lineOffset+1 < h-1 {
+		ml.lineOffset++
+		return
+	}
+	if ml.viewStart+1 < len(ml.messages) {
 		ml.viewStart++
+		ml.lineOffset = 0
 	}
 }
 
-// positionAtBottom returns the message index such that messages from that
-// index to the end fill at most viewHeight lines (newest messages visible).
-func (ml *MessageList) positionAtBottom() int {
+// positionAtBottom returns (msgIdx, lineOffset) for the viewport bottom position.
+// lineOffset > 0 means the first visible message is shown from its bottom portion,
+// filling the space that would otherwise be empty above the last full messages.
+func (ml *MessageList) positionAtBottom() (int, int) {
 	lineCount := 0
 	for i := len(ml.messages) - 1; i >= 0; i-- {
 		h := ml.msgHeight(ml.messages[i])
-		if lineCount+h > ml.viewHeight {
-			return i + 1
+		if lineCount+h >= ml.viewHeight {
+			// Adding this message meets or exceeds the viewport.
+			// Show it from the offset that makes total lines == viewHeight.
+			overflow := lineCount + h - ml.viewHeight
+			return i, overflow
 		}
 		lineCount += h
 	}
-	return 0
+	return 0, 0
 }
 
 // msgHeight estimates the rendered line count for a single message:
@@ -183,10 +239,11 @@ func (ml *MessageList) renderMessage(msg store.Message) []string {
 				name = "?"
 			}
 			senderStyled = inNameStyle.Render(name)
-		} else {
-			senderStyled = inNameStyle.Render(">")
 		}
-		titleStr := " " + senderStyled + " "
+		var titleStr string
+		if senderStyled != "" {
+			titleStr = " " + senderStyled + " "
+		}
 		titleW := lipgloss.Width(titleStr)
 		rightFill := innerW - titleW - 1 // 1 fill char on the left
 		if rightFill < 0 {
@@ -256,19 +313,48 @@ func (ml *MessageList) View() string {
 	}
 
 	var allLines []string
+	reachedEnd := true
 	for i := ml.viewStart; i < len(ml.messages); i++ {
-		allLines = append(allLines, ml.renderMessage(ml.messages[i])...)
+		msgLines := ml.renderMessage(ml.messages[i])
+		if i == ml.viewStart && ml.lineOffset > 0 {
+			if ml.lineOffset < len(msgLines) {
+				msgLines = msgLines[ml.lineOffset:]
+			} else {
+				msgLines = nil
+			}
+		}
+		allLines = append(allLines, msgLines...)
+		if len(allLines) >= ml.viewHeight {
+			reachedEnd = (i == len(ml.messages)-1)
+			break
+		}
 	}
 
-	// Fewer lines than viewport: pad at top so content anchors to bottom
+	// Pad to viewHeight.
+	// If we rendered all the way to the last message, anchor content to the bottom
+	// (chat-like: newest messages visible). Otherwise we're in the middle of history,
+	// so anchor to the top so the jump target is immediately visible.
 	if len(allLines) < ml.viewHeight {
 		padding := make([]string, ml.viewHeight-len(allLines))
-		allLines = append(padding, allLines...)
+		if reachedEnd {
+			allLines = append(padding, allLines...)
+		} else {
+			allLines = append(allLines, padding...)
+		}
 	}
 
-	// Trim to viewport height
+	// Trim to viewport height.
+	// At the natural bottom of the chat, trim from the top so the newest content
+	// stays visible. When scrolling through history, trim from the bottom so the
+	// current scroll position is preserved.
 	if len(allLines) > ml.viewHeight {
-		allLines = allLines[:ml.viewHeight]
+		botIdx, botOff := ml.positionAtBottom()
+		atNaturalBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
+		if reachedEnd && atNaturalBottom {
+			allLines = allLines[len(allLines)-ml.viewHeight:]
+		} else {
+			allLines = allLines[:ml.viewHeight]
+		}
 	}
 
 	return strings.Join(allLines, "\n")

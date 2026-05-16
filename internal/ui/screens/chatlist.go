@@ -56,7 +56,7 @@ func (m *ChatListModel) SetChats(chats []store.Chat) {
 	}
 	m.chats = chats
 	for i, c := range m.chats {
-		if n, ok := oldUnread[c.ID]; ok {
+		if n, ok := oldUnread[c.ID]; ok && n > m.chats[i].UnreadCount {
 			m.chats[i].UnreadCount = n
 		}
 	}
@@ -75,6 +75,15 @@ func (m *ChatListModel) IncrementUnread(chatID int64) {
 	for i := range m.chats {
 		if m.chats[i].ID == chatID {
 			m.chats[i].UnreadCount++
+			return
+		}
+	}
+}
+
+func (m *ChatListModel) SetChatUnread(chatID int64, count int) {
+	for i := range m.chats {
+		if m.chats[i].ID == chatID {
+			m.chats[i].UnreadCount = count
 			return
 		}
 	}

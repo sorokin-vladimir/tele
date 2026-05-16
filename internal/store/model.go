@@ -51,9 +51,12 @@ type EventKind int
 
 const (
 	EventNewMessage EventKind = iota
+	EventReadInbox
 )
 
 type Event struct {
-	Kind    EventKind
-	Message Message
+	Kind      EventKind
+	Message   Message
+	ChatID    int64
+	ReadMaxID int
 }

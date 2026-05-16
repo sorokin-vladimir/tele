@@ -29,6 +29,7 @@ func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string) (i
 	}
 	return 42, nil
 }
+func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
 var _ internaltg.Client = (*mockTGClient)(nil)

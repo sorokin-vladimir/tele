@@ -60,6 +60,37 @@ func (ml *MessageList) OldestID() int {
 	return ml.messages[0].ID
 }
 
+// VisibleReadMaxID returns the highest message ID that is "sufficiently visible" to count
+// as read: either more than half its lines are in the viewport, or it fills the entire
+// viewport (so more than half is impossible to show at once). Returns 0 if none qualify.
+func (ml *MessageList) VisibleReadMaxID() int {
+	if ml.viewWidth <= 0 || ml.viewHeight <= 0 || len(ml.messages) == 0 {
+		return 0
+	}
+	maxID := 0
+	linesUsed := 0
+	for i := ml.viewStart; i < len(ml.messages) && linesUsed < ml.viewHeight; i++ {
+		msg := ml.messages[i]
+		h := ml.msgHeight(msg)
+		skipped := 0
+		if i == ml.viewStart {
+			skipped = ml.lineOffset
+		}
+		visibleLines := h - skipped
+		remaining := ml.viewHeight - linesUsed
+		if visibleLines > remaining {
+			visibleLines = remaining
+		}
+		if visibleLines > 0 && (visibleLines*2 > h || h >= ml.viewHeight) {
+			if msg.ID > maxID {
+				maxID = msg.ID
+			}
+		}
+		linesUsed += visibleLines
+	}
+	return maxID
+}
+
 // ScrollToFirstUnread positions the viewport at the first message with ID > readMaxID.
 // If the remaining messages don't fill the viewport, older messages are pulled in to
 // fill the space (same as positionAtBottom), keeping the first unread visible.

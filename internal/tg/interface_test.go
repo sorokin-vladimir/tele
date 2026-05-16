@@ -33,6 +33,8 @@ func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string) (
 	return 0, nil
 }
 
+func (m *mockClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
+
 func (m *mockClient) Updates() <-chan store.Event {
 	return m.events
 }

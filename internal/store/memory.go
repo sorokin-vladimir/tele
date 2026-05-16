@@ -109,3 +109,21 @@ func (s *memoryStore) RemoveMessage(chatID int64, msgID int) {
 		}
 	}
 }
+
+func (s *memoryStore) UpdateChatReadMaxID(chatID int64, maxID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	chat, ok := s.chats[chatID]
+	if !ok || maxID <= chat.ReadInboxMaxID {
+		return
+	}
+	chat.ReadInboxMaxID = maxID
+	unread := 0
+	for _, m := range s.messages[chatID] {
+		if !m.IsOut && m.ID > maxID {
+			unread++
+		}
+	}
+	chat.UnreadCount = unread
+	s.chats[chatID] = chat
+}

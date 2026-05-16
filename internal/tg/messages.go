@@ -81,6 +81,29 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 	return realID, err
 }
 
+func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {
+	c.mu.RLock()
+	api := c.api
+	c.mu.RUnlock()
+	if api == nil {
+		return fmt.Errorf("not connected")
+	}
+	return WithRetry(ctx, func() error {
+		if peer.Type == store.PeerChannel {
+			_, err := api.ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
+				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				MaxID:   maxID,
+			})
+			return err
+		}
+		_, err := api.MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
+			Peer:  peerToInput(peer),
+			MaxID: maxID,
+		})
+		return err
+	})
+}
+
 func peerToInput(p store.Peer) tg.InputPeerClass {
 	switch p.Type {
 	case store.PeerUser:

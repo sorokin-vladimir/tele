@@ -54,7 +54,8 @@ func (m *ChatModel) SetChat(chat *store.Chat) {
 }
 func (m *ChatModel) SetMessages(msgs []store.Message)            { m.msgList.SetMessages(msgs) }
 func (m *ChatModel) PrependMessages(older []store.Message)       { m.msgList.PrependMessages(older) }
-func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool      { return m.msgList.ScrollToFirstUnread(readMaxID) }
+func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.ScrollToFirstUnread(readMaxID) }
+func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }

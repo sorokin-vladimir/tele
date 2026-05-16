@@ -38,6 +38,11 @@ type chatHistoryMsg struct {
 	messages []store.Message
 }
 
+type markReadDoneMsg struct {
+	chatID int64
+	maxID  int
+}
+
 type sentMsgConfirmedMsg struct {
 	chatID     int64
 	sentinelID int
@@ -182,6 +187,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		return m, m.markReadCmd()
+
+	case markReadDoneMsg:
+		if m.st != nil {
+			m.st.UpdateChatReadMaxID(msg.chatID, msg.maxID)
+			if chat, ok := m.st.GetChat(msg.chatID); ok {
+				m.chatList.SetChatUnread(msg.chatID, chat.UnreadCount)
+			}
+		}
 		return m, nil
 
 	case screens.LoadMoreMsg:
@@ -215,7 +229,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case store.Event:
-		if msg.Kind == store.EventNewMessage && m.st != nil {
+		if m.st == nil {
+			return m, nil
+		}
+		switch msg.Kind {
+		case store.EventNewMessage:
 			m.st.AppendMessage(msg.Message)
 			if msg.Message.ChatID == m.currentChatID {
 				m.chat.SetMessages(m.st.Messages(m.currentChatID))
@@ -223,6 +241,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chatList.SetChats(m.st.Chats())
 			if msg.Message.ChatID != m.currentChatID {
 				m.chatList.IncrementUnread(msg.Message.ChatID)
+			}
+		case store.EventReadInbox:
+			m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID)
+			if chat, ok := m.st.GetChat(msg.ChatID); ok {
+				m.chatList.SetChatUnread(msg.ChatID, chat.UnreadCount)
 			}
 		}
 		return m, nil
@@ -342,10 +365,33 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if action != keys.ActionNone {
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
 		m.chat = newPane.(*screens.ChatModel)
-		return m, cmd
+		return m, tea.Batch(cmd, m.markReadCmd())
 	}
 
 	return m, nil
+}
+
+func (m RootModel) markReadCmd() tea.Cmd {
+	if m.st == nil || m.tgClient == nil || m.currentChatID == 0 || m.focus != FocusChat {
+		return nil
+	}
+	chat, ok := m.st.GetChat(m.currentChatID)
+	if !ok {
+		return nil
+	}
+	maxID := m.chat.VisibleReadMaxID()
+	if maxID <= 0 || maxID <= chat.ReadInboxMaxID {
+		return nil
+	}
+	client := m.tgClient
+	peer := chat.Peer
+	chatID := chat.ID
+	return func() tea.Msg {
+		if err := client.MarkRead(context.Background(), peer, maxID); err != nil {
+			return nil
+		}
+		return markReadDoneMsg{chatID: chatID, maxID: maxID}
+	}
 }
 
 func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {

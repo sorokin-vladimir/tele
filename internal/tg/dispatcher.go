@@ -33,6 +33,26 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 		}
 		return nil
 	})
+
+	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, upd *tg.UpdateReadHistoryInbox) error {
+		chatID := peerIDFromPeer(upd.Peer)
+		if chatID == 0 {
+			return nil
+		}
+		select {
+		case events <- store.Event{Kind: store.EventReadInbox, ChatID: chatID, ReadMaxID: upd.MaxID}:
+		default:
+		}
+		return nil
+	})
+
+	dispatcher.OnReadChannelInbox(func(ctx context.Context, e tg.Entities, upd *tg.UpdateReadChannelInbox) error {
+		select {
+		case events <- store.Event{Kind: store.EventReadInbox, ChatID: upd.ChannelID, ReadMaxID: upd.MaxID}:
+		default:
+		}
+		return nil
+	})
 }
 
 func extractPeerID(raw tg.MessageClass) int64 {

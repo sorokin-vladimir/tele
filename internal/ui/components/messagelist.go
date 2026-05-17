@@ -17,6 +17,41 @@ var (
 	readStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
+// incomingIndicator returns the indicator string appended to the right of an
+// incoming bubble's first content line. available is the column count to the
+// right of the bubble's right border.
+func incomingIndicator(available int) string {
+	if available >= 25 {
+		return " <<   space: context menu"
+	}
+	if available >= 9 {
+		return " <<   SPC"
+	}
+	if available >= 3 {
+		return " <<"
+	}
+	return ""
+}
+
+// outgoingIndicator returns a string of exactly leftPad columns that replaces
+// the leading whitespace to the left of an outgoing bubble's first content
+// line, placing arrows immediately before the bubble's left border.
+func outgoingIndicator(leftPad int) string {
+	const arrows = ">>"
+	if leftPad >= 24 {
+		// "space: context menu   >>" = 19+3+2 = 24 chars
+		return strings.Repeat(" ", leftPad-24) + "space: context menu   " + arrows
+	}
+	if leftPad >= 8 {
+		// "SPC   >>" = 3+3+2 = 8 chars
+		return strings.Repeat(" ", leftPad-8) + "SPC   " + arrows
+	}
+	if leftPad >= 2 {
+		return strings.Repeat(" ", leftPad-2) + arrows
+	}
+	return strings.Repeat(" ", leftPad)
+}
+
 // MessageList renders a virtual viewport of messages (newest at bottom).
 type MessageList struct {
 	messages        []store.Message
@@ -27,6 +62,7 @@ type MessageList struct {
 	isGroup         bool
 	outboxReadMaxID int
 	images          map[int64]image.Image
+	showIndicator   bool
 }
 
 func NewMessageList(height, width int) *MessageList {
@@ -290,8 +326,43 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	return h + 2 // +2 border lines (top+bottom)
 }
 
+func (ml *MessageList) SetShowIndicator(v bool) { ml.showIndicator = v }
+
+func (ml *MessageList) SelectedMessageID() int {
+	return ml.computeSelectedMsgID()
+}
+
+func (ml *MessageList) computeSelectedMsgID() int {
+	if len(ml.messages) == 0 {
+		return 0
+	}
+	selectedID := 0
+	linesUsed := 0
+	for i := ml.viewStart; i < len(ml.messages); i++ {
+		skipped := 0
+		if i == ml.viewStart {
+			skipped = ml.lineOffset
+		}
+		h := ml.msgHeight(ml.messages[i])
+		firstContentVP := linesUsed + (1 - skipped)
+		if firstContentVP >= 0 && firstContentVP < ml.viewHeight {
+			selectedID = ml.messages[i].ID
+		}
+		visible := h - skipped
+		if visible < 0 {
+			visible = 0
+		}
+		linesUsed += visible
+		if linesUsed >= ml.viewHeight {
+			break
+		}
+	}
+	return selectedID
+}
+
 // renderMessage returns the display lines for a single message bubble.
-func (ml *MessageList) renderMessage(msg store.Message) []string {
+// selected: when true, injects << / >> indicator into allLines[1] (added in Task 2).
+func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string {
 	if ml.viewWidth <= 0 {
 		return []string{""}
 	}
@@ -456,6 +527,21 @@ func (ml *MessageList) renderMessage(msg store.Message) []string {
 		for i := range allLines {
 			allLines[i] = pad + allLines[i]
 		}
+		if selected && ml.showIndicator && len(allLines) > 1 && leftPad >= 2 {
+			ind := outgoingIndicator(leftPad)
+			// allLines[1] = pad + originalLine; replace the leading pad with indicator.
+			// pad consists of leftPad ASCII spaces, so byte-slicing is safe.
+			allLines[1] = ind + allLines[1][leftPad:]
+		}
+	} else {
+		if selected && ml.showIndicator && len(allLines) > 1 {
+			bubbleW := lipgloss.Width(allLines[0])
+			available := ml.viewWidth - bubbleW
+			ind := incomingIndicator(available)
+			if ind != "" {
+				allLines[1] = allLines[1] + ind
+			}
+		}
 	}
 
 	return allLines
@@ -469,10 +555,12 @@ func (ml *MessageList) View() string {
 		return strings.Repeat("\n", ml.viewHeight-1)
 	}
 
+	selectedID := ml.computeSelectedMsgID()
+
 	var allLines []string
 	reachedEnd := true
 	for i := ml.viewStart; i < len(ml.messages); i++ {
-		msgLines := ml.renderMessage(ml.messages[i])
+		msgLines := ml.renderMessage(ml.messages[i], ml.messages[i].ID == selectedID)
 		if i == ml.viewStart && ml.lineOffset > 0 {
 			if ml.lineOffset < len(msgLines) {
 				msgLines = msgLines[ml.lineOffset:]

@@ -259,3 +259,98 @@ func TestMessageList_SetImage_UpdatesView(t *testing.T) {
 	require.NotContains(t, after, "[ photo ]", "placeholder should be gone after image loaded")
 	require.Greater(t, len(after), len(before), "view should grow with actual art lines")
 }
+
+func TestMessageList_SelectedMessageID_EmptyList(t *testing.T) {
+	ml := components.NewMessageList(10, 80)
+	assert.Equal(t, 0, ml.SelectedMessageID())
+}
+
+func TestMessageList_SelectedMessageID_SingleMessage(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages(makeMessages(1))
+	assert.Equal(t, 1, ml.SelectedMessageID())
+}
+
+func TestMessageList_SelectedMessageID_AtBottom_SelectsLast(t *testing.T) {
+	// 6 msgs × h=3 = 18 lines < viewHeight=20 → all visible, last selected
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages(makeMessages(6))
+	assert.Equal(t, 6, ml.SelectedMessageID())
+}
+
+func TestMessageList_SelectedMessageID_AfterScrollUp_SelectsPrevious(t *testing.T) {
+	// viewHeight=3, 6 msgs each h=3 → viewStart=5 initially → msg6 selected.
+	// After one ScrollUp: viewStart=4, lineOffset=1.
+	//   msg5 (i=4): firstContentVP = 0 + (1-1) = 0 < 3 → selected
+	//   msg6 (i=5): linesUsed after msg5 slice = 2; firstContentVP = 2+1=3, not < 3
+	// → selectedID = 5
+	ml := components.NewMessageList(3, 40)
+	ml.SetMessages(makeMessages(6))
+	assert.Equal(t, 6, ml.SelectedMessageID())
+	ml.ScrollUp()
+	assert.Equal(t, 5, ml.SelectedMessageID())
+}
+
+func TestMessageList_SelectedMessageID_FirstContentCutOff_SelectsNext(t *testing.T) {
+	// viewHeight=4, 6 msgs each h=3.
+	// positionAtBottom: i=5 lineCount=3, i=4 → 3+3=6>=4 → overflow=2 → (viewStart=4, lineOffset=2).
+	// msg5 (i=4): firstContentVP = 0+(1-2) = -1 → not selected.
+	// msg6 (i=5): linesUsed after msg5 slice (1 line) = 1; firstContentVP=1+1=2 < 4 → selected.
+	ml := components.NewMessageList(4, 40)
+	ml.SetMessages(makeMessages(6))
+	assert.Equal(t, 6, ml.SelectedMessageID())
+}
+
+func TestMessageList_Indicator_Incoming_ShowsLeftArrows(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetShowIndicator(true)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	plain := stripANSI(ml.View())
+	assert.Contains(t, plain, "<<")
+	assert.NotContains(t, plain, ">>")
+}
+
+func TestMessageList_Indicator_Outgoing_ShowsRightArrows(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetShowIndicator(true)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now(), IsOut: true}})
+	plain := stripANSI(ml.View())
+	assert.Contains(t, plain, ">>")
+	assert.NotContains(t, plain, "<<")
+}
+
+func TestMessageList_Indicator_HiddenWhenShowIndicatorFalse(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetShowIndicator(false)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	plain := stripANSI(ml.View())
+	assert.NotContains(t, plain, "<<")
+	assert.NotContains(t, plain, ">>")
+}
+
+func TestMessageList_Indicator_FullHint_OnWideTerminal(t *testing.T) {
+	ml := components.NewMessageList(20, 120)
+	ml.SetShowIndicator(true)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	plain := stripANSI(ml.View())
+	assert.Contains(t, plain, "space: context menu")
+}
+
+func TestMessageList_Indicator_ShortHint_OnNarrowTerminal(t *testing.T) {
+	// width=30: bubble ≈10 cols, available ≈20 → 9<=20<25 → "SPC" hint, not full text
+	ml := components.NewMessageList(20, 30)
+	ml.SetShowIndicator(true)
+	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	plain := stripANSI(ml.View())
+	assert.Contains(t, plain, "<<")
+	assert.NotContains(t, plain, "space: context menu")
+}
+
+func TestMessageList_Indicator_OnlyOnSelectedMessage(t *testing.T) {
+	// 3 messages all visible; only the last (selected) gets <<
+	ml := components.NewMessageList(20, 80)
+	ml.SetShowIndicator(true)
+	ml.SetMessages(makeMessages(3))
+	plain := stripANSI(ml.View())
+	assert.Equal(t, 1, strings.Count(plain, "<<"))
+}

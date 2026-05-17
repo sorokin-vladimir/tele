@@ -41,8 +41,10 @@ func NewChatModel(width, height int) *ChatModel {
 	if listHeight < 1 {
 		listHeight = 1
 	}
+	ml := components.NewMessageList(listHeight, width)
+	ml.SetShowIndicator(true)
 	return &ChatModel{
-		msgList:  components.NewMessageList(listHeight, width),
+		msgList:  ml,
 		composer: components.NewComposer(width),
 		vimState: keys.NewVimState(),
 		width:    width,
@@ -68,6 +70,7 @@ func (m *ChatModel) SetOutboxReadMaxID(id int)             { m.msgList.SetOutbox
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool { return m.msgList.ScrollToFirstUnread(readMaxID) }
 func (m *ChatModel) VisibleReadMaxID() int                  { return m.msgList.VisibleReadMaxID() }
 func (m *ChatModel) ComposerFocused() bool            { return m.composerFocused }
+func (m *ChatModel) SelectedMessageID() int           { return m.msgList.SelectedMessageID() }
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }
 func (m *ChatModel) SetFocused(f bool)                { m.focused = f }
@@ -97,6 +100,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composerFocused = false
 				m.composer.Blur()
 				m.vimState.Mode = keys.ModeNormal
+				m.msgList.SetShowIndicator(true)
 			}
 			return m, nil
 		}
@@ -141,6 +145,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			m.composerFocused = true
 			m.vimState.Mode = keys.ModeInsert
 			m.composer.Focus()
+			m.msgList.SetShowIndicator(false)
 		case keys.ActionOpenPhoto:
 			photoID := m.msgList.LastVisiblePhotoID()
 			if photoID != 0 {

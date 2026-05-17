@@ -101,3 +101,32 @@ func TestChatModel_NoLoadMore_WhenNotAtTop(t *testing.T) {
 		assert.False(t, isLoadMore)
 	}
 }
+
+func TestChat_Indicator_VisibleByDefault(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+	assert.Contains(t, m.View(), "<<")
+}
+
+func TestChat_Indicator_HiddenWhenComposerFocused(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hello", Date: time.Now()}})
+
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	assert.NotContains(t, m.View(), "<<")
+
+	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
+	m = newPane.(*screens.ChatModel)
+	assert.Contains(t, m.View(), "<<")
+}
+
+func TestChat_SelectedMessageID_ReturnsLastVisible(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetMessages([]store.Message{
+		{ID: 1, ChatID: 1, Text: "first", Date: time.Now()},
+		{ID: 2, ChatID: 1, Text: "second", Date: time.Now()},
+		{ID: 3, ChatID: 1, Text: "third", Date: time.Now()},
+	})
+	assert.Equal(t, 3, m.SelectedMessageID())
+}

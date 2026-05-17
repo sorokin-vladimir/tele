@@ -29,32 +29,70 @@ ui:
   date_format: "15:04"
   history_limit: 50
   theme: default
-
-keybindings:
-  chatlist:
-    open: enter
-    search: /
-  chat:
-    reply: r
-    edit: e
-    delete: d
 ```
 
 ## Keybindings
 
+### Global
+
 | Key | Action |
 |---|---|
-| `j` / `k` | Move down / up |
-| `gg` / `G` | First / last item |
+| `1` / `h` / `←` | Focus chat list |
+| `2` / `l` / `→` | Focus chat |
+| `q` / `Ctrl+Q` / `Ctrl+C` | Quit |
+
+### Chat list
+
+| Key | Action |
+|---|---|
+| `j` / `↓` | Next chat |
+| `k` / `↑` | Previous chat |
+| `G` | Last chat |
 | `Enter` | Open chat |
 | `/` | Search chats |
-| `i` | Start composing |
-| `Esc` | Normal mode |
-| `r` | Reply to message |
-| `e` | Edit message |
-| `d` | Delete message |
-| `Tab` | Switch focus between panels |
-| `q` | Quit |
+
+### Chat (normal mode)
+
+| Key | Action |
+|---|---|
+| `j` / `↓` | Scroll down |
+| `k` / `↑` | Scroll up |
+| `gg` | Scroll to top (loads more history) |
+| `G` | Scroll to bottom |
+| `i` / `a` | Compose message (insert mode) |
+
+### Compose (insert mode)
+
+| Key | Action |
+|---|---|
+| `Enter` | Send message |
+| `Esc` | Back to normal mode |
+
+### Search overlay
+
+| Key | Action |
+|---|---|
+| type | Filter chats |
+| `j` / `k` | Navigate results |
+| `Enter` | Open selected chat |
+| `Esc` | Close |
+
+## Roadmap
+
+### Next up
+
+- Reply, edit, delete messages
+- Media: photos, files, voice messages
+- Reactions (view and send)
+- Pinned messages
+- Extended markdown (links, blockquote, strikethrough, spoiler)
+
+### Planned
+
+- Command palette
+- Full-text search over message history
+- Configurable keybindings via YAML
+- Color themes (gruvbox, nord, catppuccin)
 
 ## Build from source
 

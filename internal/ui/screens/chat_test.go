@@ -147,3 +147,19 @@ func TestChat_SelectedMessageIsOut_NoMessages(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	assert.False(t, m.SelectedMessageIsOut())
 }
+
+func TestChat_ShiftEnter_DoesNotSend(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	m.SetChat(chat)
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetComposerValue("hello")
+
+	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
+	_ = newPane
+	require.NotNil(t, cmd, "shift+enter should produce a cmd, not nil")
+	msg := cmd()
+	_, isSend := msg.(screens.SendMsgRequest)
+	assert.False(t, isSend, "shift+enter must not send message")
+}

@@ -36,16 +36,16 @@ type ChatModel struct {
 }
 
 func NewChatModel(width, height int) *ChatModel {
-	composerHeight := 3
-	listHeight := height - composerHeight - 1
-	if listHeight < 1 {
-		listHeight = 1
+	composer := components.NewComposer(width)
+	listH := height - composer.VisualHeight()
+	if listH < 1 {
+		listH = 1
 	}
-	ml := components.NewMessageList(listHeight, width)
+	ml := components.NewMessageList(listH, width)
 	ml.SetShowIndicator(true)
 	return &ChatModel{
 		msgList:  ml,
-		composer: components.NewComposer(width),
+		composer: composer,
 		vimState: keys.NewVimState(),
 		width:    width,
 		height:   height,
@@ -76,13 +76,24 @@ func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.Selecte
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }
 func (m *ChatModel) SetFocused(f bool)                { m.focused = f }
-func (m *ChatModel) SetComposerValue(v string)        { m.composer.SetValue(v) }
+func (m *ChatModel) SetComposerValue(v string) {
+	m.composer.SetValue(v)
+	m.syncMsgListHeight()
+}
 
 func (m *ChatModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.msgList.SetSize(width, height-2) // -1 separator, -1 composer
 	m.composer.SetWidth(width)
+	m.syncMsgListHeight()
+}
+
+func (m *ChatModel) syncMsgListHeight() {
+	listH := m.height - m.composer.VisualHeight()
+	if listH < 1 {
+		listH = 1
+	}
+	m.msgList.SetSize(m.width, listH)
 }
 
 func (m *ChatModel) Title() string {
@@ -146,8 +157,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		case keys.ActionInsert:
 			m.composerFocused = true
 			m.vimState.Mode = keys.ModeInsert
-			m.composer.Focus()
+			focusCmd := m.composer.Focus()
 			m.msgList.SetShowIndicator(false)
+			return m, focusCmd
 		case keys.ActionOpenPhoto:
 			photoID := m.msgList.LastVisiblePhotoID()
 			if photoID != 0 {
@@ -159,9 +171,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		if m.composerFocused {
-			if msg.Code == tea.KeyEnter {
+			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
 				text := m.composer.Value()
 				m.composer.Reset()
+				m.syncMsgListHeight()
 				if m.chat != nil && text != "" {
 					peer := m.chat.Peer
 					return m, func() tea.Msg { return SendMsgRequest{Peer: peer, Text: text} }
@@ -170,6 +183,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 			newC, cmd := m.composer.Update(msg)
 			m.composer = newC
+			m.syncMsgListHeight()
 			return m, cmd
 		}
 	}

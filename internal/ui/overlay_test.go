@@ -11,7 +11,7 @@ func TestOverlayBottomRight_PlacesOverlayAtBottomRight(t *testing.T) {
 	// 20×6 base; overlay is 3 lines × 5 cols
 	base := strings.Repeat(strings.Repeat(".", 20)+"\n", 5) + strings.Repeat(".", 20)
 	overlay := "AAAAA\nBBBBB\nCCCCC"
-	result := overlayBottomRight(base, overlay, 20, 6)
+	result := overlayBottomRight(base, overlay, 20, 6, 0)
 	lines := strings.Split(result, "\n")
 
 	// overlayH=3, overlayW=5
@@ -26,7 +26,7 @@ func TestOverlayBottomRight_PlacesOverlayAtBottomRight(t *testing.T) {
 func TestOverlayBottomRight_SingleLine(t *testing.T) {
 	base := strings.Repeat(strings.Repeat(" ", 10)+"\n", 4) + strings.Repeat(" ", 10)
 	overlay := "XYZ"
-	result := overlayBottomRight(base, overlay, 10, 5)
+	result := overlayBottomRight(base, overlay, 10, 5, 0)
 	lines := strings.Split(result, "\n")
 	// overlayH=1, top = 5-1-1 = 3; overlayW=3, left = 10-3-2 = 5
 	assert.Equal(t, 5, len(lines))

@@ -3,11 +3,13 @@ package keys
 type Context string
 
 const (
-	ContextGlobal   Context = "global"
-	ContextChatList Context = "chatlist"
-	ContextChat     Context = "chat"
-	ContextComposer Context = "composer"
-	ContextSearch   Context = "search"
+	ContextGlobal        Context = "global"
+	ContextChatList      Context = "chatlist"
+	ContextChat          Context = "chat"
+	ContextComposer      Context = "composer"
+	ContextSearch        Context = "search"
+	ContextContextMenu   Context = "context_menu"
+	ContextDeleteSubMenu Context = "delete_submenu"
 )
 
 const (
@@ -56,6 +58,41 @@ func DefaultKeyMap() KeyMap {
 			"esc":   ActionNormal,
 			"o":     ActionOpenPhoto,
 			"space": ActionOpenContextMenu,
+		},
+		ContextComposer: {
+			"enter": ActionConfirm,
+			"esc":   ActionNormal,
+		},
+		ContextContextMenu: {
+			"j":     ActionDown,
+			"down":  ActionDown,
+			"k":     ActionUp,
+			"up":    ActionUp,
+			"enter": ActionConfirm,
+			"space": ActionCancel,
+			"esc":   ActionCancel,
+			"r":     ActionReply,
+			"t":     ActionReact,
+			"e":     ActionEdit,
+			"d":     ActionDelete,
+		},
+		ContextDeleteSubMenu: {
+			"j":     ActionDown,
+			"down":  ActionDown,
+			"k":     ActionUp,
+			"up":    ActionUp,
+			"enter": ActionConfirm,
+			"esc":   ActionCancel,
+			"a":     ActionDeleteRevoke,
+			"m":     ActionDeleteMe,
+		},
+		ContextSearch: {
+			"esc":    ActionCancel,
+			"enter":  ActionConfirm,
+			"down":   ActionDown,
+			"ctrl+j": ActionDown,
+			"up":     ActionUp,
+			"ctrl+k": ActionUp,
 		},
 	}
 }

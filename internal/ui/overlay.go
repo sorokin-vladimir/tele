@@ -58,8 +58,9 @@ func overlayCenter(base, overlay string, w, h int) string {
 }
 
 // overlayBottomRight stamps overlay string in the bottom-right corner of a
-// base string (w×h terminal). Positioned 1 line from bottom, 2 cols from right.
-func overlayBottomRight(base, overlay string, w, h int) string {
+// base string (w×h terminal). bottomOffset shifts the overlay upward by that
+// many additional rows (use to clear a bottom status bar or input area).
+func overlayBottomRight(base, overlay string, w, h, bottomOffset int) string {
 	baseLines := strings.Split(base, "\n")
 	overlayLines := strings.Split(overlay, "\n")
 
@@ -71,7 +72,7 @@ func overlayBottomRight(base, overlay string, w, h int) string {
 		}
 	}
 
-	top := h - overlayH - 1
+	top := h - overlayH - 1 - bottomOffset
 	if top < 0 {
 		top = 0
 	}

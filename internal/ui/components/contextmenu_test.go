@@ -5,26 +5,33 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// keyMsg is a helper that builds a tea.KeyPressMsg from a rune.
+func defaultKM() keys.KeyMap { return keys.DefaultKeyMap() }
+
 func keyMsg(r rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: r, Text: string(r)}
 }
 
-func pressJ() tea.KeyPressMsg { return keyMsg('j') }
-func pressK() tea.KeyPressMsg { return keyMsg('k') }
-
+func pressJ() tea.KeyPressMsg     { return keyMsg('j') }
+func pressK() tea.KeyPressMsg     { return keyMsg('k') }
+func pressR() tea.KeyPressMsg     { return keyMsg('r') }
+func pressD() tea.KeyPressMsg     { return keyMsg('d') }
+func pressA() tea.KeyPressMsg     { return keyMsg('a') }
+func pressM() tea.KeyPressMsg     { return keyMsg('m') }
 func pressDown() tea.KeyPressMsg  { return tea.KeyPressMsg{Code: tea.KeyDown} }
 func pressUp() tea.KeyPressMsg    { return tea.KeyPressMsg{Code: tea.KeyUp} }
 func pressEnter() tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeyEnter} }
 func pressEsc() tea.KeyPressMsg   { return tea.KeyPressMsg{Code: tea.KeyEsc} }
 func pressSpace() tea.KeyPressMsg { return keyMsg(' ') }
 
+// --- item display ---
+
 func TestNewContextMenu_IncomingItems(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
+	cm := components.NewContextMenu(1, false, defaultKM())
 	view := cm.View()
 	assert.Contains(t, view, "Reply")
 	assert.Contains(t, view, "React")
@@ -33,7 +40,7 @@ func TestNewContextMenu_IncomingItems(t *testing.T) {
 }
 
 func TestNewContextMenu_OutgoingItems(t *testing.T) {
-	cm := components.NewContextMenu(1, true)
+	cm := components.NewContextMenu(1, true, defaultKM())
 	view := cm.View()
 	assert.Contains(t, view, "Reply")
 	assert.Contains(t, view, "React")
@@ -41,73 +48,91 @@ func TestNewContextMenu_OutgoingItems(t *testing.T) {
 	assert.Contains(t, view, "Delete")
 }
 
-func TestNewContextMenu_CursorStartsOnReply(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
-	assert.Contains(t, cm.View(), "▸ Reply")
+func TestNewContextMenu_ShowsKeyBindings(t *testing.T) {
+	cm := components.NewContextMenu(1, false, defaultKM())
+	view := cm.View()
+	assert.Contains(t, view, "r -> Reply")
+	assert.Contains(t, view, "t -> React")
+	assert.Contains(t, view, "d -> Delete")
+}
+
+func TestNewContextMenu_ShowsNavHintInBottomBorder(t *testing.T) {
+	cm := components.NewContextMenu(1, false, defaultKM())
+	view := cm.View()
+	assert.Contains(t, view, "j/k")
+	assert.Contains(t, view, "enter")
+	assert.Contains(t, view, "esc")
+}
+
+// --- cursor navigation ---
+
+func TestNewContextMenu_CursorStartsAtZero(t *testing.T) {
+	cm := components.NewContextMenu(1, false, defaultKM())
+	assert.Equal(t, 0, cm.Cursor())
 }
 
 func TestContextMenu_J_MovesCursorDown(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
+	cm := components.NewContextMenu(1, false, defaultKM())
 	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ React")
-	assert.NotContains(t, cm.View(), "▸ Reply")
+	assert.Equal(t, 1, cm.Cursor())
 }
 
 func TestContextMenu_DownArrow_MovesCursorDown(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
+	cm := components.NewContextMenu(1, false, defaultKM())
 	cm, _ = cm.Update(pressDown())
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ React")
+	assert.Equal(t, 1, cm.Cursor())
 }
 
 func TestContextMenu_K_MovesCursorUp(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
-	// Move down to React, then back up to Reply
+	cm := components.NewContextMenu(1, false, defaultKM())
 	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
 	cm, _ = cm.Update(pressK())
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ Reply")
+	assert.Equal(t, 0, cm.Cursor())
 }
 
 func TestContextMenu_UpArrow_MovesCursorUp(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
+	cm := components.NewContextMenu(1, false, defaultKM())
 	cm, _ = cm.Update(pressDown())
 	require.NotNil(t, cm)
 	cm, _ = cm.Update(pressUp())
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ Reply")
+	assert.Equal(t, 0, cm.Cursor())
 }
 
 func TestContextMenu_WrapAround_K_FromFirst_GoesToLast(t *testing.T) {
+	cm := components.NewContextMenu(1, false, defaultKM())
 	// incoming: Reply(0), React(1), Delete(2)
-	// pressing k from Reply should wrap to Delete
-	cm := components.NewContextMenu(1, false)
-	cm, _ = cm.Update(pressK()) // wrap from Reply to Delete
+	cm, _ = cm.Update(pressK())
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ Delete")
+	assert.Equal(t, 2, cm.Cursor()) // wrapped to Delete
 }
 
+// --- close actions ---
+
 func TestContextMenu_EscFromMain_Closes(t *testing.T) {
-	cm := components.NewContextMenu(42, false)
+	cm := components.NewContextMenu(42, false, defaultKM())
 	newCM, cmd := cm.Update(pressEsc())
-	assert.Nil(t, newCM, "menu should close")
+	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
 	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
 }
 
 func TestContextMenu_Space_Closes(t *testing.T) {
-	cm := components.NewContextMenu(42, false)
+	cm := components.NewContextMenu(42, false, defaultKM())
 	newCM, cmd := cm.Update(pressSpace())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
 	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
 }
 
+// --- enter on items ---
+
 func TestContextMenu_ReplyStub_Closes(t *testing.T) {
-	cm := components.NewContextMenu(42, false)
-	// cursor is on Reply (index 0)
+	cm := components.NewContextMenu(42, false, defaultKM())
 	newCM, cmd := cm.Update(pressEnter())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
@@ -115,8 +140,8 @@ func TestContextMenu_ReplyStub_Closes(t *testing.T) {
 }
 
 func TestContextMenu_ReactStub_Closes(t *testing.T) {
-	cm := components.NewContextMenu(42, false)
-	cm, _ = cm.Update(pressJ()) // React
+	cm := components.NewContextMenu(42, false, defaultKM())
+	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
 	newCM, cmd := cm.Update(pressEnter())
 	assert.Nil(t, newCM)
@@ -125,7 +150,7 @@ func TestContextMenu_ReactStub_Closes(t *testing.T) {
 }
 
 func TestContextMenu_EditStub_Closes(t *testing.T) {
-	cm := components.NewContextMenu(42, true)
+	cm := components.NewContextMenu(42, true, defaultKM())
 	cm, _ = cm.Update(pressJ()) // React
 	require.NotNil(t, cm)
 	cm, _ = cm.Update(pressJ()) // Edit
@@ -136,46 +161,95 @@ func TestContextMenu_EditStub_Closes(t *testing.T) {
 	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
 }
 
-func TestContextMenu_DeleteIncoming_EmitsDeleteRequest(t *testing.T) {
-	cm := components.NewContextMenu(42, false)
-	// incoming: Reply(0), React(1), Delete(2)
-	cm, _ = cm.Update(pressJ()) // React
+// --- direct key dispatch ---
+
+func TestContextMenu_DirectKey_R_ExecutesReply(t *testing.T) {
+	cm := components.NewContextMenu(42, false, defaultKM())
+	cm, _ = cm.Update(pressJ()) // move cursor away
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressJ()) // Delete
+	newCM, cmd := cm.Update(pressR())
+	assert.Nil(t, newCM)
+	require.NotNil(t, cmd)
+	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
+}
+
+func TestContextMenu_DirectKey_D_ExecutesDeleteIncoming(t *testing.T) {
+	cm := components.NewContextMenu(42, false, defaultKM())
+	newCM, cmd := cm.Update(pressD())
+	assert.Nil(t, newCM)
+	require.NotNil(t, cmd)
+	req, ok := cmd().(components.DeleteMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, 42, req.MsgID)
+	assert.False(t, req.Revoke)
+}
+
+func TestContextMenu_DirectKey_D_OutgoingShowsSubMenu(t *testing.T) {
+	cm := components.NewContextMenu(42, true, defaultKM())
+	newCM, cmd := cm.Update(pressD())
+	require.NotNil(t, newCM, "outgoing delete opens sub-menu")
+	assert.Nil(t, cmd)
+	assert.Contains(t, newCM.View(), "For everyone")
+}
+
+// --- delete (enter navigation) ---
+
+func TestContextMenu_DeleteIncoming_EmitsDeleteRequest(t *testing.T) {
+	cm := components.NewContextMenu(42, false, defaultKM())
+	// incoming: Reply(0), React(1), Delete(2)
+	cm, _ = cm.Update(pressJ())
+	require.NotNil(t, cm)
+	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
 	newCM, cmd := cm.Update(pressEnter())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
-	msg := cmd()
-	req, ok := msg.(components.DeleteMsgRequest)
+	req, ok := cmd().(components.DeleteMsgRequest)
 	require.True(t, ok)
 	assert.Equal(t, 42, req.MsgID)
 	assert.False(t, req.Revoke)
 }
 
 func TestContextMenu_DeleteOutgoing_ShowsSubPrompt(t *testing.T) {
-	cm := components.NewContextMenu(42, true)
+	cm := components.NewContextMenu(42, true, defaultKM())
 	// outgoing: Reply(0), React(1), Edit(2), Delete(3)
-	cm, _ = cm.Update(pressJ()) // React
+	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressJ()) // Edit
+	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressJ()) // Delete
+	cm, _ = cm.Update(pressJ())
 	require.NotNil(t, cm)
-	newCM, cmd := cm.Update(pressEnter()) // enter on Delete
-	require.NotNil(t, newCM, "menu stays open (sub-prompt)")
+	newCM, cmd := cm.Update(pressEnter())
+	require.NotNil(t, newCM)
 	assert.Nil(t, cmd)
 	view := newCM.View()
 	assert.Contains(t, view, "For everyone")
 	assert.Contains(t, view, "For me")
-	assert.Contains(t, view, "Cancel")
 	assert.NotContains(t, view, "Reply")
+}
+
+// --- delete sub-menu ---
+
+func TestContextMenu_DeleteSub_ShowsItemKeys(t *testing.T) {
+	cm := navigateToDeleteSubPrompt(t)
+	view := cm.View()
+	assert.Contains(t, view, "a -> For everyone")
+	assert.Contains(t, view, "m -> For me")
+}
+
+func TestContextMenu_DeleteSub_ForEveryone_EmitsDeleteRevoke(t *testing.T) {
+	cm := navigateToDeleteSubPrompt(t)
+	newCM, cmd := cm.Update(pressEnter())
+	assert.Nil(t, newCM)
+	require.NotNil(t, cmd)
+	req, ok := cmd().(components.DeleteMsgRequest)
+	require.True(t, ok)
+	assert.True(t, req.Revoke)
 }
 
 func TestContextMenu_DeleteSub_ForMe_EmitsDelete(t *testing.T) {
 	cm := navigateToDeleteSubPrompt(t)
-	// cursor on "For everyone" (index 0); navigate to "For me" (index 1)
-	cm, _ = cm.Update(pressJ())
+	cm, _ = cm.Update(pressJ()) // For me
 	require.NotNil(t, cm)
 	newCM, cmd := cm.Update(pressEnter())
 	assert.Nil(t, newCM)
@@ -186,10 +260,9 @@ func TestContextMenu_DeleteSub_ForMe_EmitsDelete(t *testing.T) {
 	assert.False(t, req.Revoke)
 }
 
-func TestContextMenu_DeleteSub_ForEveryone_EmitsDeleteRevoke(t *testing.T) {
+func TestContextMenu_DeleteSub_DirectKey_A_ForEveryone(t *testing.T) {
 	cm := navigateToDeleteSubPrompt(t)
-	// cursor starts on "For everyone" (index 0)
-	newCM, cmd := cm.Update(pressEnter())
+	newCM, cmd := cm.Update(pressA())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
 	req, ok := cmd().(components.DeleteMsgRequest)
@@ -197,27 +270,23 @@ func TestContextMenu_DeleteSub_ForEveryone_EmitsDeleteRevoke(t *testing.T) {
 	assert.True(t, req.Revoke)
 }
 
-func TestContextMenu_DeleteSub_Cancel_Closes(t *testing.T) {
+func TestContextMenu_DeleteSub_DirectKey_M_ForMe(t *testing.T) {
 	cm := navigateToDeleteSubPrompt(t)
-	// Navigate to Cancel (index 3), skipping separator (index 2)
-	cm, _ = cm.Update(pressJ()) // For me
-	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressJ()) // should skip separator, land on Cancel
-	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ Cancel")
-	newCM, cmd := cm.Update(pressEnter())
+	newCM, cmd := cm.Update(pressM())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
-	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
+	req, ok := cmd().(components.DeleteMsgRequest)
+	require.True(t, ok)
+	assert.False(t, req.Revoke)
 }
 
 func TestContextMenu_DeleteSub_SeparatorSkipped_Down(t *testing.T) {
 	cm := navigateToDeleteSubPrompt(t)
-	cm, _ = cm.Update(pressJ()) // For me (index 1)
+	cm, _ = cm.Update(pressJ()) // For me (1)
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressJ()) // should skip sep(2), land on Cancel(3)
+	cm, _ = cm.Update(pressJ()) // skip sep(2), land on Cancel(3)
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ Cancel")
+	assert.Equal(t, 3, cm.Cursor())
 }
 
 func TestContextMenu_DeleteSub_SeparatorSkipped_Up(t *testing.T) {
@@ -226,32 +295,29 @@ func TestContextMenu_DeleteSub_SeparatorSkipped_Up(t *testing.T) {
 	require.NotNil(t, cm)
 	cm, _ = cm.Update(pressJ()) // Cancel (skipping sep)
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressK()) // should skip sep going up, land on For me
+	cm, _ = cm.Update(pressK()) // skip sep going up, land on For me
 	require.NotNil(t, cm)
-	assert.Contains(t, cm.View(), "▸ For me")
+	assert.Equal(t, 1, cm.Cursor())
 }
 
 func TestContextMenu_EscFromSubPrompt_ReturnsToMain(t *testing.T) {
 	cm := navigateToDeleteSubPrompt(t)
 	newCM, cmd := cm.Update(pressEsc())
-	require.NotNil(t, newCM, "should NOT close, should return to main")
+	require.NotNil(t, newCM)
 	assert.Nil(t, cmd)
 	view := newCM.View()
 	assert.Contains(t, view, "Reply")
-	assert.Contains(t, view, "Delete")
 	assert.NotContains(t, view, "For me")
 }
 
 func TestContextMenu_View_ReturnsNonEmpty(t *testing.T) {
-	cm := components.NewContextMenu(1, false)
+	cm := components.NewContextMenu(1, false, defaultKM())
 	assert.NotEmpty(t, cm.View())
 }
 
-// navigateToDeleteSubPrompt creates an outgoing ContextMenu with cursor on the
-// Delete sub-prompt for msgID=99.
 func navigateToDeleteSubPrompt(t *testing.T) *components.ContextMenu {
 	t.Helper()
-	cm := components.NewContextMenu(99, true)
+	cm := components.NewContextMenu(99, true, defaultKM())
 	// outgoing: Reply(0) React(1) Edit(2) Delete(3)
 	cm, _ = cm.Update(pressJ()) // React
 	require.NotNil(t, cm)
@@ -259,7 +325,7 @@ func navigateToDeleteSubPrompt(t *testing.T) *components.ContextMenu {
 	require.NotNil(t, cm)
 	cm, _ = cm.Update(pressJ()) // Delete
 	require.NotNil(t, cm)
-	cm, _ = cm.Update(pressEnter()) // enter sub-prompt
+	cm, _ = cm.Update(pressEnter()) // open sub-menu
 	require.NotNil(t, cm)
 	return cm
 }

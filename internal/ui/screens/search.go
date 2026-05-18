@@ -6,14 +6,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 type CloseSearchMsg struct{}
 
 var (
-	searchBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("63"))
 	searchActiveRow = lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("0"))
 	searchNormalRow = lipgloss.NewStyle()
 	searchPrompt    = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
@@ -29,13 +28,48 @@ type SearchModel struct {
 	cursor  int
 	width   int
 	height  int
+	keyMap  keys.KeyMap
 }
 
-func NewSearchModel(chats []store.Chat, width, height int) *SearchModel {
-	m := &SearchModel{all: chats, width: width, height: height}
+func NewSearchModel(chats []store.Chat, width, height int, km keys.KeyMap) *SearchModel {
+	m := &SearchModel{all: chats, width: width, height: height, keyMap: km}
 	m.results = make([]store.Chat, len(chats))
 	copy(m.results, chats)
 	return m
+}
+
+func (m *SearchModel) hint() string {
+	if m.keyMap == nil {
+		return ""
+	}
+	cancel := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionCancel)
+	confirm := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionConfirm)
+	down := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionDown)
+	up := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionUp)
+	downSym := arrowSym(down)
+	upSym := arrowSym(up)
+	parts := []string{}
+	if downSym != "" || upSym != "" {
+		parts = append(parts, upSym+"/"+downSym+" -> move")
+	}
+	if confirm != "" {
+		parts = append(parts, confirm+" -> open")
+	}
+	if cancel != "" {
+		parts = append(parts, cancel+" -> close")
+	}
+	return strings.Join(parts, " | ")
+}
+
+func arrowSym(key string) string {
+	switch key {
+	case "up":
+		return "↑"
+	case "down":
+		return "↓"
+	default:
+		return key
+	}
 }
 
 func (m *SearchModel) Cursor() int { return m.cursor }
@@ -111,6 +145,12 @@ func (m *SearchModel) View() string {
 	if m.width > 0 && m.width < w {
 		w = m.width
 	}
+
+	hint := m.hint()
+	if hintW := lipgloss.Width(" " + hint + " "); hintW+2 > w-2 {
+		w = hintW + 4
+	}
+
 	inner := w - 2
 
 	queryLine := searchPrompt.Render("> ") + m.query + "█"
@@ -132,5 +172,7 @@ func (m *SearchModel) View() string {
 		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Width(inner).Render("no results"))
 	}
 
-	return searchBorderStyle.Width(inner).Render(strings.Join(lines, "\n"))
+	content := strings.Join(lines, "\n")
+	h := len(lines) + 2
+	return components.RenderBox(content, "", hint, lipgloss.RoundedBorder(), w, h)
 }

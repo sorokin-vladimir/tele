@@ -89,14 +89,17 @@ type RootModel struct {
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
+	km := keys.DefaultKeyMap()
+	sb := components.NewStatusBar(80)
+	sb.SetKeyMap(km)
 	return RootModel{
 		screen:       ScreenLogin,
 		focus:        FocusChatList,
 		chatList:     screens.NewChatListModel(),
 		chat:         screens.NewChatModel(80, 24),
-		statusBar:    components.NewStatusBar(80),
+		statusBar:    sb,
 		vimState:     keys.NewVimState(),
-		keyMap:       keys.DefaultKeyMap(),
+		keyMap:       km,
 		tgClient:     client,
 		st:           st,
 		historyLimit: historyLimit,
@@ -420,7 +423,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if keyStr == "/" {
 		if m.st != nil {
-			m.searchModel = screens.NewSearchModel(m.st.Chats(), m.width, m.height)
+			m.searchModel = screens.NewSearchModel(m.st.Chats(), m.width, m.height, m.keyMap)
 		}
 		return m, nil
 	}
@@ -459,7 +462,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			msgID := m.chat.SelectedMessageID()
 			isOut := m.chat.SelectedMessageIsOut()
 			if msgID != 0 {
-				m.contextMenu = components.NewContextMenu(msgID, isOut)
+				m.contextMenu = components.NewContextMenu(msgID, isOut, m.keyMap)
 			}
 		}
 		return m, nil
@@ -569,12 +572,10 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 	m.focus = target
 	m.chatList.SetFocused(target == FocusChatList)
 	m.chat.SetFocused(target == FocusChat)
-	if m.verbose {
-		if target == FocusChatList {
-			m.statusBar.SetActivePane("chatlist")
-		} else {
-			m.statusBar.SetActivePane("chat")
-		}
+	if target == FocusChatList {
+		m.statusBar.SetActivePane("chatlist")
+	} else {
+		m.statusBar.SetActivePane("chat")
 	}
 	return m, nil
 }
@@ -596,7 +597,7 @@ func (m RootModel) View() tea.View {
 		innerW := loginContentW + 2*loginPadH
 		innerH := loginContentH + 2*loginPadV
 		padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
-		loginBox := renderWithTitle(padded, "Telegram", b, innerW+2, innerH+2)
+		loginBox := components.RenderBox(padded, "Telegram", "", b, innerW+2, innerH+2)
 		content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, loginBox)
 	} else {
 		leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
@@ -616,8 +617,8 @@ func (m RootModel) View() tea.View {
 		chatListWidth := leftW - 2*borderSize + 2
 		chatWidth := rightW - 2*borderSize + 2
 
-		chatListView := renderWithTitle(m.chatList.View(), "[1] Chats", chatListBorder, chatListWidth, innerH)
-		chatView := renderWithTitle(m.chat.View(), "[2] "+m.chat.Title(), chatBorder, chatWidth, innerH)
+		chatListView := components.RenderBox(m.chatList.View(), "[1] Chats", "", chatListBorder, chatListWidth, innerH)
+		chatView := components.RenderBox(m.chat.View(), "[2] "+m.chat.Title(), "", chatBorder, chatWidth, innerH)
 
 		main := lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
 		content = main + "\n" + m.statusBar.View()
@@ -625,7 +626,7 @@ func (m RootModel) View() tea.View {
 			content = overlayCenter(content, m.searchModel.View(), m.width, m.height)
 		}
 		if m.contextMenu != nil {
-			content = overlayBottomRight(content, m.contextMenu.View(), m.width, m.height)
+			content = overlayBottomRight(content, m.contextMenu.View(), m.width, m.height, m.chat.ComposerHeight()+1)
 		}
 	}
 	v := tea.NewView(content)
@@ -633,42 +634,3 @@ func (m RootModel) View() tea.View {
 	return v
 }
 
-// renderWithTitle renders a bordered box with a title in the top border line.
-// w and h are the total outer dimensions (including the 1-char border on each side).
-func renderWithTitle(content, title string, b lipgloss.Border, w, h int) string {
-	innerW := w - 2
-	innerH := h - 2
-
-	titleStr := " " + title + " "
-	titleW := lipgloss.Width(titleStr)
-	fillW := innerW - titleW
-
-	var top string
-	if fillW >= 2 {
-		rightFill := fillW - 1
-		top = b.TopLeft + b.Top + titleStr + strings.Repeat(b.Top, rightFill) + b.TopRight
-	} else {
-		top = b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight
-	}
-	bottom := b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight
-
-	lines := strings.Split(content, "\n")
-	for len(lines) < innerH {
-		lines = append(lines, strings.Repeat(" ", innerW))
-	}
-	if len(lines) > innerH {
-		lines = lines[:innerH]
-	}
-
-	result := make([]string, 0, innerH+2)
-	result = append(result, top)
-	for _, l := range lines {
-		lw := lipgloss.Width(l)
-		if lw < innerW {
-			l += strings.Repeat(" ", innerW-lw)
-		}
-		result = append(result, b.Left+l+b.Right)
-	}
-	result = append(result, bottom)
-	return strings.Join(result, "\n")
-}

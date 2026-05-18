@@ -131,12 +131,15 @@ func TestContextMenu_Space_Closes(t *testing.T) {
 
 // --- enter on items ---
 
-func TestContextMenu_ReplyStub_Closes(t *testing.T) {
+func TestContextMenu_Reply_EmitsReplyMsgRequest(t *testing.T) {
 	cm := components.NewContextMenu(42, false, 0, defaultKM())
+	// cursor starts at 0 (Reply item)
 	newCM, cmd := cm.Update(pressEnter())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
-	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
+	req, ok := cmd().(components.ReplyMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, 42, req.MsgID)
 }
 
 func TestContextMenu_ReactStub_Closes(t *testing.T) {
@@ -163,14 +166,27 @@ func TestContextMenu_EditStub_Closes(t *testing.T) {
 
 // --- direct key dispatch ---
 
-func TestContextMenu_DirectKey_R_ExecutesReply(t *testing.T) {
+func TestContextMenu_DirectKey_R_EmitsReplyMsgRequest(t *testing.T) {
 	cm := components.NewContextMenu(42, false, 0, defaultKM())
 	cm, _ = cm.Update(pressJ()) // move cursor away
 	require.NotNil(t, cm)
 	newCM, cmd := cm.Update(pressR())
 	assert.Nil(t, newCM)
 	require.NotNil(t, cmd)
-	assert.IsType(t, components.CloseContextMenuMsg{}, cmd())
+	req, ok := cmd().(components.ReplyMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, 42, req.MsgID)
+}
+
+func TestContextMenu_Reply_OutgoingMessage_EmitsReplyMsgRequest(t *testing.T) {
+	cm := components.NewContextMenu(99, true, 0, defaultKM())
+	// outgoing: Reply(0) React(1) Edit(2) Delete(3); cursor at 0
+	newCM, cmd := cm.Update(pressEnter())
+	assert.Nil(t, newCM)
+	require.NotNil(t, cmd)
+	req, ok := cmd().(components.ReplyMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, 99, req.MsgID)
 }
 
 func TestContextMenu_DirectKey_D_ExecutesDeleteIncoming(t *testing.T) {

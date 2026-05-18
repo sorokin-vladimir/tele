@@ -23,6 +23,11 @@ type JumpToMsgRequest struct {
 	MsgID int
 }
 
+// ReplyMsgRequest is emitted when the user activates reply for a message.
+type ReplyMsgRequest struct {
+	MsgID int
+}
+
 type menuState int
 
 const (
@@ -171,7 +176,10 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	case keys.ActionJumpToOriginal:
 		replyToMsgID := cm.replyToMsgID
 		return nil, func() tea.Msg { return JumpToMsgRequest{MsgID: replyToMsgID} }
-	case keys.ActionReply, keys.ActionReact, keys.ActionEdit, keys.ActionCancel:
+	case keys.ActionReply:
+		msgID := cm.msgID
+		return nil, func() tea.Msg { return ReplyMsgRequest{MsgID: msgID} }
+	case keys.ActionReact, keys.ActionEdit, keys.ActionCancel:
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 	case keys.ActionDelete:
 		if !cm.isOut {

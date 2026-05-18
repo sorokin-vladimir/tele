@@ -11,8 +11,9 @@ import (
 )
 
 type SendMsgRequest struct {
-	Peer store.Peer
-	Text string
+	Peer         store.Peer
+	Text         string
+	ReplyToMsgID int
 }
 
 type OpenPhotoMsg struct {
@@ -33,6 +34,7 @@ type ChatModel struct {
 	height          int
 	focused         bool
 	composerFocused bool
+	replyToMsgID    int
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -76,6 +78,36 @@ func (m *ChatModel) SelectedMessageID() int           { return m.msgList.Selecte
 func (m *ChatModel) SelectedMessageIsOut() bool        { return m.msgList.SelectedMessageIsOut() }
 func (m *ChatModel) SelectedMessageReplyToMsgID() int  { return m.msgList.SelectedMessageReplyToMsgID() }
 func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.ScrollToMessage(id) }
+func (m *ChatModel) ReplyToMsgID() int                 { return m.replyToMsgID }
+
+func (m *ChatModel) clearPendingAction() {
+	m.replyToMsgID = 0
+	m.composer.ClearReplyPreview()
+}
+
+// ClearPendingAction clears any active reply (or future forward) state.
+func (m *ChatModel) ClearPendingAction() {
+	m.clearPendingAction()
+	m.syncMsgListHeight()
+}
+
+// SetReply activates reply mode. Clears any existing pending action first.
+func (m *ChatModel) SetReply(msgID int, preview string) {
+	m.clearPendingAction()
+	m.replyToMsgID = msgID
+	m.composer.SetReplyPreview(preview)
+	m.syncMsgListHeight()
+}
+
+// FocusComposer focuses the composer and switches to insert mode.
+// Returns a blink Cmd that must be returned from the parent Update.
+func (m *ChatModel) FocusComposer() tea.Cmd {
+	m.composerFocused = true
+	m.vimState.Mode = keys.ModeInsert
+	m.msgList.SetShowIndicator(false)
+	return m.composer.Focus()
+}
+
 func (m *ChatModel) Context() keys.Context            { return keys.ContextChat }
 func (m *ChatModel) Focused() bool                    { return m.focused }
 func (m *ChatModel) SetFocused(f bool)                { m.focused = f }
@@ -113,6 +145,8 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 	case keys.ActionMsg:
 		if m.composerFocused {
 			if msg.Action == keys.ActionNormal {
+				m.clearPendingAction()
+				m.syncMsgListHeight()
 				m.composerFocused = false
 				m.composer.Blur()
 				m.vimState.Mode = keys.ModeNormal
@@ -176,11 +210,15 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		if m.composerFocused {
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
 				text := m.composer.Value()
+				replyID := m.replyToMsgID
+				m.clearPendingAction()
 				m.composer.Reset()
 				m.syncMsgListHeight()
 				if m.chat != nil && text != "" {
 					peer := m.chat.Peer
-					return m, func() tea.Msg { return SendMsgRequest{Peer: peer, Text: text} }
+					return m, func() tea.Msg {
+						return SendMsgRequest{Peer: peer, Text: text, ReplyToMsgID: replyID}
+					}
 				}
 				return m, nil
 			}

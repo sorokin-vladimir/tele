@@ -42,7 +42,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string) (int, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error) {
 	c.mu.RLock()
 	api := c.api
 	c.mu.RUnlock()
@@ -60,11 +60,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 		}
 		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
 
-		updates, err := api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
-			Peer:     inputPeer,
-			Message:  text,
-			RandomID: randomID,
-		})
+		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID))
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 			return err
@@ -79,6 +75,18 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 		return nil
 	})
 	return realID, err
+}
+
+func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int) *tg.MessagesSendMessageRequest {
+	req := &tg.MessagesSendMessageRequest{
+		Peer:     inputPeer,
+		Message:  text,
+		RandomID: randomID,
+	}
+	if replyToMsgID != 0 {
+		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
+	}
+	return req
 }
 
 func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) error {

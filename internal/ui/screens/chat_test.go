@@ -148,6 +148,62 @@ func TestChat_SelectedMessageIsOut_NoMessages(t *testing.T) {
 	assert.False(t, m.SelectedMessageIsOut())
 }
 
+func TestChat_SetReply_SetsState(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetReply(10, "▌ Alice\n▌ hello")
+	assert.Equal(t, 10, m.ReplyToMsgID())
+}
+
+func TestChat_ClearPendingAction_ZerosState(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetReply(10, "▌ Alice\n▌ hello")
+	m.ClearPendingAction()
+	assert.Equal(t, 0, m.ReplyToMsgID())
+}
+
+func TestChat_ActionNormal_ClearsReplyState(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	// enter composer
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetReply(10, "▌ Alice\n▌ hello")
+	// press Esc
+	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
+	m = newPane.(*screens.ChatModel)
+	assert.Equal(t, 0, m.ReplyToMsgID())
+	assert.False(t, m.ComposerFocused())
+}
+
+func TestChat_SendMessage_CarriesReplyToMsgID(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	m.SetChat(chat)
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetReply(5, "▌ Bob\n▌ original")
+	m.SetComposerValue("my reply")
+	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_ = newPane
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.SendMsgRequest)
+	require.True(t, ok)
+	assert.Equal(t, "my reply", req.Text)
+	assert.Equal(t, 5, req.ReplyToMsgID)
+}
+
+func TestChat_SendMessage_ClearsReplyStateAfterSend(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}
+	m.SetChat(chat)
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetReply(5, "▌ Bob\n▌ original")
+	m.SetComposerValue("my reply")
+	newPane, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = newPane.(*screens.ChatModel)
+	assert.Equal(t, 0, m.ReplyToMsgID())
+}
+
 func TestChat_ShiftEnter_DoesNotSend(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerUser}}

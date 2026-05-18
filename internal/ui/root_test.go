@@ -13,19 +13,22 @@ import (
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
 type mockTGClient struct {
-	history  []store.Message
-	sendFunc func() int
+	history          []store.Message
+	sendFunc         func() int
+	lastReplyToMsgID int
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
 func (m *mockTGClient) GetHistory(_ context.Context, _ store.Peer, _ int, _ int) ([]store.Message, error) {
 	return m.history, nil
 }
-func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string) (int, error) {
+func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
+	m.lastReplyToMsgID = replyToMsgID
 	if m.sendFunc != nil {
 		return m.sendFunc(), nil
 	}
@@ -436,4 +439,92 @@ func TestRoot_ContextMenu_QuitKeyDoesNotQuit(t *testing.T) {
 
 	assert.True(t, m.ContextMenuOpen(), "context menu must stay open after q")
 	assert.Nil(t, cmd, "q while menu is open must not produce a quit cmd")
+}
+
+func TestRoot_ReplyMsgRequest_ClosesMenuAndFocusesComposer(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// open context menu first
+	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = newM.(ui.RootModel)
+	require.True(t, m.ContextMenuOpen())
+
+	newM, _ = m.Update(components.ReplyMsgRequest{MsgID: 10})
+	m = newM.(ui.RootModel)
+
+	assert.False(t, m.ContextMenuOpen(), "context menu must close after ReplyMsgRequest")
+	assert.True(t, m.Chat().ComposerFocused(), "composer must be focused after ReplyMsgRequest")
+	assert.Equal(t, keys.ModeInsert, m.VimMode(), "ReplyMsgRequest must switch root to insert mode")
+}
+
+func TestRoot_Send_WithReply_PassesReplyToMsgID(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	_, cmd := m.Update(screens.SendMsgRequest{
+		Peer:         store.Peer{ID: 1, Type: store.PeerUser},
+		Text:         "my reply",
+		ReplyToMsgID: 10,
+	})
+	require.NotNil(t, cmd)
+	cmd() // triggers mock.SendMessage
+
+	assert.Equal(t, 10, mock.lastReplyToMsgID)
+}
+
+func TestRoot_R_Key_ActivatesReplyMode(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = newM.(ui.RootModel)
+
+	assert.True(t, m.Chat().ComposerFocused(), "r key must activate reply mode and focus composer")
+	assert.Equal(t, 10, m.Chat().ReplyToMsgID(), "r key must set reply target")
+	assert.Equal(t, keys.ModeInsert, m.VimMode(), "r key must switch root to insert mode")
+}
+
+func TestRoot_OpenChat_ClearsPendingReply(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original", SenderName: "Alice", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// activate reply mode
+	newM, _ = m.Update(components.ReplyMsgRequest{MsgID: 10})
+	m = newM.(ui.RootModel)
+	require.Equal(t, 10, m.Chat().ReplyToMsgID(), "reply must be active before switching chat")
+
+	// switch to a different chat
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+	newM, _ = m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	m = newM.(ui.RootModel)
+
+	assert.Equal(t, 0, m.Chat().ReplyToMsgID(), "switching chat must clear pending reply")
+}
+
+func TestRoot_Send_SentinelCarriesReplyToMsgID(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+
+	_, _ = m.Update(screens.SendMsgRequest{
+		Peer:         store.Peer{ID: 1, Type: store.PeerUser},
+		Text:         "my reply",
+		ReplyToMsgID: 10,
+	})
+
+	msgs := st.Messages(1)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, 10, msgs[0].ReplyToMsgID, "sentinel must carry ReplyToMsgID")
 }

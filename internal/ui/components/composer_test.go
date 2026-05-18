@@ -59,3 +59,9 @@ func TestComposer_Reset_ClearsPreview(t *testing.T) {
 	assert.Empty(t, c.Value())
 	assert.Equal(t, 3, c.VisualHeight())
 }
+
+func TestComposer_VisualHeight_WithTwoLinePreview(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetReplyPreview("line1\nline2")
+	assert.Equal(t, 5, c.VisualHeight()) // 1 textarea + 2 border + 2 preview lines
+}

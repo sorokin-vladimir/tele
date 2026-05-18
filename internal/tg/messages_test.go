@@ -230,3 +230,18 @@ func TestConvertMessage_NoReply_ReplyToMsgIDIsZero(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 0, msg.ReplyToMsgID)
 }
+
+func TestBuildSendRequest_WithReply(t *testing.T) {
+	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
+	req := buildSendRequest(peer, "hello", 123, 42)
+	require.NotNil(t, req.ReplyTo)
+	replyTo, ok := req.ReplyTo.(*tg.InputReplyToMessage)
+	require.True(t, ok)
+	assert.Equal(t, 42, replyTo.ReplyToMsgID)
+}
+
+func TestBuildSendRequest_WithoutReply(t *testing.T) {
+	peer := &tg.InputPeerUser{UserID: 10}
+	req := buildSendRequest(peer, "hello", 123, 0)
+	assert.Nil(t, req.ReplyTo)
+}

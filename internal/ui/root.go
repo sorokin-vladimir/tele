@@ -111,6 +111,8 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 func (m RootModel) CurrentScreen() Screen            { return m.screen }
 func (m RootModel) CurrentFocus() Focus              { return m.focus }
 func (m RootModel) ChatList() *screens.ChatListModel { return m.chatList }
+func (m RootModel) Chat() *screens.ChatModel         { return m.chat }
+func (m RootModel) VimMode() keys.VimMode            { return m.vimState.Mode }
 
 // WithScreen returns a copy with the given screen set (used in tests and app init).
 func (m RootModel) WithScreen(s Screen) RootModel {
@@ -174,6 +176,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.onChatOpen != nil {
 			m.onChatOpen(msg.Chat.ID)
 		}
+		m.chat.ClearPendingAction()
 		m.chat.SetChat(&msg.Chat)
 		if m.st != nil {
 			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
@@ -296,11 +299,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nextSentinel--
 		sentinelID := m.nextSentinel
 		sentinel := store.Message{
-			ID:     sentinelID,
-			ChatID: m.currentChatID,
-			Text:   msg.Text,
-			Date:   time.Now(),
-			IsOut:  true,
+			ID:           sentinelID,
+			ChatID:       m.currentChatID,
+			Text:         msg.Text,
+			Date:         time.Now(),
+			IsOut:        true,
+			ReplyToMsgID: msg.ReplyToMsgID,
 		}
 		if m.st != nil {
 			m.st.AppendMessage(sentinel)
@@ -309,9 +313,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		client := m.tgClient
 		peer := msg.Peer
 		text := msg.Text
+		replyToMsgID := msg.ReplyToMsgID
 		chatID := m.currentChatID
 		return m, func() tea.Msg {
-			realID, err := client.SendMessage(context.Background(), peer, text)
+			realID, err := client.SendMessage(context.Background(), peer, text, replyToMsgID)
 			if err != nil {
 				realID = 0
 			}
@@ -338,6 +343,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusBar.SetStatus("Not in buffer")
 		}
 		return m, nil
+
+	case components.ReplyMsgRequest:
+		m.contextMenu = nil
+		return m, m.activateReply(msg.MsgID)
 
 	case components.CloseContextMenuMsg:
 		m.contextMenu = nil
@@ -478,6 +487,13 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if action == keys.ActionReply && m.focus == FocusChat {
+		if m.chat != nil {
+			return m, m.activateReply(m.chat.SelectedMessageID())
+		}
+		return m, nil
+	}
+
 	if action == keys.ActionPassthrough {
 		newPane, cmd := m.chat.Update(msg)
 		m.chat = newPane.(*screens.ChatModel)
@@ -559,6 +575,27 @@ func (m RootModel) markReadCmd() tea.Cmd {
 		}
 		return markReadDoneMsg{chatID: chatID, maxID: maxID}
 	}
+}
+
+// activateReply sets reply state for msgID, switches to insert mode, and returns the FocusComposer cmd.
+// Returns nil if msgID is zero.
+func (m *RootModel) activateReply(msgID int) tea.Cmd {
+	if msgID == 0 {
+		return nil
+	}
+	preview := "▌ Reply to message"
+	if m.st != nil {
+		for _, storeMsg := range m.st.Messages(m.currentChatID) {
+			if storeMsg.ID == msgID {
+				preview = components.BuildReplyPreview(storeMsg)
+				break
+			}
+		}
+	}
+	m.chat.SetReply(msgID, preview)
+	m.vimState.Mode = keys.ModeInsert
+	m.statusBar.SetMode(keys.ModeInsert)
+	return m.chat.FocusComposer()
 }
 
 func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {

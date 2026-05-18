@@ -67,11 +67,11 @@ func (c *Composer) SetReplyPreview(preview string) { c.replyPreview = preview }
 func (c *Composer) ClearReplyPreview()             { c.replyPreview = "" }
 
 // VisualHeight returns the total number of terminal rows that View() occupies:
-// textarea lines + 2 border rows + 1 if a reply preview is active.
+// textarea lines + 2 border rows + preview lines (0 if no preview).
 func (c *Composer) VisualHeight() int {
 	h := c.visualLines + 2
 	if c.replyPreview != "" {
-		h++
+		h += strings.Count(c.replyPreview, "\n") + 1
 	}
 	return h
 }

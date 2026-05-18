@@ -108,3 +108,14 @@ func TestDefaultKeyMap_ContextComposer(t *testing.T) {
 	assert.Equal(t, keys.ActionConfirm, km.Resolve(keys.ContextComposer, "enter"))
 	assert.Equal(t, keys.ActionNormal, km.Resolve(keys.ContextComposer, "esc"))
 }
+
+func TestVimState_R_NormalMode_Reply(t *testing.T) {
+	vs := keys.NewVimState()
+	assert.Equal(t, keys.ActionReply, vs.Process("r"))
+}
+
+func TestVimState_R_InsertMode_Passthrough(t *testing.T) {
+	vs := keys.NewVimState()
+	vs.Process("i") // enter insert mode
+	assert.Equal(t, keys.ActionPassthrough, vs.Process("r"))
+}

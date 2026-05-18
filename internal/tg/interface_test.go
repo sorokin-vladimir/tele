@@ -29,7 +29,7 @@ func (m *mockClient) GetHistory(_ context.Context, _ store.Peer, _ int, _ int) (
 	return m.history, nil
 }
 
-func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string) (int, error) {
+func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _ int) (int, error) {
 	m.sent = append(m.sent, text)
 	return 0, nil
 }

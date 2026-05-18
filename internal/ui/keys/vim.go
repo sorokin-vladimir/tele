@@ -94,6 +94,8 @@ func (vs *VimState) Process(key string) Action {
 		return ActionOpenPhoto
 	case "space":
 		return ActionOpenContextMenu
+	case "r":
+		return ActionReply
 	}
 	return ActionNone
 }

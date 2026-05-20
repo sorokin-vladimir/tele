@@ -198,10 +198,6 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 	case keys.ActionDelete:
-		if !cm.isOut {
-			msgID := cm.msgID
-			return nil, func() tea.Msg { return DeleteMsgRequest{MsgID: msgID, Revoke: false} }
-		}
 		cm.state = stateDeleteSub
 		cm.items = deleteSubItems()
 		cm.cursor = 0

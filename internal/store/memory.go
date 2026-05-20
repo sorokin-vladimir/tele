@@ -136,6 +136,26 @@ func (s *memoryStore) RemoveMessage(chatID int64, msgID int) {
 	}
 }
 
+func (s *memoryStore) RemoveMessages(chatID int64, msgIDs []int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.messages[chatID]) == 0 {
+		return
+	}
+	toRemove := make(map[int]struct{}, len(msgIDs))
+	for _, id := range msgIDs {
+		toRemove[id] = struct{}{}
+	}
+	msgs := s.messages[chatID]
+	kept := msgs[:0]
+	for _, m := range msgs {
+		if _, remove := toRemove[m.ID]; !remove {
+			kept = append(kept, m)
+		}
+	}
+	s.messages[chatID] = kept
+}
+
 func (s *memoryStore) UpdateChatReadMaxID(chatID int64, maxID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

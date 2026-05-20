@@ -136,6 +136,26 @@ func TestMemory_RemoveMessage_NoopWhenMissing(t *testing.T) {
 	assert.Len(t, s.Messages(5), 1)
 }
 
+func TestMemory_RemoveMessages_RemovesMatchingIDs(t *testing.T) {
+	s := store.NewMemory()
+	now := time.Now()
+	s.SetMessages(10, []store.Message{
+		{ID: 1, ChatID: 10, Text: "a", Date: now},
+		{ID: 2, ChatID: 10, Text: "b", Date: now},
+		{ID: 3, ChatID: 10, Text: "c", Date: now},
+	})
+	s.RemoveMessages(10, []int{1, 3})
+	msgs := s.Messages(10)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, 2, msgs[0].ID)
+}
+
+func TestMemory_RemoveMessages_NoopWhenEmpty(t *testing.T) {
+	s := store.NewMemory()
+	s.RemoveMessages(99, []int{1, 2, 3})
+	assert.Empty(t, s.Messages(99))
+}
+
 func TestMemory_UpdateMessageReactions_SetsReactions(t *testing.T) {
 	s := store.NewMemory()
 	s.AppendMessage(store.Message{ID: 1, ChatID: 5, Text: "hi"})

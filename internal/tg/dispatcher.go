@@ -73,6 +73,22 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 		return nil
 	})
 
+	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, upd *tg.UpdateDeleteMessages) error {
+		select {
+		case events <- store.Event{Kind: store.EventDeleteMessages, MsgIDs: upd.Messages}:
+		default:
+		}
+		return nil
+	})
+
+	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, upd *tg.UpdateDeleteChannelMessages) error {
+		select {
+		case events <- store.Event{Kind: store.EventDeleteMessages, ChatID: upd.ChannelID, MsgIDs: upd.Messages}:
+		default:
+		}
+		return nil
+	})
+
 	// OnReadHistoryOutbox / OnReadChannelOutbox are NOT registered here.
 	// They are intercepted before pts-tracking in outboxHook (see client.go),
 	// because pts gaps cause updates.Manager to silently drop these events.

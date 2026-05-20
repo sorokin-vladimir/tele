@@ -13,6 +13,7 @@ type Store interface {
 	UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)
 	RemoveMessage(chatID int64, msgID int)
+	RemoveMessages(chatID int64, msgIDs []int)
 	UpdateChatReadMaxID(chatID int64, maxID int)
 	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
 }

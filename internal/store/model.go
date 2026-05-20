@@ -100,6 +100,7 @@ const (
 	EventReadInbox
 	EventReadOutbox
 	EventReactionsUpdate
+	EventDeleteMessages
 )
 
 type Event struct {
@@ -108,5 +109,6 @@ type Event struct {
 	ChatID    int64
 	ReadMaxID int
 	MsgID     int
+	MsgIDs    []int
 	Reactions []Reaction
 }

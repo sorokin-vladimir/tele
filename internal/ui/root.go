@@ -396,6 +396,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.ChatID == m.currentChatID {
 				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
 			}
+		case store.EventDeleteMessages:
+			if msg.ChatID != 0 {
+				m.st.RemoveMessages(msg.ChatID, msg.MsgIDs)
+			} else {
+				for _, chat := range m.st.Chats() {
+					m.st.RemoveMessages(chat.ID, msg.MsgIDs)
+				}
+			}
+			if msg.ChatID == 0 || msg.ChatID == m.currentChatID {
+				m.chat.SetMessages(m.st.Messages(m.currentChatID))
+			}
+			m.chatList.SetChats(m.filteredChats())
 		}
 		return m, nil
 

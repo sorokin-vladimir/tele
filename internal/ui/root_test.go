@@ -597,3 +597,44 @@ func TestRoot_0_FocusesFolders(t *testing.T) {
 	root2 := newM.(ui.RootModel)
 	assert.Equal(t, ui.FocusFolders, root2.CurrentFocus())
 }
+
+func TestRoot_EventDeleteMessages_Channel_RemovesFromCurrentChat(t *testing.T) {
+	m, st := newRootWithTwoChats(t)
+	now := time.Now()
+	st.SetMessages(1, []store.Message{
+		{ID: 10, ChatID: 1, Text: "hello", Date: now},
+		{ID: 11, ChatID: 1, Text: "world", Date: now},
+	})
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 1, Title: "Alice"}})
+	m = newM.(ui.RootModel)
+
+	evt := store.Event{
+		Kind:   store.EventDeleteMessages,
+		ChatID: 1,
+		MsgIDs: []int{10},
+	}
+	newM, _ = m.Update(evt)
+	_ = newM.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, 11, msgs[0].ID)
+}
+
+func TestRoot_EventDeleteMessages_NonChannel_ScansAllChats(t *testing.T) {
+	m, st := newRootWithTwoChats(t)
+	now := time.Now()
+	st.SetMessages(1, []store.Message{{ID: 5, ChatID: 1, Text: "a", Date: now}})
+	st.SetMessages(2, []store.Message{{ID: 5, ChatID: 2, Text: "b", Date: now}})
+
+	evt := store.Event{
+		Kind:   store.EventDeleteMessages,
+		ChatID: 0,
+		MsgIDs: []int{5},
+	}
+	newM, _ := m.Update(evt)
+	_ = newM.(ui.RootModel)
+
+	assert.Empty(t, st.Messages(1))
+	assert.Empty(t, st.Messages(2))
+}

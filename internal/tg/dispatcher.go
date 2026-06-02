@@ -112,9 +112,63 @@ func setupDispatcher(dispatcher *tg.UpdateDispatcher, events chan<- store.Event,
 		return nil
 	})
 
+	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateUserTyping) error {
+		action := convertTypingAction(upd.Action)
+		select {
+		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.UserID, TypingAction: action}:
+		default:
+		}
+		return nil
+	})
+
+	dispatcher.OnChatUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateChatUserTyping) error {
+		action := convertTypingAction(upd.Action)
+		select {
+		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.ChatID, TypingAction: action}:
+		default:
+		}
+		return nil
+	})
+
+	dispatcher.OnChannelUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateChannelUserTyping) error {
+		action := convertTypingAction(upd.Action)
+		select {
+		case events <- store.Event{Kind: store.EventTyping, ChatID: upd.ChannelID, TypingAction: action}:
+		default:
+		}
+		return nil
+	})
+
 	// OnReadHistoryOutbox / OnReadChannelOutbox are NOT registered here.
 	// They are intercepted before pts-tracking in outboxHook (see client.go),
 	// because pts gaps cause updates.Manager to silently drop these events.
+}
+
+func convertTypingAction(a tg.SendMessageActionClass) store.TypingAction {
+	switch a.(type) {
+	case *tg.SendMessageTypingAction:
+		return store.TypingActionTyping
+	case *tg.SendMessageRecordAudioAction:
+		return store.TypingActionRecordAudio
+	case *tg.SendMessageUploadAudioAction:
+		return store.TypingActionUploadAudio
+	case *tg.SendMessageRecordVideoAction:
+		return store.TypingActionRecordVideo
+	case *tg.SendMessageUploadVideoAction:
+		return store.TypingActionUploadVideo
+	case *tg.SendMessageUploadPhotoAction:
+		return store.TypingActionUploadPhoto
+	case *tg.SendMessageUploadDocumentAction:
+		return store.TypingActionUploadDocument
+	case *tg.SendMessageChooseStickerAction:
+		return store.TypingActionChooseSticker
+	case *tg.SendMessageRecordRoundAction:
+		return store.TypingActionRecordRound
+	case *tg.SendMessageCancelAction:
+		return store.TypingActionCancel
+	default:
+		return store.TypingActionUnknown
+	}
 }
 
 func extractPeerID(raw tg.MessageClass) int64 {

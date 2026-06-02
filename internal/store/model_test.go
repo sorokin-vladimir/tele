@@ -60,3 +60,27 @@ func TestChat_NewFields(t *testing.T) {
 	assert.False(t, c.IsBot)
 	assert.True(t, c.IsMuted)
 }
+
+func TestTypingAction_Label_KnownValues(t *testing.T) {
+	assert.Equal(t, "typing", store.TypingActionTyping.Label())
+	assert.Equal(t, "recording audio", store.TypingActionRecordAudio.Label())
+	assert.Equal(t, "sending audio", store.TypingActionUploadAudio.Label())
+	assert.Equal(t, "recording video", store.TypingActionRecordVideo.Label())
+	assert.Equal(t, "sending video", store.TypingActionUploadVideo.Label())
+	assert.Equal(t, "sending a photo", store.TypingActionUploadPhoto.Label())
+	assert.Equal(t, "sending a file", store.TypingActionUploadDocument.Label())
+	assert.Equal(t, "choosing a sticker", store.TypingActionChooseSticker.Label())
+	assert.Equal(t, "recording a video message", store.TypingActionRecordRound.Label())
+}
+
+func TestTypingAction_Label_EmptyForUnknownAndCancel(t *testing.T) {
+	assert.Equal(t, "", store.TypingActionUnknown.Label())
+	assert.Equal(t, "", store.TypingActionCancel.Label())
+}
+
+func TestEventTyping_TypingActionField(t *testing.T) {
+	evt := store.Event{Kind: store.EventTyping, ChatID: 42, TypingAction: store.TypingActionTyping}
+	assert.Equal(t, store.EventTyping, evt.Kind)
+	assert.Equal(t, store.TypingActionTyping, evt.TypingAction)
+	assert.Equal(t, int64(42), evt.ChatID)
+}

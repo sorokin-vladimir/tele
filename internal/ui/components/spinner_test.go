@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -36,4 +37,40 @@ func TestSpinner_AllFramesDistinct(t *testing.T) {
 		s.Tick()
 	}
 	assert.Len(t, seen, 6)
+}
+
+func TestTypingDots_ViewEmpty_ReturnsEmpty(t *testing.T) {
+	var d components.TypingDots
+	assert.Equal(t, "", d.View(""))
+}
+
+func TestTypingDots_DotsFrameIsAlways3Chars(t *testing.T) {
+	var d components.TypingDots
+	for i := 0; i < 4; i++ {
+		v := d.View("x")
+		// base "x" (1 char) + dots suffix (3 chars) = 4 chars total
+		assert.Equal(t, 4, len(v), "frame %d: %q", i, v)
+		d.Tick()
+	}
+}
+
+func TestTypingDots_PingPong_WrapsAfter4Ticks(t *testing.T) {
+	var d components.TypingDots
+	first := d.View("typing")
+	for i := 0; i < 4; i++ {
+		d.Tick()
+	}
+	assert.Equal(t, first, d.View("typing"))
+}
+
+func TestTypingDots_Tick_ChangesSuffix(t *testing.T) {
+	var d components.TypingDots
+	before := d.View("typing")
+	d.Tick()
+	assert.NotEqual(t, before, d.View("typing"))
+}
+
+func TestTypingDots_BasePreserved(t *testing.T) {
+	var d components.TypingDots
+	assert.True(t, strings.HasPrefix(d.View("recording audio"), "recording audio"))
 }

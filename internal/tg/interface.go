@@ -19,6 +19,7 @@ type Client interface {
 	DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error
 	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error
 	SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error
+	SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }

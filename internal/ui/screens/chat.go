@@ -2,6 +2,7 @@ package screens
 
 import (
 	"image"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -23,6 +24,11 @@ type EditSendRequest struct {
 	Text  string
 }
 
+type SetTypingRequest struct {
+	Peer   store.Peer
+	Action store.TypingAction
+}
+
 type LoadMoreMsg struct {
 	ChatID   int64
 	OffsetID int
@@ -42,6 +48,9 @@ type ChatModel struct {
 	spinner         components.Spinner
 	loading         bool
 	logo            components.LogoLoader
+	typingBase      string
+	typingDots      components.TypingDots
+	lastTypingAt    time.Time
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -74,6 +83,8 @@ func (m *ChatModel) TickLogo() { m.logo.Tick() }
 
 
 func (m *ChatModel) SetChat(chat *store.Chat) {
+	m.typingBase = ""
+	m.lastTypingAt = time.Time{}
 	m.chat = chat
 	if chat != nil {
 		m.msgList.SetIsGroup(chat.Peer.IsGroup() || chat.Peer.IsChannel())
@@ -102,6 +113,24 @@ func (m *ChatModel) SelectedMessagePhotoID() int64     { return m.msgList.Select
 func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.ScrollToMessage(id) }
 func (m *ChatModel) ReplyToMsgID() int { return m.replyToMsgID }
 func (m *ChatModel) EditMsgID() int    { return m.editMsgID }
+
+// SetTypingLabel sets the active typing label and resets the animation frame.
+func (m *ChatModel) SetTypingLabel(base string) {
+	m.typingBase = base
+	m.typingDots = components.TypingDots{}
+}
+
+// ClearTypingLabel removes the typing indicator.
+func (m *ChatModel) ClearTypingLabel() { m.typingBase = "" }
+
+// IsTyping reports whether a typing indicator is currently active.
+func (m *ChatModel) IsTyping() bool { return m.typingBase != "" }
+
+// TickTypingDots advances the dots animation by one frame.
+func (m *ChatModel) TickTypingDots() { m.typingDots.Tick() }
+
+// TypingLabel returns the animated typing label, or "" if no typing is active.
+func (m *ChatModel) TypingLabel() string { return m.typingDots.View(m.typingBase) }
 
 func (m *ChatModel) SetDarkBackground(isDark bool) {
 	m.composer.SetDarkBackground(isDark)
@@ -194,6 +223,13 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composer.Blur()
 				m.vimState.Mode = keys.ModeNormal
 				m.msgList.SetShowIndicator(true)
+				if !m.lastTypingAt.IsZero() && m.chat != nil {
+					peer := m.chat.Peer
+					m.lastTypingAt = time.Time{}
+					return m, func() tea.Msg {
+						return SetTypingRequest{Peer: peer, Action: store.TypingActionCancel}
+					}
+				}
 			}
 			return m, nil
 		}
@@ -257,25 +293,47 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				text := m.composer.Value()
 				replyID := m.replyToMsgID
 				editID := m.editMsgID
+				wasTyping := !m.lastTypingAt.IsZero()
 				m.clearPendingAction()
 				m.composer.Reset()
 				m.syncMsgListHeight()
+				m.lastTypingAt = time.Time{}
 				if m.chat != nil && text != "" {
 					peer := m.chat.Peer
+					var sendCmd tea.Cmd
 					if editID != 0 {
-						return m, func() tea.Msg {
+						sendCmd = func() tea.Msg {
 							return EditSendRequest{Peer: peer, MsgID: editID, Text: text}
 						}
+					} else {
+						sendCmd = func() tea.Msg {
+							return SendMsgRequest{Peer: peer, Text: text, ReplyToMsgID: replyID}
+						}
 					}
-					return m, func() tea.Msg {
-						return SendMsgRequest{Peer: peer, Text: text, ReplyToMsgID: replyID}
+					if wasTyping {
+						cancelCmd := func() tea.Msg {
+							return SetTypingRequest{Peer: peer, Action: store.TypingActionCancel}
+						}
+						return m, tea.Batch(sendCmd, cancelCmd)
 					}
+					return m, sendCmd
 				}
 				return m, nil
 			}
 			newC, cmd := m.composer.Update(msg)
 			m.composer = newC
 			m.syncMsgListHeight()
+			if m.chat != nil && time.Since(m.lastTypingAt) >= 4*time.Second {
+				peer := m.chat.Peer
+				m.lastTypingAt = time.Now()
+				typingCmd := func() tea.Msg {
+					return SetTypingRequest{Peer: peer, Action: store.TypingActionTyping}
+				}
+				if cmd != nil {
+					return m, tea.Batch(cmd, typingCmd)
+				}
+				return m, typingCmd
+			}
 			return m, cmd
 		}
 	}

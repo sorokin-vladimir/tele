@@ -409,6 +409,48 @@ func convertReactions(mr tg.MessageReactions) []store.Reaction {
 	return out
 }
 
+func typingActionToTG(a store.TypingAction) tg.SendMessageActionClass {
+	switch a {
+	case store.TypingActionTyping:
+		return &tg.SendMessageTypingAction{}
+	case store.TypingActionRecordAudio:
+		return &tg.SendMessageRecordAudioAction{}
+	case store.TypingActionUploadAudio:
+		return &tg.SendMessageUploadAudioAction{}
+	case store.TypingActionRecordVideo:
+		return &tg.SendMessageRecordVideoAction{}
+	case store.TypingActionUploadVideo:
+		return &tg.SendMessageUploadVideoAction{}
+	case store.TypingActionUploadPhoto:
+		return &tg.SendMessageUploadPhotoAction{}
+	case store.TypingActionUploadDocument:
+		return &tg.SendMessageUploadDocumentAction{}
+	case store.TypingActionChooseSticker:
+		return &tg.SendMessageChooseStickerAction{}
+	case store.TypingActionRecordRound:
+		return &tg.SendMessageRecordRoundAction{}
+	default:
+		return &tg.SendMessageCancelAction{}
+	}
+}
+
+func (c *GotdClient) SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error {
+	c.mu.RLock()
+	api := c.api
+	c.mu.RUnlock()
+	if api == nil {
+		return nil
+	}
+	_, err := api.MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
+		Peer:   peerToInput(peer),
+		Action: typingActionToTG(action),
+	})
+	if err != nil {
+		c.log.Debug("SetTyping failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
+	}
+	return err
+}
+
 func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {
 	if len(entities) == 0 {
 		return nil

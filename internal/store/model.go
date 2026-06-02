@@ -104,15 +104,58 @@ const (
 	EventReactionsUpdate
 	EventDeleteMessages
 	EventUserPresence
+	EventTyping
 )
 
+type TypingAction int
+
+const (
+	TypingActionUnknown TypingAction = iota
+	TypingActionTyping
+	TypingActionRecordAudio
+	TypingActionUploadAudio
+	TypingActionRecordVideo
+	TypingActionUploadVideo
+	TypingActionUploadPhoto
+	TypingActionUploadDocument
+	TypingActionChooseSticker
+	TypingActionRecordRound
+	TypingActionCancel
+)
+
+func (a TypingAction) Label() string {
+	switch a {
+	case TypingActionTyping:
+		return "typing"
+	case TypingActionRecordAudio:
+		return "recording audio"
+	case TypingActionUploadAudio:
+		return "sending audio"
+	case TypingActionRecordVideo:
+		return "recording video"
+	case TypingActionUploadVideo:
+		return "sending video"
+	case TypingActionUploadPhoto:
+		return "sending a photo"
+	case TypingActionUploadDocument:
+		return "sending a file"
+	case TypingActionChooseSticker:
+		return "choosing a sticker"
+	case TypingActionRecordRound:
+		return "recording a video message"
+	default:
+		return ""
+	}
+}
+
 type Event struct {
-	Kind      EventKind
-	Message   Message
-	ChatID    int64
-	ReadMaxID int
-	MsgID     int
-	MsgIDs    []int
-	Reactions []Reaction
-	Online    bool
+	Kind         EventKind
+	Message      Message
+	ChatID       int64
+	ReadMaxID    int
+	MsgID        int
+	MsgIDs       []int
+	Reactions    []Reaction
+	Online       bool
+	TypingAction TypingAction
 }

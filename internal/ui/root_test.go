@@ -50,6 +50,10 @@ func (m *mockTGClient) DeleteMessages(_ context.Context, _ store.Peer, _ []int, 
 func (m *mockTGClient) SendReaction(_ context.Context, _ store.Peer, _ int, _ string) error {
 	return nil
 }
+
+func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAction) error {
+	return nil
+}
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
 var _ internaltg.Client = (*mockTGClient)(nil)

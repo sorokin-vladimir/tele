@@ -56,6 +56,10 @@ func (m *mockClient) SendReaction(_ context.Context, _ store.Peer, _ int, _ stri
 	return nil
 }
 
+func (m *mockClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAction) error {
+	return nil
+}
+
 func (m *mockClient) Updates() <-chan store.Event {
 	return m.events
 }

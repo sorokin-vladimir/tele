@@ -25,6 +25,15 @@ func NewComposer(width int) *Composer {
 	ta.ShowLineNumbers = false
 	ta.Prompt = "> "
 	ta.MaxHeight = maxComposerLines
+	// Modifier+Enter combos (shift+enter, alt+enter) require a terminal that supports an extended
+	// key protocol (Kitty keyboard protocol, or XTerm's modifyOtherKeys). Legacy terminals such as
+	// macOS Terminal.app and MinTTY (Git for Windows) silently drop these keys, so neither binding
+	// fires there. Both alternatives are registered so that whichever the terminal forwards is caught.
+	// Lazygit has the same limitation and handles it identically — document the requirement and list
+	// multiple fallbacks. Recommended terminals: Ghostty / iTerm2 (macOS), Windows Terminal (Windows),
+	// kitty, WezTerm, Alacritty. tmux users need: set -g extended-keys on
+	// See: https://github.com/jesseduffield/lazygit/blob/master/docs/keybindings/Custom_Keybindings.md#terminal-compatibility
+	// Issue: https://github.com/sorokin-vladimir/tele/issues/9#issuecomment-4600787928
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "shift+enter"))
 	ta.KeyMap.Paste = key.NewBinding() // handled at root level via readClipboardCmd → tea.PasteMsg
 	ta.CharLimit = 4096

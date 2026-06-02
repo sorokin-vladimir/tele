@@ -83,6 +83,8 @@ type FolderFiltersMsg struct {
 	Filters []store.FolderFilter
 }
 
+type clearTypingMsg struct{ serial int }
+
 type RootModel struct {
 	screen            Screen
 	focus             Focus
@@ -113,6 +115,7 @@ type RootModel struct {
 	folderBar          *screens.FoldersModel
 	activeFilter       *store.FolderFilter
 	logo               components.LogoLoader
+	typingSerial       int
 }
 
 func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, verbose bool) RootModel {
@@ -458,6 +461,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.chat.SetChat(&chat)
 				}
 			}
+		case store.EventTyping:
+			if msg.ChatID != m.currentChatID {
+				return m, nil
+			}
+			label := msg.TypingAction.Label()
+			if label == "" {
+				m.chat.ClearTypingLabel()
+				return m, nil
+			}
+			alreadyActive := m.chat.IsTyping()
+			m.typingSerial++
+			serial := m.typingSerial
+			m.chat.SetTypingLabel(label)
+			var cmds []tea.Cmd
+			cmds = append(cmds, tea.Tick(6*time.Second, func(time.Time) tea.Msg { return clearTypingMsg{serial: serial} }))
+			if !alreadyActive {
+				cmds = append(cmds, typingDotsTickCmd())
+			}
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 
@@ -507,6 +529,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = client.EditMessage(context.Background(), peer, msgID, text)
 			return nil
 		}
+
+	case screens.SetTypingRequest:
+		if m.tgClient == nil {
+			return m, nil
+		}
+		client := m.tgClient
+		peer := msg.Peer
+		action := msg.Action
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = client.SetTyping(ctx, peer, action)
+		}()
+		return m, nil
 
 	case sentMsgConfirmedMsg:
 		if m.st == nil {
@@ -654,6 +690,19 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chat.TickSpinner()
 		if m.screen == ScreenMain {
 			return m, spinnerTickCmd()
+		}
+		return m, nil
+
+	case components.TypingDotsTickMsg:
+		if m.chat.IsTyping() {
+			m.chat.TickTypingDots()
+			return m, typingDotsTickCmd()
+		}
+		return m, nil
+
+	case clearTypingMsg:
+		if msg.serial == m.typingSerial {
+			m.chat.ClearTypingLabel()
 		}
 		return m, nil
 
@@ -1154,7 +1203,9 @@ func (m RootModel) View() tea.View {
 		chatListTitle := "[1] Chats"
 		chatTitle := "[2] " + m.chat.Title()
 		chatDot := ""
-		if m.currentChatID != 0 && m.st != nil {
+		if m.chat.IsTyping() {
+			chatDot = m.chat.TypingLabel()
+		} else if m.currentChatID != 0 && m.st != nil {
 			if chat, ok := m.st.GetChat(m.currentChatID); ok && chat.Peer.IsUser() && chat.Online {
 				chatDot = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("●")
 			}
@@ -1212,6 +1263,12 @@ func bgColorPollCmd() tea.Cmd {
 func spinnerTickCmd() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
 		return components.SpinnerTickMsg{}
+	})
+}
+
+func typingDotsTickCmd() tea.Cmd {
+	return tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg {
+		return components.TypingDotsTickMsg{}
 	})
 }
 

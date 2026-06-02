@@ -247,6 +247,66 @@ func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T
 	}
 }
 
+func TestConvertTypingAction_Typing(t *testing.T) {
+	assert.Equal(t, store.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
+}
+
+func TestConvertTypingAction_UploadPhoto(t *testing.T) {
+	assert.Equal(t, store.TypingActionUploadPhoto, convertTypingAction(&tg.SendMessageUploadPhotoAction{}))
+}
+
+func TestConvertTypingAction_Cancel(t *testing.T) {
+	assert.Equal(t, store.TypingActionCancel, convertTypingAction(&tg.SendMessageCancelAction{}))
+}
+
+func TestConvertTypingAction_Unknown(t *testing.T) {
+	assert.Equal(t, store.TypingActionUnknown, convertTypingAction(&tg.SendMessageGamePlayAction{}))
+}
+
+func TestSetupDispatcher_UserTyping_EmitsTypingEvent(t *testing.T) {
+	events := make(chan store.Event, 1)
+	dispatcher := tg.NewUpdateDispatcher()
+	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+
+	upd := &tg.UpdateUserTyping{
+		UserID: 55,
+		Action: &tg.SendMessageTypingAction{},
+	}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-events:
+		assert.Equal(t, store.EventTyping, evt.Kind)
+		assert.Equal(t, int64(55), evt.ChatID)
+		assert.Equal(t, store.TypingActionTyping, evt.TypingAction)
+	case <-time.After(time.Second):
+		t.Fatal("no event received")
+	}
+}
+
+func TestSetupDispatcher_ChatUserTyping_EmitsTypingEvent(t *testing.T) {
+	events := make(chan store.Event, 1)
+	dispatcher := tg.NewUpdateDispatcher()
+	setupDispatcher(&dispatcher, events, func(int) bool { return false })
+
+	upd := &tg.UpdateChatUserTyping{
+		ChatID: 100,
+		Action: &tg.SendMessageUploadPhotoAction{},
+	}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-events:
+		assert.Equal(t, store.EventTyping, evt.Kind)
+		assert.Equal(t, int64(100), evt.ChatID)
+		assert.Equal(t, store.TypingActionUploadPhoto, evt.TypingAction)
+	case <-time.After(time.Second):
+		t.Fatal("no event received")
+	}
+}
+
 func TestExtractPeerID(t *testing.T) {
 	cases := []struct {
 		name   string

@@ -79,6 +79,11 @@ type reactionFailedMsg struct {
 	reactions []store.Reaction
 }
 
+type deleteMsgFailedMsg struct {
+	chatID   int64
+	messages []store.Message
+}
+
 type FolderFiltersMsg struct {
 	Filters []store.FolderFilter
 }
@@ -616,6 +621,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case deleteMsgFailedMsg:
+		if m.st != nil {
+			m.st.SetMessages(msg.chatID, msg.messages)
+			if msg.chatID == m.currentChatID {
+				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			}
+		}
+		m.statusBar.SetStatus("Delete failed")
+		return m, nil
+
 	case components.ReactConfirmedMsg:
 		m.reactionPicker = nil
 		if m.st == nil || m.tgClient == nil {
@@ -666,12 +681,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.st == nil {
 			return m, nil
 		}
-		m.st.RemoveMessage(m.currentChatID, msg.MsgID)
+		chatID := m.currentChatID
+		origMessages := m.st.Messages(chatID)
+		m.st.RemoveMessage(chatID, msg.MsgID)
 		m.chat.RemoveMessage(msg.MsgID)
 		if m.tgClient == nil {
 			return m, nil
 		}
-		chat, ok := m.st.GetChat(m.currentChatID)
+		chat, ok := m.st.GetChat(chatID)
 		if !ok {
 			return m, nil
 		}
@@ -680,8 +697,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msgID := msg.MsgID
 		revoke := msg.Revoke
 		return m, func() tea.Msg {
-			// TODO: on error, re-insert message (optimistic delete, no rollback yet)
-			_ = client.DeleteMessages(context.Background(), peer, []int{msgID}, revoke)
+			if err := client.DeleteMessages(context.Background(), peer, []int{msgID}, revoke); err != nil {
+				return deleteMsgFailedMsg{chatID: chatID, messages: origMessages}
+			}
 			return nil
 		}
 

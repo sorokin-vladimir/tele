@@ -61,8 +61,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	sd, err := stateDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "state dir: %v\n", err)
+		os.Exit(1)
+	}
 	logCfg := zap.NewProductionConfig()
-	logCfg.OutputPaths = []string{"tele.log"}
+	logCfg.OutputPaths = []string{filepath.Join(sd, "tele.log")}
 	if *verbose {
 		logCfg.Level.SetLevel(zap.DebugLevel)
 	}
@@ -103,6 +108,23 @@ func expandTilde(path string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+// stateDir returns ~/.local/state/tele (or $XDG_STATE_HOME/tele) and ensures it exists.
+func stateDir() (string, error) {
+	base := os.Getenv("XDG_STATE_HOME")
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		base = filepath.Join(home, ".local", "state")
+	}
+	dir := filepath.Join(base, "tele")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 // ensureConfig creates a default config file if it does not exist.

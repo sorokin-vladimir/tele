@@ -8,18 +8,24 @@ import (
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
-type AuthRequestMsg struct{ Step internaltg.AuthStep }
+type AuthRequestMsg struct {
+	Step internaltg.AuthStep
+	Hint string
+}
+type AuthErrorMsg struct{ Text string }
 type ConnectedMsg struct{}
 type TransitionToMainMsg struct{}
 
-// WaitForAuthRequest returns a Cmd that blocks until AuthFlow sends a request or ready closes.
+// WaitForAuthRequest returns a Cmd that blocks until AuthFlow sends a request, an error, or ready closes.
 func WaitForAuthRequest(af *internaltg.AuthFlow, ready <-chan struct{}) tea.Cmd {
 	return func() tea.Msg {
 		select {
 		case req := <-af.Requests:
-			return AuthRequestMsg{Step: req.Step}
+			return AuthRequestMsg{Step: req.Step, Hint: req.Hint}
 		case <-ready:
 			return ConnectedMsg{}
+		case text := <-af.Errors:
+			return AuthErrorMsg{Text: text}
 		}
 	}
 }
@@ -58,7 +64,10 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.prompt = "Enter phone number:"
 			m.input.Placeholder = "+1234567890"
 		case internaltg.AuthStepCode:
-			m.prompt = "Enter SMS code:"
+			m.prompt = msg.Hint
+			if m.prompt == "" {
+				m.prompt = "Enter the login code:"
+			}
 			m.input.Placeholder = "12345"
 		case internaltg.AuthStepPassword:
 			m.prompt = "Enter 2FA password:"
@@ -66,6 +75,11 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Placeholder = "password"
 		}
 		m.input.SetValue("")
+		return m, nil
+
+	case AuthErrorMsg:
+		m.err = msg.Text
+		m.step = -2
 		return m, nil
 
 	case ConnectedMsg:
@@ -90,9 +104,12 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m LoginModel) View() tea.View {
 	var s string
-	if m.step < 0 {
+	switch {
+	case m.step == -2:
+		s = fmt.Sprintf("Login error:\n\n%s\n\n(Press Ctrl+C to exit)", m.err)
+	case m.step < 0:
 		s = "Connecting...\n"
-	} else {
+	default:
 		s = fmt.Sprintf("%s\n\n%s\n\n%s", m.prompt, m.input.View(), m.err)
 	}
 	return tea.NewView(s)

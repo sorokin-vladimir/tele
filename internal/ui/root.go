@@ -747,7 +747,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case screens.AuthRequestMsg, screens.ConnectedMsg:
+	case screens.AuthRequestMsg, screens.ConnectedMsg, screens.AuthErrorMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)

@@ -111,6 +111,7 @@ func (a *App) Run() error {
 
 	// Bridge: auth requests + ready signal → bubbletea
 	go func() {
+		var authOK bool
 		for {
 			cmd := screens.WaitForAuthRequest(authFlow, readyCh)
 			msg := cmd()
@@ -120,8 +121,16 @@ func (a *App) Run() error {
 			}
 			if _, done := msg.(screens.ConnectedMsg); done {
 				a.log.Info("connected, loading dialogs")
+				authOK = true
 				break
 			}
+			if errMsg, failed := msg.(screens.AuthErrorMsg); failed {
+				a.log.Error("auth error", zap.String("reason", errMsg.Text))
+				break
+			}
+		}
+		if !authOK {
+			return
 		}
 		// Connected: load initial chats
 		go func() {

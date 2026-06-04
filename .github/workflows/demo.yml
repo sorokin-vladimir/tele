@@ -37,14 +37,16 @@ jobs:
             history_limit: 50
           EOF
 
-      - name: Install ffmpeg
+      - name: Install VHS dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg ttyd
 
-      - uses: charmbracelet/vhs-action@v2
-        with:
-          path: demo.tape
+      - name: Install VHS
+        run: go install github.com/charmbracelet/vhs@latest
+
+      - name: Record demo
+        run: vhs demo.tape
 
       - name: Publish demo GIF
         run: |

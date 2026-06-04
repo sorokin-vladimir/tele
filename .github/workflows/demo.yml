@@ -38,7 +38,7 @@ jobs:
           EOF
 
       - name: Install ffmpeg
-        run: sudo apt-get install -y ffmpeg
+        run: sudo apt-get install -y --fix-missing ffmpeg
 
       - uses: charmbracelet/vhs-action@v2
         with:

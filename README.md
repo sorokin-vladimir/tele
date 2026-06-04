@@ -8,7 +8,7 @@
   \__|  \___| |_|  \___|
 ```
 
-> Keyboard-driven TUI Telegram client for the terminal
+> A terminal-native Telegram client built for keyboard-driven workflows.
 
 [![Go](https://img.shields.io/badge/go-1.26+-blue)](https://go.dev)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -23,26 +23,69 @@
   <a href="#roadmap">Roadmap</a>
 </p>
 
+---
+
 ![tele demo](./assets/demo.gif)
 
-> **Status:** Active development. Already usable for daily messaging — private chats, groups, replies, reactions. Some Telegram features are still in progress.
+> **Status:** Active development — already usable for daily messaging (private chats, groups, replies, reactions). Some Telegram features are still in progress.
+
+---
 
 ## Why tele?
 
-Telegram Desktop, the web version, and mobile apps are built for mouse-first interaction. If you live in the terminal — editing in [Neovim](https://neovim.io), navigating with [yazi](https://yazi-rs.github.io), monitoring with [k9s](https://k9scli.io) — switching to a GUI messenger breaks your flow.
+Telegram Desktop, the web client, and mobile apps are designed around mouse-first interaction.
 
-`tele` keeps you in the terminal. Navigate chats with `j`/`k`, open and reply to messages without touching the mouse, and run it over SSH on a remote machine. If lazygit feels natural to you, `tele` will too.
+If you live in the terminal — using tools like Neovim, yazi, k9s, or tmux — switching to a GUI messenger breaks your flow.
 
-It also runs lean: ~35 MB RSS at idle vs several hundred for a desktop client.
+`tele` keeps you in the terminal.
 
-| Feature              | tele           | Telegram Desktop | Web        |
-| -------------------- | -------------- | ---------------- | ---------- |
-| Terminal-native      | ✅             | ❌               | ❌         |
-| Keyboard-first       | ✅             | ⚠️ partial       | ⚠️ partial |
-| Works over SSH       | ✅             | ❌               | ❌         |
-| Single static binary | ✅             | ❌               | ❌         |
-| Full media support   | ⚠️ photos only | ✅               | ✅         |
-| Voice/video calls    | ❌ planned     | ✅               | ✅         |
+It is built for:
+
+- keyboard-driven navigation
+- fast chat switching
+- SSH / remote workflows
+- distraction-free messaging
+
+If tools like lazygit feel natural to you, `tele` will too.
+
+It also runs lean — typically ~35MB RSS at idle vs several hundred MB for desktop clients.
+
+---
+
+| Feature              | tele       | Telegram Desktop | Web        |
+| -------------------- | ---------- | ---------------- | ---------- |
+| Terminal-native      | ✅         | ❌               | ❌         |
+| Keyboard-first       | ✅         | ⚠️ partial       | ⚠️ partial |
+| Works over SSH       | ✅         | ❌               | ❌         |
+| Single static binary | ✅         | ❌               | ❌         |
+| Full media support   | ⚠️ photos  | ✅               | ✅         |
+| Voice/video calls    | ❌ planned | ✅               | ✅         |
+
+---
+
+## Features
+
+### ⚡ Keyboard-first UX
+
+Vim-inspired navigation (`j/k`, `gg/G`, insert mode, etc.)
+
+### 💬 Full Telegram support
+
+Private chats, groups, channels, replies, reactions, edits.
+
+### 🧠 Terminal-native design
+
+Built specifically for terminal workflows — not adapted from a GUI client.
+
+### 🚀 Lightweight by design
+
+Single static Go binary with fast startup and low memory usage.
+
+### ⚙ Simple configuration
+
+YAML-based config with sensible defaults.
+
+---
 
 ## Installation
 
@@ -60,7 +103,9 @@ curl -sL https://github.com/sorokin-vladimir/tele/releases/latest/download/tele-
   -o ~/.local/bin/tele && chmod +x ~/.local/bin/tele
 ```
 
-For arm64: replace `tele-linux-amd64` with `tele-linux-arm64`.
+For arm64: replace `amd64` with `arm64`.
+
+---
 
 ## First launch
 
@@ -68,19 +113,19 @@ For arm64: replace `tele-linux-amd64` with `tele-linux-arm64`.
 tele
 ```
 
-On first run, `tele` creates `~/.config/tele/config.yml` and prompts you to log in: phone number → SMS code → 2FA password (if set).
+On first run, `tele` creates:
 
-## Features
+```text
+~/.config/tele/config.yml
+```
 
-- Vim-style navigation — `j`/`k`, `gg`/`G`, `i`/`Esc`
-- Telegram folders — archived chats, custom folders, persistent state
-- Send, reply, edit and delete messages
-- Reactions — view and send
-- Photos — open in external viewer
-- Chat search (`/`)
-- Date separators and unread message marker in chat history
-- Configurable via YAML
-- Single static binary — no runtime dependencies
+Then prompts for:
+
+- phone number
+- SMS code
+- optional 2FA password
+
+---
 
 ## Keybindings
 
@@ -89,17 +134,17 @@ On first run, `tele` creates `~/.config/tele/config.yml` and prompts you to log 
 | `j` / `k`       | Navigate chats or scroll messages |
 | `i`             | Compose message                   |
 | `r`             | Reply                             |
-| `e` / `d`       | Edit / delete own message         |
+| `e` / `d`       | Edit / delete message             |
 | `t`             | React                             |
 | `/`             | Search chats                      |
-| `0` / `1` / `2` | Focus folders / chat list / chat  |
+| `0` / `1` / `2` | Focus panes                       |
 | `q`             | Quit                              |
 
-Full keybinding reference: [docs/keybindings.md](docs/keybindings.md)
+Full reference: [docs/keybindings.md](docs/keybindings.md)
+
+---
 
 ## Configuration
-
-`~/.config/tele/config.yml`:
 
 ```yaml
 telegram:
@@ -111,16 +156,20 @@ ui:
   theme: default
 ```
 
+---
+
 ## Roadmap
 
 Tracked via [GitHub milestones](https://github.com/sorokin-vladimir/tele/milestones).
 
-| Milestone                                                                          | Issues  | Focus                                                                             |
-| ---------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
-| [Security & Reliability](https://github.com/sorokin-vladimir/tele/milestone/4)     | 7 open  | Rollback on API failure, secure logging, photo cleanup, event delivery guarantees |
-| [Architecture & Performance](https://github.com/sorokin-vladimir/tele/milestone/5) | 12 open | Decompose model, debounce updates, store caching, memory caps                     |
-| [Feature Completeness](https://github.com/sorokin-vladimir/tele/milestone/6)       | 15 open | Forward, @mentions, extended markdown, pinned messages, drafts, in-chat search    |
-| [Power User & Polish](https://github.com/sorokin-vladimir/tele/milestone/7)        | 16 open | Vim motions, configurable keybindings, command palette, themes, full-text search  |
+| Milestone                  | Focus                                  |
+| -------------------------- | -------------------------------------- |
+| Security & Reliability     | safer event handling, logging, cleanup |
+| Architecture & Performance | caching, memory caps, optimization     |
+| Feature Completeness       | forwarding, mentions, drafts, search   |
+| Power User & Polish        | themes, vim motions, command palette   |
+
+---
 
 ## Build from source
 
@@ -134,8 +183,17 @@ go build \
   -o tele ./cmd/tele/
 ```
 
+---
+
 ## License
 
-[GPL-3.0](LICENSE) — free to use and fork; derivative works must remain open-source.
+GPL-3.0 — free to use and fork; derivative works must remain open-source.
 
-Inspired by [lazygit](https://github.com/jesseduffield/lazygit). Built with [gotd/td](https://github.com/gotd/td), [bubbletea](https://github.com/charmbracelet/bubbletea) and [lipgloss](https://github.com/charmbracelet/lipgloss).
+---
+
+Built with:
+
+- [gotd/td](https://github.com/gotd/td)
+- [bubbletea](https://github.com/charmbracelet/bubbletea)
+- [lipgloss](https://github.com/charmbracelet/lipgloss)
+- inspired by [lazygit](https://github.com/jesseduffield/lazygit)

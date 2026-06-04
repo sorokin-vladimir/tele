@@ -2,7 +2,7 @@ Output demo.gif
 
 Require tele
 
-Set Shell "zsh"
+Set Shell "bash"
 Set FontSize 13
 Set Width 1440
 Set Height 720

@@ -84,6 +84,11 @@ type deleteMsgFailedMsg struct {
 	messages []store.Message
 }
 
+type editMsgFailedMsg struct {
+	chatID   int64
+	messages []store.Message
+}
+
 type FolderFiltersMsg struct {
 	Filters []store.FolderFilter
 }
@@ -529,6 +534,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		chatID := m.currentChatID
+		origMessages := m.st.Messages(chatID)
 		m.st.UpdateMessageText(chatID, msg.MsgID, msg.Text, time.Now())
 		m.chat.SetMessages(m.st.Messages(chatID))
 		client := m.tgClient
@@ -536,7 +542,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msgID := msg.MsgID
 		text := msg.Text
 		return m, func() tea.Msg {
-			_ = client.EditMessage(context.Background(), peer, msgID, text)
+			if err := client.EditMessage(context.Background(), peer, msgID, text); err != nil {
+				return editMsgFailedMsg{chatID: chatID, messages: origMessages}
+			}
 			return nil
 		}
 
@@ -629,6 +637,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.statusBar.SetStatus("Delete failed")
+		return m, nil
+
+	case editMsgFailedMsg:
+		if m.st != nil {
+			m.st.SetMessages(msg.chatID, msg.messages)
+			if msg.chatID == m.currentChatID {
+				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			}
+		}
+		m.statusBar.SetStatus("Edit failed")
 		return m, nil
 
 	case components.ReactConfirmedMsg:

@@ -332,3 +332,90 @@ func TestParseHistory_UserMessage_SenderNameFromUsers(t *testing.T) {
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "Alice", msgs[0].SenderName)
 }
+
+func TestClassifyMedia_Photo(t *testing.T) {
+	m := classifyMedia(&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 1}})
+	require.NotNil(t, m)
+	assert.Equal(t, store.MediaPhoto, m.Kind)
+}
+
+func TestClassifyMedia_Nil(t *testing.T) {
+	assert.Nil(t, classifyMedia(nil))
+}
+
+func TestClassifyMedia_Location(t *testing.T) {
+	for _, media := range []tg.MessageMediaClass{
+		&tg.MessageMediaGeo{},
+		&tg.MessageMediaGeoLive{},
+		&tg.MessageMediaVenue{},
+	} {
+		m := classifyMedia(media)
+		require.NotNil(t, m)
+		assert.Equal(t, store.MediaLocation, m.Kind)
+	}
+}
+
+func TestClassifyMedia_Other(t *testing.T) {
+	m := classifyMedia(&tg.MessageMediaContact{})
+	require.NotNil(t, m)
+	assert.Equal(t, store.MediaOther, m.Kind)
+}
+
+func docMedia(attrs ...tg.DocumentAttributeClass) *tg.MessageMediaDocument {
+	return &tg.MessageMediaDocument{
+		Document: &tg.Document{ID: 1, Size: 123, Attributes: attrs},
+	}
+}
+
+func TestClassifyMedia_Document(t *testing.T) {
+	tests := []struct {
+		name  string
+		attrs []tg.DocumentAttributeClass
+		want  store.MediaKind
+	}{
+		{"sticker", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{Alt: "🐱"}}, store.MediaSticker},
+		{"sticker beats animated", []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{}, &tg.DocumentAttributeAnimated{}}, store.MediaSticker},
+		{"gif", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}}, store.MediaGIF},
+		{"animated beats video (gif)", []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}, &tg.DocumentAttributeVideo{}}, store.MediaGIF},
+		{"video note", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{RoundMessage: true}}, store.MediaVideoNote},
+		{"video", []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}}, store.MediaVideo},
+		{"voice", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{Voice: true}}, store.MediaVoice},
+		{"audio", []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}}, store.MediaAudio},
+		{"file", []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: "a.pdf"}}, store.MediaFile},
+		{"empty file", nil, store.MediaFile},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := classifyMedia(docMedia(tc.attrs...))
+			require.NotNil(t, m)
+			assert.Equal(t, tc.want, m.Kind)
+		})
+	}
+}
+
+func TestClassifyMedia_StickerEmoji(t *testing.T) {
+	m := classifyMedia(docMedia(&tg.DocumentAttributeSticker{Alt: "🐱"}))
+	require.NotNil(t, m)
+	assert.Equal(t, "🐱", m.Emoji)
+}
+
+func TestConvertMessage_SetsMediaForPhoto(t *testing.T) {
+	raw := &tg.Message{
+		ID: 1, Date: 1700000000,
+		Media: &tg.MessageMediaPhoto{Photo: &tg.Photo{
+			ID: 5, Sizes: []tg.PhotoSizeClass{&tg.PhotoSize{Type: "m", W: 320, H: 240}},
+		}},
+	}
+	msg, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	require.NotNil(t, msg.Media)
+	assert.Equal(t, store.MediaPhoto, msg.Media.Kind)
+	require.NotNil(t, msg.Photo) // photo ref still populated
+}
+
+func TestConvertMessage_NoMediaForText(t *testing.T) {
+	raw := &tg.Message{ID: 1, Date: 1700000000, Message: "hi"}
+	msg, ok := convertMessage(raw, 10)
+	require.True(t, ok)
+	assert.Nil(t, msg.Media)
+}

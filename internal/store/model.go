@@ -43,6 +43,33 @@ type PhotoRef struct {
 	FullThumbSize string // full quality: best large size ("x"→800px, "y"→1280px, "w"→2560px)
 }
 
+// MediaKind classifies the media a message carries, for display purposes.
+type MediaKind int
+
+const (
+	MediaPhoto MediaKind = iota
+	MediaVideo
+	MediaVideoNote // round video message (кружок)
+	MediaVoice
+	MediaAudio
+	MediaSticker
+	MediaGIF
+	MediaFile
+	MediaLocation
+	MediaOther // generic fallback (contact, poll, dice, …)
+)
+
+// MediaRef is the display-level description of a message's media. PhotoRef
+// remains the download-capable reference and is set only for photos.
+type MediaRef struct {
+	Kind  MediaKind
+	Emoji string // sticker's alt emoji; populated now for stickers
+	// Populated in a later iteration:
+	Duration int    // seconds, for video/voice/audio/note
+	FileName string // for files
+	Size     int64  // bytes, for files
+}
+
 type Chat struct {
 	ID              int64
 	Title           string
@@ -89,6 +116,7 @@ type Message struct {
 	Date         time.Time
 	IsOut        bool
 	Entities     []MessageEntity
+	Media        *MediaRef  // nil if message has no media
 	Photo        *PhotoRef  // nil if message has no photo
 	ReplyToMsgID int        // 0 if not a reply
 	EditDate     *time.Time // nil if not edited

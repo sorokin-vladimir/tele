@@ -231,6 +231,47 @@ func (ml *MessageList) SetKnownImages(cache map[int64]image.Image) {
 	}
 }
 
+// placeholderFor returns the text label shown for a media message until (and
+// unless) richer content such as photo block-art is available.
+func placeholderFor(m *store.MediaRef) string {
+	switch m.Kind {
+	case store.MediaPhoto:
+		return "📷 photo"
+	case store.MediaVideo:
+		return "🎥 video"
+	case store.MediaVideoNote:
+		return "⭕ video note"
+	case store.MediaVoice:
+		return "🎤 voice"
+	case store.MediaAudio:
+		return "🎵 audio"
+	case store.MediaSticker:
+		if m.Emoji != "" {
+			return m.Emoji + " sticker"
+		}
+		return "sticker"
+	case store.MediaGIF:
+		return "🎞 GIF"
+	case store.MediaFile:
+		return "📎 file"
+	case store.MediaLocation:
+		return "📍 location"
+	default:
+		return "📦 media"
+	}
+}
+
+// placeholderLine renders one bordered label line for a media placeholder.
+// Width is measured with lipgloss.Width so wide emoji pad correctly.
+func placeholderLine(m *store.MediaRef, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
+	label := placeholderFor(m)
+	padding := ""
+	if pw := lipgloss.Width(label); actualW > pw {
+		padding = strings.Repeat(" ", actualW-pw)
+	}
+	return bs.Render(b.Left) + " " + label + padding + " " + bs.Render(b.Right)
+}
+
 func (ml *MessageList) photoContentCols() int {
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
@@ -539,21 +580,25 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 		} else {
 			h += 1
 		}
-		if msg.Text != "" || msg.Photo != nil {
+		if msg.Text != "" || msg.Media != nil {
 			h++ // blank separator line between preview and body
 		}
 	}
 
-	if msg.Photo != nil {
-		if img, ok := ml.images[msg.Photo.ID]; ok {
-			cols := ml.photoContentCols()
-			b := img.Bounds()
-			h += media.PhotoTermLines(b.Dx(), b.Dy(), cols)
+	if msg.Media != nil {
+		if msg.Media.Kind == store.MediaPhoto && msg.Photo != nil {
+			if img, ok := ml.images[msg.Photo.ID]; ok {
+				cols := ml.photoContentCols()
+				b := img.Bounds()
+				h += media.PhotoTermLines(b.Dx(), b.Dy(), cols)
+			} else {
+				h++ // placeholder line
+			}
 		} else {
 			h++ // placeholder line
 		}
 		if msg.Text != "" {
-			h++ // blank separator line between photo and caption
+			h++ // blank separator line between media and caption
 		}
 	}
 
@@ -731,6 +776,14 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		}
 	}
 
+	// Ensure bubble is wide enough for a media placeholder label.
+	// Measured with lipgloss.Width so wide emoji match placeholderLine's padding.
+	if msg.Media != nil {
+		if w := lipgloss.Width(placeholderFor(msg.Media)); w > actualW {
+			actualW = w
+		}
+	}
+
 	// Ensure bubble is wide enough for the reply preview block.
 	if msg.ReplyToMsgID != 0 {
 		orig := ml.findMessage(msg.ReplyToMsgID)
@@ -837,30 +890,28 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 			snippet = firstLine(orig.Text)
 		}
 		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
-		if msg.Text != "" || msg.Photo != nil {
+		if msg.Text != "" || msg.Media != nil {
 			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
 		}
 	}
 
-	if msg.Photo != nil {
-		photoCols := ml.photoContentCols()
-		if img, ok := ml.images[msg.Photo.ID]; ok {
-			artLines := media.RenderBlockArt(img, photoCols)
-			for _, al := range artLines {
-				lw := lipgloss.Width(al)
-				if lw < actualW {
-					al += strings.Repeat(" ", actualW-lw)
+	if msg.Media != nil {
+		if msg.Media.Kind == store.MediaPhoto && msg.Photo != nil {
+			if img, ok := ml.images[msg.Photo.ID]; ok {
+				photoCols := ml.photoContentCols()
+				artLines := media.RenderBlockArt(img, photoCols)
+				for _, al := range artLines {
+					lw := lipgloss.Width(al)
+					if lw < actualW {
+						al += strings.Repeat(" ", actualW-lw)
+					}
+					sideLines = append(sideLines, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
 				}
-				sideLines = append(sideLines, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
+			} else {
+				sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 			}
 		} else {
-			placeholder := "[ photo ]"
-			pw := len(placeholder)
-			padding := ""
-			if actualW > pw {
-				padding = strings.Repeat(" ", actualW-pw)
-			}
-			sideLines = append(sideLines, bs.Render(b.Left)+" "+placeholder+padding+" "+bs.Render(b.Right))
+			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}
 		if msg.Text != "" {
 			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))

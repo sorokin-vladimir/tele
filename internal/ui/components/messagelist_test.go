@@ -237,17 +237,19 @@ func TestMessageList_PhotoPlaceholderInView(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	msg := store.Message{
 		ID:    1,
+		Media: &store.MediaRef{Kind: store.MediaPhoto},
 		Photo: &store.PhotoRef{ID: 42},
 	}
 	ml.SetMessages([]store.Message{msg})
 	view := ml.View()
-	require.Contains(t, view, "[ photo ]", "should show placeholder when image not loaded")
+	require.Contains(t, view, "📷 photo", "should show placeholder when image not loaded")
 }
 
 func TestMessageList_SetImage_UpdatesView(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	msg := store.Message{
 		ID:    1,
+		Media: &store.MediaRef{Kind: store.MediaPhoto},
 		Photo: &store.PhotoRef{ID: 99},
 	}
 	ml.SetMessages([]store.Message{msg})
@@ -257,7 +259,7 @@ func TestMessageList_SetImage_UpdatesView(t *testing.T) {
 	ml.SetImage(99, img)
 	after := ml.View()
 
-	require.NotContains(t, after, "[ photo ]", "placeholder should be gone after image loaded")
+	require.NotContains(t, after, "📷 photo", "placeholder should be gone after image loaded")
 	require.Greater(t, len(after), len(before), "view should grow with actual art lines")
 }
 
@@ -515,7 +517,7 @@ func TestMessageList_SetImage_AtBottom_ReanchorsToBottom(t *testing.T) {
 	ml := components.NewMessageList(10, 80)
 	msgs := []store.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
-		{ID: 2, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 2, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -531,7 +533,7 @@ func TestMessageList_SetKnownImages_AtBottom_ReanchorsToBottom(t *testing.T) {
 	ml := components.NewMessageList(10, 80)
 	msgs := []store.Message{
 		{ID: 1, ChatID: 1, Text: "msg 1", Date: time.Now()},
-		{ID: 2, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 2, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
@@ -550,7 +552,7 @@ func TestMessageList_SetImage_ScrolledUp_DoesNotReanchor(t *testing.T) {
 		{ID: 2, ChatID: 1, Text: "msg 2", Date: time.Now()},
 		{ID: 3, ChatID: 1, Text: "msg 3", Date: time.Now()},
 		{ID: 4, ChatID: 1, Text: "msg 4", Date: time.Now()},
-		{ID: 5, ChatID: 1, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
+		{ID: 5, ChatID: 1, Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 42}, Date: time.Now()},
 	}
 	ml.SetMessages(msgs)
 	ml.ScrollUp()
@@ -743,6 +745,7 @@ func TestMessageList_View_PhotoTextHasBlankLineSeparator(t *testing.T) {
 	msg := store.Message{
 		ID:     1,
 		ChatID: 1,
+		Media:  &store.MediaRef{Kind: store.MediaPhoto},
 		Photo:  &store.PhotoRef{ID: 77},
 		Text:   "caption text",
 		Date:   time.Now(),
@@ -1012,4 +1015,56 @@ func TestMessageList_UnreadSepAppearsAfterDateSep_WhenFirstUnreadStartsNewDay(t 
 	todayIdx := strings.Index(view, "Today")
 	unreadIdx := strings.Index(view, "New Messages")
 	assert.Less(t, todayIdx, unreadIdx, "date separator should appear before unread separator")
+}
+
+func TestMessageList_MediaPlaceholders(t *testing.T) {
+	cases := []struct {
+		kind store.MediaKind
+		want string
+	}{
+		{store.MediaPhoto, "📷 photo"},
+		{store.MediaVideo, "🎥 video"},
+		{store.MediaVideoNote, "⭕ video note"},
+		{store.MediaVoice, "🎤 voice"},
+		{store.MediaAudio, "🎵 audio"},
+		{store.MediaGIF, "🎞 GIF"},
+		{store.MediaFile, "📎 file"},
+		{store.MediaLocation, "📍 location"},
+		{store.MediaOther, "📦 media"},
+	}
+	for _, tc := range cases {
+		ml := components.NewMessageList(20, 80)
+		ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: tc.kind}}})
+		assert.Contains(t, ml.View(), tc.want)
+	}
+}
+
+func TestMessageList_MediaOnlyBubble_BordersAligned(t *testing.T) {
+	// A media-only message (no text/reactions) must still size its bubble to the
+	// placeholder label, so every rendered bubble line has the same width.
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaVoice}}})
+	var widths []int
+	for _, line := range strings.Split(strings.TrimRight(stripANSI(ml.View()), "\n"), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		widths = append(widths, lipgloss.Width(line))
+	}
+	require.NotEmpty(t, widths)
+	for _, w := range widths {
+		assert.Equal(t, widths[0], w, "all bubble lines must share the same width")
+	}
+}
+
+func TestMessageList_StickerPlaceholder_UsesAltEmoji(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaSticker, Emoji: "🐱"}}})
+	assert.Contains(t, ml.View(), "🐱 sticker")
+}
+
+func TestMessageList_StickerPlaceholder_NoEmojiFallback(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{Kind: store.MediaSticker}}})
+	assert.Contains(t, ml.View(), "sticker")
 }

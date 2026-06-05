@@ -320,6 +320,66 @@ func pickThumbSize(sizes []tg.PhotoSizeClass) string {
 	return best
 }
 
+// classifyMedia maps a Telegram media object to a display-level MediaRef.
+// Returns nil when there is no media to show.
+func classifyMedia(media tg.MessageMediaClass) *store.MediaRef {
+	switch m := media.(type) {
+	case *tg.MessageMediaPhoto:
+		return &store.MediaRef{Kind: store.MediaPhoto}
+	case *tg.MessageMediaDocument:
+		return classifyDocument(m)
+	case *tg.MessageMediaGeo, *tg.MessageMediaGeoLive, *tg.MessageMediaVenue:
+		return &store.MediaRef{Kind: store.MediaLocation}
+	case nil:
+		return nil
+	default:
+		return &store.MediaRef{Kind: store.MediaOther}
+	}
+}
+
+// classifyDocument inspects document attributes by strict priority to decide
+// the media kind. A document can carry several attributes at once.
+func classifyDocument(m *tg.MessageMediaDocument) *store.MediaRef {
+	doc, ok := m.Document.(*tg.Document)
+	if !ok {
+		return &store.MediaRef{Kind: store.MediaOther}
+	}
+	var (
+		sticker  *tg.DocumentAttributeSticker
+		video    *tg.DocumentAttributeVideo
+		audio    *tg.DocumentAttributeAudio
+		animated bool
+	)
+	for _, a := range doc.Attributes {
+		switch at := a.(type) {
+		case *tg.DocumentAttributeSticker:
+			sticker = at
+		case *tg.DocumentAttributeVideo:
+			video = at
+		case *tg.DocumentAttributeAudio:
+			audio = at
+		case *tg.DocumentAttributeAnimated:
+			animated = true
+		}
+	}
+	switch {
+	case sticker != nil:
+		return &store.MediaRef{Kind: store.MediaSticker, Emoji: sticker.Alt}
+	case animated:
+		return &store.MediaRef{Kind: store.MediaGIF}
+	case video != nil && video.RoundMessage:
+		return &store.MediaRef{Kind: store.MediaVideoNote}
+	case video != nil:
+		return &store.MediaRef{Kind: store.MediaVideo}
+	case audio != nil && audio.Voice:
+		return &store.MediaRef{Kind: store.MediaVoice}
+	case audio != nil:
+		return &store.MediaRef{Kind: store.MediaAudio}
+	default:
+		return &store.MediaRef{Kind: store.MediaFile}
+	}
+}
+
 func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 	msg, ok := raw.(*tg.Message)
 	if !ok {
@@ -338,6 +398,7 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		IsOut:    msg.Out,
 		Entities: convertEntities(msg.Entities),
 	}
+	out.Media = classifyMedia(msg.Media)
 	if hdr, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		out.ReplyToMsgID = hdr.ReplyToMsgID
 	}

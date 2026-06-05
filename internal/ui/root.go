@@ -216,310 +216,60 @@ func (m RootModel) Init() tea.Cmd {
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.BackgroundColorMsg:
-		m.hasDarkBackground = msg.IsDark()
-		m.logo.SetDarkBackground(m.hasDarkBackground)
-		m.chat.SetDarkBackground(m.hasDarkBackground)
-		return m, bgColorPollCmd()
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.logo.SetWidth(msg.Width)
-		m.statusBar.SetWidth(msg.Width)
-		paneH := msg.Height - 1
-		innerH := paneH - 2*borderSize
-		if m.folderBar != nil && m.folderBar.HasFolders() {
-			const sidebarW = 18
-			_, chatlistW, chatW := layout.SplitThree(msg.Width, sidebarW, 0.30)
-			m.folderBar.SetSize(sidebarW-2*borderSize, innerH)
-			m.chatList.SetSize(chatlistW-2*borderSize, innerH)
-			m.chat.SetSize(chatW-2*borderSize, innerH)
-		} else {
-			leftW, rightW := layout.SplitHorizontal(msg.Width, msg.Height, 0.30)
-			m.chatList.SetSize(leftW-2*borderSize, innerH)
-			m.chat.SetSize(rightW-2*borderSize, innerH)
-		}
-		return m, nil
-
-	case FolderFiltersMsg:
-		if m.folderBar != nil {
-			m.folderBar.SetFolders(msg.Filters)
-			if m.width > 0 && m.height > 0 {
-				const sidebarW = 18
-				paneH := m.height - 1
-				innerH := paneH - 2*borderSize
-				_, chatlistW, chatW := layout.SplitThree(m.width, sidebarW, 0.30)
-				m.folderBar.SetSize(sidebarW-2*borderSize, innerH)
-				m.chatList.SetSize(chatlistW-2*borderSize, innerH)
-				m.chat.SetSize(chatW-2*borderSize, innerH)
-			}
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
-		}
-		return m, nil
-
-	case screens.FolderSelectedMsg:
-		m.activeFilter = msg.Filter
-		m.chatList.SetChats(m.filteredChats())
-		m.chatList.SetActiveByID(m.currentChatID)
-		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
-		}
-		return m.focusPane(FocusChatList)
-
-	case screens.TransitionToMainMsg:
-		m.screen = ScreenMain
-		m.statusBar.SetVerbose(m.verbose)
-		m.statusBar.SetActivePane("chatlist")
-		if m.st != nil {
-			m.chatList.SetChats(m.filteredChats())
-		}
-		if m.folderBar != nil {
-			m.folderBar.SetUnreadCounts(m.computeFolderUnreads())
-		}
-		return m, spinnerTickCmd()
-
-	case screens.CloseSearchMsg:
-		m.searchModel = nil
-		return m, nil
-
-	case screens.OpenChatMsg:
-		m.searchModel = nil
-		if msg.Chat.ID == m.currentChatID {
-			return m.focusPane(FocusChat)
-		}
-		m.currentChatID = msg.Chat.ID
-		m.chatList.SetActiveByID(msg.Chat.ID)
-		if m.onChatOpen != nil {
-			m.onChatOpen(msg.Chat.ID)
-		}
-		m.chat.ClearPendingAction()
-		m.chat.SetChat(&msg.Chat)
-		if m.st != nil {
-			m.chat.SetMessages(m.st.Messages(msg.Chat.ID))
-		}
-		m.chat.SetKnownImages(m.imageCache)
-		m.focus = FocusChat
-		m.chatList.SetFocused(false)
-		m.chat.SetFocused(true)
-		m.statusBar.SetActivePane("chat")
-		if m.tgClient != nil {
-			m.chat.SetLoading(true)
-			client := m.tgClient
-			peer := msg.Chat.Peer
-			chatID := msg.Chat.ID
-			limit := m.historyLimit
-			return m, func() tea.Msg {
-				msgs, err := client.GetHistory(context.Background(), peer, 0, limit)
-				if err != nil {
-					return nil
-				}
-				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
-			}
-		}
-		return m, nil
-
-	case ChatHistoryMsg:
-		if m.st != nil {
-			m.st.SetMessages(msg.ChatID, msg.Messages)
-			if msg.ChatID == m.currentChatID {
-				if chat, ok := m.st.GetChat(msg.ChatID); ok {
-					m.chat.SetInboxReadMaxID(chat.ReadInboxMaxID)
-				}
-				m.chat.SetMessages(m.st.Messages(msg.ChatID))
-				m.chat.SetLoading(false)
-				if chat, ok := m.st.GetChat(msg.ChatID); ok && chat.UnreadCount > 0 {
-					m.chat.ScrollToFirstUnread(chat.ReadInboxMaxID)
-				}
-			}
-		}
-		return m, tea.Batch(m.markReadCmd(), m.pendingDownloadCmds(msg.Messages))
-
-	case markReadDoneMsg:
-		if m.st != nil {
-			m.st.UpdateChatReadMaxID(msg.chatID, msg.maxID)
-			if chat, ok := m.st.GetChat(msg.chatID); ok {
-				m.chatList.SetChatUnread(msg.chatID, chat.UnreadCount)
-			}
-		}
-		return m, nil
-
-	case screens.LoadMoreMsg:
-		if m.st == nil || m.tgClient == nil {
-			return m, nil
-		}
-		chat, ok := m.st.GetChat(msg.ChatID)
-		if !ok {
-			return m, nil
-		}
-		client := m.tgClient
-		peer := chat.Peer
-		offsetID := msg.OffsetID
-		limit := m.historyLimit
-		chatID := msg.ChatID
-		return m, func() tea.Msg {
-			msgs, err := client.GetHistory(context.Background(), peer, offsetID, limit)
-			if err != nil {
-				return nil
-			}
-			return historyChunkMsg{chatID: chatID, messages: msgs}
-		}
-
-	case historyChunkMsg:
-		if m.st != nil && msg.chatID == m.currentChatID && len(msg.messages) > 0 {
-			existing := m.st.Messages(msg.chatID)
-			combined := append(msg.messages, existing...)
-			m.st.SetMessages(msg.chatID, combined)
-			m.chat.PrependMessages(msg.messages) // preserves viewport position
-		}
-		return m, nil
-
-	case PhotoReadyMsg:
-		m.imageCache[msg.PhotoID] = msg.Image
-		m.chat.SetImage(msg.PhotoID, msg.Image)
-		return m, nil
-
-	case FullPhotoReadyMsg:
-		m.fullImageCache[msg.PhotoID] = msg.Image
-		return m, nil
-
-	case components.OpenInViewerRequest:
-		img := m.fullImageCache[msg.PhotoID]
-		if img == nil {
-			img = m.imageCache[msg.PhotoID]
-		}
-		if img != nil {
-			go openInViewer(img)
-		}
-		return m, nil
-
+	// message operations (steps 1+2)
 	case store.Event:
 		return m.handleStoreEvent(msg)
-
 	case screens.SendMsgRequest:
 		return m.handleSendMsg(msg)
-
 	case screens.EditSendRequest:
 		return m.handleEditSend(msg)
-
 	case screens.SetTypingRequest:
 		return m.handleSetTyping(msg)
-
 	case sentMsgConfirmedMsg:
 		return m.handleSentMsgConfirmed(msg)
-
-	case components.JumpToMsgRequest:
-		m.contextMenu = nil
-		if !m.chat.ScrollToMessage(msg.MsgID) {
-			m.statusBar.SetStatus("Not in buffer")
-		}
-		return m, nil
-
-	case components.ReplyMsgRequest:
-		m.contextMenu = nil
-		return m, m.activateReply(msg.MsgID)
-
-	case components.EditMsgRequest:
-		m.contextMenu = nil
-		return m, m.activateEdit(msg.MsgID)
-
-	case components.CloseContextMenuMsg:
-		m.contextMenu = nil
-		return m, nil
-
-	case components.ReactMsgRequest:
-		m.contextMenu = nil
-		if m.st == nil {
-			return m, nil
-		}
-		var chosen string
-		for _, sm := range m.st.Messages(m.currentChatID) {
-			if sm.ID == msg.MsgID {
-				for _, r := range sm.Reactions {
-					if r.IsChosen {
-						chosen = r.Emoji
-						break
-					}
-				}
-				break
-			}
-		}
-		m.reactionTargetID = msg.MsgID
-		m.reactionPicker = components.NewReactionPicker(chosen)
-		return m, nil
-
-	case components.CloseReactionPickerMsg:
-		m.reactionPicker = nil
-		return m, nil
-
 	case reactionFailedMsg:
 		return m.handleReactionFailed(msg)
-
 	case deleteMsgFailedMsg:
 		return m.handleDeleteMsgFailed(msg)
-
 	case editMsgFailedMsg:
 		return m.handleEditMsgFailed(msg)
-
 	case components.ReactConfirmedMsg:
 		return m.handleReactConfirmed(msg)
-
 	case components.DeleteMsgRequest:
 		return m.handleDeleteMsg(msg)
-
-	case components.LogoTickMsg:
-		m.logo.Tick()
-		m.chat.TickLogo()
-		return m, logoTickCmd()
-
-	case components.SpinnerTickMsg:
-		m.chatList.TickSpinner()
-		m.chat.TickSpinner()
-		if m.screen == ScreenMain {
-			return m, spinnerTickCmd()
-		}
-		return m, nil
-
-	case components.TypingDotsTickMsg:
-		if m.chat.IsTyping() {
-			m.chat.TickTypingDots()
-			return m, typingDotsTickCmd()
-		}
-		return m, nil
-
-	case clearTypingMsg:
-		if msg.serial == m.typingSerial {
-			m.chat.ClearTypingLabel()
-		}
-		return m, nil
-
-	case screens.AuthRequestMsg, screens.ConnectedMsg, screens.AuthErrorMsg:
-		if m.screen == ScreenLogin {
-			newLogin, cmd := m.login.Update(msg)
-			m.login = newLogin.(screens.LoginModel)
-			if _, ok := msg.(screens.AuthRequestMsg); ok {
-				m.logo.SetState(components.LogoStateStatic)
-			}
-			return m, cmd
-		}
-		return m, nil
-
-	case tea.PasteMsg:
-		if m.screen != ScreenMain {
-			return m, nil
-		}
-		if m.searchModel != nil {
-			newSearch, cmd := m.searchModel.Update(msg)
-			m.searchModel = newSearch
-			return m, cmd
-		}
-		if m.focus == FocusChat {
-			newPane, cmd := m.chat.Update(msg)
-			m.chat = newPane.(*screens.ChatModel)
-			return m, cmd
-		}
-		return m, nil
-
+	// network/data messages
+	case screens.OpenChatMsg,
+		ChatHistoryMsg,
+		screens.LoadMoreMsg,
+		historyChunkMsg,
+		markReadDoneMsg,
+		PhotoReadyMsg,
+		FullPhotoReadyMsg,
+		components.OpenInViewerRequest:
+		return m.updateNetworkMsg(msg)
+	// UI/layout/animation messages
+	case tea.BackgroundColorMsg,
+		tea.WindowSizeMsg,
+		FolderFiltersMsg,
+		screens.FolderSelectedMsg,
+		screens.TransitionToMainMsg,
+		screens.CloseSearchMsg,
+		components.JumpToMsgRequest,
+		components.ReplyMsgRequest,
+		components.EditMsgRequest,
+		components.CloseContextMenuMsg,
+		components.ReactMsgRequest,
+		components.CloseReactionPickerMsg,
+		components.LogoTickMsg,
+		components.SpinnerTickMsg,
+		components.TypingDotsTickMsg,
+		clearTypingMsg,
+		screens.AuthRequestMsg,
+		screens.ConnectedMsg,
+		screens.AuthErrorMsg,
+		tea.PasteMsg:
+		return m.updateUIMsg(msg)
+	// key input
 	case tea.KeyPressMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)

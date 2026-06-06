@@ -7,66 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVimState_BasicMotions(t *testing.T) {
+func TestVimState_StartsInNormalMode(t *testing.T) {
 	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionDown, vs.Process("j"))
-	assert.Equal(t, keys.ActionUp, vs.Process("k"))
-	// h/l are handled by global focus bindings before vim sees them
-	assert.Equal(t, keys.ActionNone, vs.Process("h"))
-	assert.Equal(t, keys.ActionNone, vs.Process("l"))
-}
-
-func TestVimState_GG(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionNone, vs.Process("g"))
-	assert.Equal(t, keys.ActionGoTop, vs.Process("g"))
-}
-
-func TestVimState_GUppercase(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionGoBottom, vs.Process("G"))
-}
-
-func TestVimState_InsertMode(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionInsert, vs.Process("i"))
-	assert.Equal(t, keys.ModeInsert, vs.Mode)
-	assert.Equal(t, keys.ActionPassthrough, vs.Process("j"))
-	assert.Equal(t, keys.ActionNormal, vs.Process("esc"))
 	assert.Equal(t, keys.ModeNormal, vs.Mode)
-}
-
-func TestVimState_Enter(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionConfirm, vs.Process("enter"))
-}
-
-func TestVimState_Slash(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionSearch, vs.Process("/"))
-}
-
-func TestVimState_UnknownKey(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionNone, vs.Process("x"))
-}
-
-func TestVimState_GG_InvalidSecond(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionNone, vs.Process("g"))
-	assert.Equal(t, keys.ActionNone, vs.Process("x"))
-	assert.Equal(t, keys.ActionDown, vs.Process("j"))
-}
-
-func TestVimState_Space_OpenContextMenu(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionOpenContextMenu, vs.Process("space"))
-}
-
-func TestVimState_Space_PassthroughInInsertMode(t *testing.T) {
-	vs := keys.NewVimState()
-	vs.Process("i") // enter insert mode
-	assert.Equal(t, keys.ActionPassthrough, vs.Process("space"))
 }
 
 func TestDefaultKeyMap_ContextContextMenu(t *testing.T) {
@@ -108,15 +51,4 @@ func TestDefaultKeyMap_ContextComposer(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionConfirm, km.Resolve(keys.ContextComposer, "enter"))
 	assert.Equal(t, keys.ActionNormal, km.Resolve(keys.ContextComposer, "esc"))
-}
-
-func TestVimState_R_NormalMode_Reply(t *testing.T) {
-	vs := keys.NewVimState()
-	assert.Equal(t, keys.ActionReply, vs.Process("r"))
-}
-
-func TestVimState_R_InsertMode_Passthrough(t *testing.T) {
-	vs := keys.NewVimState()
-	vs.Process("i") // enter insert mode
-	assert.Equal(t, keys.ActionPassthrough, vs.Process("r"))
 }

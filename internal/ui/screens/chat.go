@@ -39,7 +39,6 @@ type ChatModel struct {
 	chat            *store.Chat
 	msgList         *components.MessageList
 	composer        *components.Composer
-	vimState        *keys.VimState
 	width           int
 	height          int
 	focused         bool
@@ -66,7 +65,6 @@ func NewChatModel(width, height int) *ChatModel {
 	return &ChatModel{
 		msgList:  ml,
 		composer: composer,
-		vimState: keys.NewVimState(),
 		width:    width,
 		height:   height,
 		logo:     logo,
@@ -181,7 +179,6 @@ func (m *ChatModel) SetReply(msgID int, preview string) {
 // Returns a blink Cmd that must be returned from the parent Update.
 func (m *ChatModel) FocusComposer() tea.Cmd {
 	m.composerFocused = true
-	m.vimState.Mode = keys.ModeInsert
 	m.msgList.SetShowIndicator(false)
 	return m.composer.Focus()
 }
@@ -228,7 +225,6 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.syncMsgListHeight()
 				m.composerFocused = false
 				m.composer.Blur()
-				m.vimState.Mode = keys.ModeNormal
 				m.msgList.SetShowIndicator(true)
 				if !m.lastTypingAt.IsZero() && m.chat != nil {
 					peer := m.chat.Peer
@@ -279,7 +275,6 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionInsert:
 			m.composerFocused = true
-			m.vimState.Mode = keys.ModeInsert
 			focusCmd := m.composer.Focus()
 			m.msgList.SetShowIndicator(false)
 			return m, focusCmd

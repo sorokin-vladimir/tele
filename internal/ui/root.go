@@ -86,6 +86,7 @@ type RootModel struct {
 	statusBar          *components.StatusBar
 	vimState           *keys.VimState
 	keyMap             keys.KeyMap
+	matcher            *keys.Matcher
 	tgClient           internaltg.Client
 	st                 store.Store
 	currentChatID      int64
@@ -100,7 +101,6 @@ type RootModel struct {
 	searchModel        *screens.SearchModel
 	onChatOpen         func(int64)
 	nextSentinel       int
-	chatListPendingKey string
 	contextMenu        *components.ContextMenu
 	reactionPicker     *components.ReactionPicker
 	reactionTargetID   int
@@ -127,6 +127,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		statusBar:         sb,
 		vimState:          keys.NewVimState(),
 		keyMap:            km,
+		matcher:           keys.NewMatcher(km),
 		tgClient:          client,
 		st:                st,
 		historyLimit:      historyLimit,
@@ -371,7 +372,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == FocusFolders {
-		action := m.keyMap.Resolve(keys.ContextFolders, keyStr)
+		action, res := m.matcher.Resolve(keys.ContextFolders, keyStr)
+		if res == keys.MatchPending {
+			return m, nil
+		}
 		if action != keys.ActionNone {
 			newPane, cmd := m.folderBar.Update(keys.ActionMsg{Action: action})
 			m.folderBar = newPane.(*screens.FoldersModel)
@@ -381,22 +385,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == FocusChatList {
-		// Handle gg two-key sequence
-		if m.chatListPendingKey == "g" {
-			m.chatListPendingKey = ""
-			if keyStr == "g" {
-				newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: keys.ActionGoTop})
-				m.chatList = newPane.(*screens.ChatListModel)
-				return m, cmd
-			}
-			// Not gg — fall through and process current key normally
-		}
-		if keyStr == "g" {
-			m.chatListPendingKey = "g"
+		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
+		if res == keys.MatchPending {
 			return m, nil
 		}
-
-		action := m.keyMap.Resolve(keys.ContextChatList, keyStr)
 		if action != keys.ActionNone {
 			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
 			m.chatList = newPane.(*screens.ChatListModel)
@@ -405,8 +397,18 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Chat pane: route through vim state machine
-	action := m.vimState.Process(keyStr)
+	// Chat pane: resolve through the matcher (supports chords).
+	action, res := m.matcher.Resolve(keys.ContextChat, keyStr)
+	if res == keys.MatchPending {
+		return m, nil
+	}
+	// Mode is a consequence of the resolved action.
+	switch action {
+	case keys.ActionInsert:
+		m.vimState.Mode = keys.ModeInsert
+	case keys.ActionNormal:
+		m.vimState.Mode = keys.ModeNormal
+	}
 	m.statusBar.SetMode(m.vimState.Mode)
 
 	// Esc in normal mode: close active chat and return to chatlist.
@@ -458,12 +460,6 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.activateEdit(m.chat.SelectedMessageID())
 		}
 		return m, nil
-	}
-
-	if action == keys.ActionPassthrough {
-		newPane, cmd := m.chat.Update(msg)
-		m.chat = newPane.(*screens.ChatModel)
-		return m, cmd
 	}
 
 	if action != keys.ActionNone {
@@ -700,6 +696,7 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 	if target == m.focus {
 		return m, nil
 	}
+	m.matcher.Reset()
 	// Exit insert mode when leaving chat
 	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
 		m.vimState.Mode = keys.ModeNormal

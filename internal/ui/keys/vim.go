@@ -12,7 +12,6 @@ type Action string
 
 const (
 	ActionNone            Action = ""
-	ActionPassthrough     Action = "passthrough"
 	ActionUp              Action = "up"
 	ActionDown            Action = "down"
 	ActionLeft            Action = "left"
@@ -38,62 +37,9 @@ const (
 )
 
 type VimState struct {
-	Mode    VimMode
-	Pending string
+	Mode VimMode
 }
 
 func NewVimState() *VimState {
 	return &VimState{Mode: ModeNormal}
-}
-
-func (vs *VimState) Process(key string) Action {
-	if vs.Mode == ModeInsert {
-		if key == "esc" {
-			vs.Mode = ModeNormal
-			return ActionNormal
-		}
-		return ActionPassthrough
-	}
-
-	if vs.Pending == "g" {
-		vs.Pending = ""
-		if key == "g" {
-			return ActionGoTop
-		}
-		return ActionNone
-	}
-
-	switch key {
-	case "j", "down":
-		return ActionDown
-	case "k", "up":
-		return ActionUp
-	case "G":
-		return ActionGoBottom
-	case "g":
-		vs.Pending = "g"
-		return ActionNone
-	case "ctrl+d":
-		return ActionScrollHalfDown
-	case "ctrl+u":
-		return ActionScrollHalfUp
-	case "i", "a":
-		vs.Mode = ModeInsert
-		return ActionInsert
-	case "esc":
-		return ActionNormal
-	case "enter":
-		return ActionConfirm
-	case "/":
-		return ActionSearch
-	case "space":
-		return ActionOpenContextMenu
-	case "r":
-		return ActionReply
-	case "e":
-		return ActionEdit
-	case "o":
-		return ActionOpenInViewer
-	}
-	return ActionNone
 }

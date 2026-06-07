@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -458,6 +459,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if img != nil {
 				go openInViewer(img, m.tmpDir)
 			}
+			return m, nil
+		}
+		if ref, ok := m.chat.SelectedMessageVideo(); ok {
+			return m, openDocumentCmd(m.tgClient, ref, m.tmpDir)
 		}
 		return m, nil
 	}
@@ -469,7 +474,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if msgID != 0 {
 				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
 				photoID := m.chat.SelectedMessagePhotoID()
-				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, m.keyMap)
+				_, hasVideo := m.chat.SelectedMessageVideo()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, hasVideo, m.keyMap)
 			}
 		}
 		return m, nil
@@ -553,6 +559,53 @@ func downloadPhotoCmd(client internaltg.Client, ref store.PhotoRef) tea.Cmd {
 	}
 }
 
+// openDocumentCmd downloads a document in full and opens it in the OS default
+// application (e.g. a video player). Runs async; the download may be large.
+func openDocumentCmd(client internaltg.Client, ref store.DocumentRef, tmpDir string) tea.Cmd {
+	return func() tea.Msg {
+		data, err := client.DownloadDocument(context.Background(), ref)
+		if err != nil || len(data) == 0 {
+			return nil
+		}
+		ext := filepath.Ext(ref.FileName)
+		if ext == "" {
+			ext = extFromMime(ref.MimeType)
+		}
+		name, err := writeTempMediaFile(data, tmpDir, ext)
+		if err != nil {
+			return nil
+		}
+		openPath(name)
+		return nil
+	}
+}
+
+// extFromMime maps common video MIME types to a file extension so the OS picks
+// the right player. Defaults to .mp4 (the usual Telegram video container).
+func extFromMime(mime string) string {
+	switch mime {
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	case "video/x-matroska":
+		return ".mkv"
+	default:
+		return ".mp4"
+	}
+}
+
+func downloadVideoThumbCmd(client internaltg.Client, ref store.DocumentRef) tea.Cmd {
+	return func() tea.Msg {
+		img, err := client.DownloadDocumentThumb(context.Background(), ref)
+		if err != nil || img == nil {
+			return nil
+		}
+		// Reuse the photo-ready path; the cache is keyed by id (here the document id).
+		return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+	}
+}
+
 func downloadFullPhotoCmd(client internaltg.Client, ref store.PhotoRef) tea.Cmd {
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
@@ -576,6 +629,12 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 				if _, ok := m.fullImageCache[msg.Photo.ID]; !ok {
 					cmds = append(cmds, downloadFullPhotoCmd(m.tgClient, *msg.Photo))
 				}
+			}
+		}
+		// Video thumbnails reuse the inline-image cache, keyed by document id.
+		if msg.Media != nil && msg.Media.Kind == store.MediaVideo && msg.Document != nil && msg.Document.ThumbSize != "" {
+			if _, ok := m.imageCache[msg.Document.ID]; !ok {
+				cmds = append(cmds, downloadVideoThumbCmd(m.tgClient, *msg.Document))
 			}
 		}
 	}
@@ -646,11 +705,12 @@ func (m RootModel) retransmitChatCmd() tea.Cmd {
 	var transmits []tea.Cmd
 	if m.st != nil && m.currentChatID != 0 {
 		for _, msg := range m.st.Messages(m.currentChatID) {
-			if msg.Photo == nil {
+			id, ok := components.PreviewImageID(msg)
+			if !ok {
 				continue
 			}
-			if img, ok := m.imageCache[msg.Photo.ID]; ok {
-				transmits = append(transmits, m.transmitPhotoCmd(msg.Photo.ID, img))
+			if img, ok := m.imageCache[id]; ok {
+				transmits = append(transmits, m.transmitPhotoCmd(id, img))
 			}
 		}
 	}

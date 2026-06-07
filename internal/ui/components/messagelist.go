@@ -256,9 +256,9 @@ func placeholderFor(m *store.MediaRef) string {
 	case store.MediaPhoto:
 		return "📷 photo"
 	case store.MediaVideo:
-		return "🎥 video"
+		return durationLabel("🎥 video", m.Duration)
 	case store.MediaVideoNote:
-		return "⭕ video note"
+		return durationLabel("⭕ video note", m.Duration)
 	case store.MediaVoice:
 		return voiceLabel(m)
 	case store.MediaAudio:
@@ -279,15 +279,51 @@ func placeholderFor(m *store.MediaRef) string {
 	}
 }
 
-// placeholderLine renders one bordered label line for a media placeholder.
+// durationLabel appends a mm:ss suffix to a base label when the duration is known.
+func durationLabel(base string, dur int) string {
+	if dur > 0 {
+		return base + " " + formatDuration(dur)
+	}
+	return base
+}
+
+// PreviewImageID returns the image-cache key for a message's inline thumbnail
+// (photos and videos with an embedded thumbnail) and whether one applies.
+func PreviewImageID(msg store.Message) (int64, bool) {
+	if msg.Media == nil {
+		return 0, false
+	}
+	switch {
+	case msg.Media.Kind == store.MediaPhoto && msg.Photo != nil:
+		return msg.Photo.ID, true
+	case msg.Media.Kind == store.MediaVideo && msg.Document != nil && msg.Document.ThumbSize != "":
+		return msg.Document.ID, true
+	}
+	return 0, false
+}
+
+// videoOverlayLabel returns the play affordance shown under a video thumbnail,
+// or "" for non-video media.
+func videoOverlayLabel(m *store.MediaRef) string {
+	if m != nil && m.Kind == store.MediaVideo {
+		return "▶ " + formatDuration(m.Duration)
+	}
+	return ""
+}
+
+// labelLine renders one bordered, right-padded content line for a label.
 // Width is measured with lipgloss.Width so wide emoji pad correctly.
-func placeholderLine(m *store.MediaRef, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
-	label := placeholderFor(m)
+func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
 	padding := ""
 	if pw := lipgloss.Width(label); actualW > pw {
 		padding = strings.Repeat(" ", actualW-pw)
 	}
 	return bs.Render(b.Left) + " " + label + padding + " " + bs.Render(b.Right)
+}
+
+// placeholderLine renders one bordered label line for a media placeholder.
+func placeholderLine(m *store.MediaRef, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
+	return labelLine(placeholderFor(m), actualW, b, bs)
 }
 
 func (ml *MessageList) photoContentCols() int {
@@ -607,11 +643,14 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	}
 
 	if msg.Media != nil {
-		if msg.Media.Kind == store.MediaPhoto && msg.Photo != nil {
-			if img, ok := ml.images[msg.Photo.ID]; ok {
+		if id, ok := PreviewImageID(msg); ok {
+			if img, has := ml.images[id]; has {
 				cols := ml.photoContentCols()
 				b := img.Bounds()
 				h += ml.renderer.Footprint(b.Dx(), b.Dy(), cols)
+				if videoOverlayLabel(msg.Media) != "" {
+					h++ // play/duration overlay line under the thumbnail
+				}
 			} else {
 				h++ // placeholder line
 			}
@@ -681,6 +720,16 @@ func (ml *MessageList) SelectedMessagePhotoID() int64 {
 		return msg.Photo.ID
 	}
 	return 0
+}
+
+// SelectedMessageVideo returns the document ref of the selected message when it
+// is a playable video, for opening in an external player.
+func (ml *MessageList) SelectedMessageVideo() (store.DocumentRef, bool) {
+	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
+		msg.Media.Kind == store.MediaVideo && msg.Document != nil {
+		return *msg.Document, true
+	}
+	return store.DocumentRef{}, false
 }
 
 func (ml *MessageList) ScrollToMessage(id int) bool {
@@ -789,8 +838,18 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		actualW = 1
 	}
 
-	// Ensure photo content width is reflected in bubble sizing.
-	if msg.Photo != nil {
+	// Ensure photo content width is reflected in bubble sizing. Photos pre-size
+	// the bubble even before the image loads; video thumbnails widen it only
+	// once the thumbnail is available (the text placeholder is narrow).
+	widenToPhotoCols := msg.Photo != nil
+	if !widenToPhotoCols {
+		if id, ok := PreviewImageID(msg); ok {
+			if _, has := ml.images[id]; has {
+				widenToPhotoCols = true
+			}
+		}
+	}
+	if widenToPhotoCols {
 		photoCols := ml.photoContentCols()
 		if photoCols > actualW {
 			actualW = photoCols
@@ -918,9 +977,9 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 
 	if msg.Media != nil {
 		var artLines []string
-		if msg.Media.Kind == store.MediaPhoto && msg.Photo != nil {
-			if img, ok := ml.images[msg.Photo.ID]; ok {
-				artLines = ml.renderer.Render(msg.Photo.ID, img, ml.photoContentCols())
+		if id, ok := PreviewImageID(msg); ok {
+			if img, has := ml.images[id]; has {
+				artLines = ml.renderer.Render(id, img, ml.photoContentCols())
 			}
 		}
 		if artLines != nil {
@@ -930,6 +989,9 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 					al += strings.Repeat(" ", actualW-lw)
 				}
 				sideLines = append(sideLines, bs.Render(b.Left)+" "+al+" "+bs.Render(b.Right))
+			}
+			if overlay := videoOverlayLabel(msg.Media); overlay != "" {
+				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
 		} else {
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))

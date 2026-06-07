@@ -121,12 +121,19 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case components.OpenInViewerRequest:
-		img := m.fullImageCache[msg.PhotoID]
-		if img == nil {
-			img = m.imageCache[msg.PhotoID]
+		if msg.PhotoID != 0 {
+			img := m.fullImageCache[msg.PhotoID]
+			if img == nil {
+				img = m.imageCache[msg.PhotoID]
+			}
+			if img != nil {
+				go openInViewer(img, m.tmpDir)
+			}
+			return m, nil
 		}
-		if img != nil {
-			go openInViewer(img, m.tmpDir)
+		// No photo on the request → a video message; open the full file in a player.
+		if ref, ok := m.chat.SelectedMessageVideo(); ok {
+			return m, openDocumentCmd(m.tgClient, ref, m.tmpDir)
 		}
 		return m, nil
 	}

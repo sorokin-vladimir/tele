@@ -48,3 +48,16 @@ func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
 	_, cmd2 := m.Update(retransmitTickMsg{gen: 2})
 	require.NotNil(t, cmd2, "the latest debounce tick must trigger the retransmit")
 }
+
+func TestExtFromMime(t *testing.T) {
+	cases := map[string]string{
+		"video/quicktime":   ".mov",
+		"video/webm":        ".webm",
+		"video/x-matroska":  ".mkv",
+		"video/mp4":         ".mp4",
+		"application/weird": ".mp4", // default container for Telegram video
+	}
+	for mime, want := range cases {
+		require.Equal(t, want, extFromMime(mime), mime)
+	}
+}

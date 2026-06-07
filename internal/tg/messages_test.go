@@ -421,6 +421,20 @@ func TestClassifyMedia_AudioTitlePerformerDuration(t *testing.T) {
 	assert.Equal(t, "Artist", m.Performer)
 }
 
+func TestClassifyMedia_VideoDuration(t *testing.T) {
+	m := classifyMedia(docMedia(&tg.DocumentAttributeVideo{Duration: 42.7}))
+	require.NotNil(t, m)
+	assert.Equal(t, store.MediaVideo, m.Kind)
+	assert.Equal(t, 42, m.Duration)
+}
+
+func TestClassifyMedia_VideoNoteDuration(t *testing.T) {
+	m := classifyMedia(docMedia(&tg.DocumentAttributeVideo{RoundMessage: true, Duration: 8.2}))
+	require.NotNil(t, m)
+	assert.Equal(t, store.MediaVideoNote, m.Kind)
+	assert.Equal(t, 8, m.Duration)
+}
+
 func TestConvertMessage_SetsMediaForPhoto(t *testing.T) {
 	raw := &tg.Message{
 		ID: 1, Date: 1700000000,

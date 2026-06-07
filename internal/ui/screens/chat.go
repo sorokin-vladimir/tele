@@ -118,9 +118,12 @@ func (m *ChatModel) SelectedMessageID() int           { return m.msgList.Selecte
 func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
 func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.SelectedMessageReplyToMsgID() }
 func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }
-func (m *ChatModel) ScrollToMessage(id int) bool      { return m.msgList.ScrollToMessage(id) }
-func (m *ChatModel) ReplyToMsgID() int                { return m.replyToMsgID }
-func (m *ChatModel) EditMsgID() int                   { return m.editMsgID }
+func (m *ChatModel) SelectedMessageVideo() (store.DocumentRef, bool) {
+	return m.msgList.SelectedMessageVideo()
+}
+func (m *ChatModel) ScrollToMessage(id int) bool { return m.msgList.ScrollToMessage(id) }
+func (m *ChatModel) ReplyToMsgID() int           { return m.replyToMsgID }
+func (m *ChatModel) EditMsgID() int              { return m.editMsgID }
 
 // SetTypingLabel sets the active typing label and resets the animation frame.
 func (m *ChatModel) SetTypingLabel(base string) {

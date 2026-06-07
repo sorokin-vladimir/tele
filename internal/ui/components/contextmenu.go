@@ -76,23 +76,25 @@ type ContextMenu struct {
 	isOut        bool
 	replyToMsgID int
 	photoID      int64
+	hasVideo     bool
 	keyMap       keys.KeyMap
 }
 
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, photoID int64, km keys.KeyMap) *ContextMenu {
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, photoID int64, hasVideo bool, km keys.KeyMap) *ContextMenu {
 	return &ContextMenu{
-		items:        mainItems(isOut, replyToMsgID != 0, photoID != 0),
+		items:        mainItems(isOut, replyToMsgID != 0, photoID != 0, hasVideo),
 		msgID:        msgID,
 		isOut:        isOut,
 		replyToMsgID: replyToMsgID,
 		photoID:      photoID,
+		hasVideo:     hasVideo,
 		keyMap:       km,
 	}
 }
 
 func (cm *ContextMenu) Cursor() int { return cm.cursor }
 
-func mainItems(isOut bool, isReply bool, hasPhoto bool) []menuItem {
+func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -104,8 +106,11 @@ func mainItems(isOut bool, isReply bool, hasPhoto bool) []menuItem {
 	if isOut {
 		items = append(items, menuItem{label: "Edit", action: keys.ActionEdit})
 	}
-	if hasPhoto {
+	switch {
+	case hasPhoto:
 		items = append(items, menuItem{label: "Open in viewer", action: keys.ActionOpenInViewer})
+	case hasVideo:
+		items = append(items, menuItem{label: "Open in player", action: keys.ActionOpenInViewer})
 	}
 	items = append(items, menuItem{label: "Delete", action: keys.ActionDelete})
 	return items
@@ -168,7 +173,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.items = mainItems(cm.isOut, cm.replyToMsgID != 0, cm.photoID != 0)
+			cm.items = mainItems(cm.isOut, cm.replyToMsgID != 0, cm.photoID != 0, cm.hasVideo)
 			cm.cursor = 0
 			return cm, nil
 		}

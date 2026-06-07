@@ -368,9 +368,9 @@ func classifyDocument(m *tg.MessageMediaDocument) *store.MediaRef {
 	case animated:
 		return &store.MediaRef{Kind: store.MediaGIF}
 	case video != nil && video.RoundMessage:
-		return &store.MediaRef{Kind: store.MediaVideoNote}
+		return &store.MediaRef{Kind: store.MediaVideoNote, Duration: int(video.Duration)}
 	case video != nil:
-		return &store.MediaRef{Kind: store.MediaVideo}
+		return &store.MediaRef{Kind: store.MediaVideo, Duration: int(video.Duration)}
 	case audio != nil && audio.Voice:
 		return &store.MediaRef{
 			Kind:     store.MediaVoice,

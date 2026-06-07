@@ -1081,6 +1081,28 @@ func TestMessageList_VoiceWaveform(t *testing.T) {
 	assert.Contains(t, view, "0:15")
 }
 
+func TestMessageList_VideoPlaceholder_ShowsDuration(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 42},
+		Document: &store.DocumentRef{ID: 99, ThumbSize: "m"},
+	}})
+	assert.Contains(t, ml.View(), "🎥 video 0:42")
+}
+
+func TestMessageList_VideoThumbnail_ShowsPlayOverlay(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	ml.SetMessages([]store.Message{{ID: 1,
+		Media:    &store.MediaRef{Kind: store.MediaVideo, Duration: 42},
+		Document: &store.DocumentRef{ID: 99, ThumbSize: "m"},
+	}})
+	// Inject the downloaded thumbnail under the document id.
+	ml.SetImage(99, image.NewRGBA(image.Rect(0, 0, 16, 12)))
+	view := ml.View()
+	assert.Contains(t, view, "▶ 0:42", "play affordance + duration over the preview")
+	assert.NotContains(t, view, "🎥 video", "text placeholder is replaced by the thumbnail")
+}
+
 func TestMessageList_AudioMetadata(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	ml.SetMessages([]store.Message{{ID: 1, Media: &store.MediaRef{

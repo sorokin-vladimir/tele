@@ -67,12 +67,21 @@ type SQLiteStore struct {
 // NewSQLite opens (or creates) the SQLite file at path and returns a ready store.
 // The caller must call Close() when done.
 func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return nil, err
+	inMemory := path == ":memory:"
+	if !inMemory {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return nil, err
+		}
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
+	}
+	if inMemory {
+		// database/sql keeps a connection pool; each fresh connection to
+		// ":memory:" opens its own empty database. Pin the pool to a single
+		// connection so the in-memory store stays consistent for its lifetime.
+		db.SetMaxOpenConns(1)
 	}
 	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;"); err != nil {
 		_ = db.Close()

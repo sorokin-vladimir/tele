@@ -12,6 +12,7 @@ type Store interface {
 	UpdateMessageID(chatID int64, oldID, newID int)
 	UpdateMessageText(chatID int64, msgID int, text string, editDate time.Time)
 	UpdateMessageReactions(chatID int64, msgID int, reactions []Reaction)
+	UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef)
 	RemoveMessage(chatID int64, msgID int)
 	RemoveMessages(chatID int64, msgIDs []int)
 	IncrementChatUnread(chatID int64)

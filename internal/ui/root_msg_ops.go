@@ -107,8 +107,7 @@ func (m RootModel) handleEditMsgFailed(msg editMsgFailedMsg) (RootModel, tea.Cmd
 			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 		}
 	}
-	m.statusBar.SetStatus("Edit failed")
-	return m, nil
+	return m, func() tea.Msg { return StatusErrMsg{Text: "edit failed", Sev: components.SeverityWarning} }
 }
 
 func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea.Cmd) {
@@ -217,8 +216,7 @@ func (m RootModel) handleDeleteMsgFailed(msg deleteMsgFailedMsg) (RootModel, tea
 			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
 		}
 	}
-	m.statusBar.SetStatus("Delete failed")
-	return m, nil
+	return m, func() tea.Msg { return StatusErrMsg{Text: "delete failed", Sev: components.SeverityWarning} }
 }
 
 func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Reaction {

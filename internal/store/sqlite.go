@@ -280,6 +280,24 @@ func (s *SQLiteStore) UpdateMessageReactions(chatID int64, msgID int, reactions 
 	}
 }
 
+// UpdateMessageMedia replaces the photo/document refs of a cached message. A nil
+// ref leaves that field unchanged.
+func (s *SQLiteStore) UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.messages[chatID] {
+		if s.messages[chatID][i].ID == msgID {
+			if photo != nil {
+				s.messages[chatID][i].Photo = photo
+			}
+			if document != nil {
+				s.messages[chatID][i].Document = document
+			}
+			return
+		}
+	}
+}
+
 func (s *SQLiteStore) RemoveMessage(chatID int64, msgID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

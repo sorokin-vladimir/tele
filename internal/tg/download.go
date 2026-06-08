@@ -10,9 +10,16 @@ import (
 
 	"github.com/gotd/td/telegram/downloader"
 	gotdtg "github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
+
+// IsFileReferenceExpired reports whether err is Telegram's FILE_REFERENCE_EXPIRED.
+// Kept here so the ui layer can detect it without importing gotd directly.
+func IsFileReferenceExpired(err error) bool {
+	return tgerr.Is(err, "FILE_REFERENCE_EXPIRED")
+}
 
 func (c *GotdClient) DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error) {
 	c.mu.RLock()

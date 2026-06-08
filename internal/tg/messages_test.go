@@ -10,6 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSelectMessageByID(t *testing.T) {
+	msgs := []store.Message{{ID: 1}, {ID: 2}, {ID: 3}}
+	got, ok := selectMessageByID(msgs, 2)
+	assert.True(t, ok)
+	assert.Equal(t, 2, got.ID)
+
+	_, ok = selectMessageByID(msgs, 99)
+	assert.False(t, ok)
+}
+
 func TestConvertMessage_Regular(t *testing.T) {
 	raw := &tg.Message{
 		ID:      42,

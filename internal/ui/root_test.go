@@ -2,11 +2,13 @@ package ui_test
 
 import (
 	"context"
+	"errors"
 	"image"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
@@ -18,9 +20,12 @@ import (
 )
 
 type mockTGClient struct {
-	history          []store.Message
-	sendFunc         func() int
-	lastReplyToMsgID int
+	history           []store.Message
+	historyErr        error
+	sendFunc          func() int
+	lastReplyToMsgID  int
+	downloadPhotoFunc func() (image.Image, error)
+	refreshFunc       func(msgID int) (store.Message, error)
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
@@ -28,7 +33,16 @@ func (m *mockTGClient) GetDialogFilters(_ context.Context) ([]store.FolderFilter
 	return nil, nil
 }
 func (m *mockTGClient) GetHistory(_ context.Context, _ store.Peer, _ int, _ int) ([]store.Message, error) {
+	if m.historyErr != nil {
+		return nil, m.historyErr
+	}
 	return m.history, nil
+}
+func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int) (store.Message, error) {
+	if m.refreshFunc != nil {
+		return m.refreshFunc(msgID)
+	}
+	return store.Message{}, nil
 }
 func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
 	m.lastReplyToMsgID = replyToMsgID
@@ -39,6 +53,9 @@ func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string, re
 }
 func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
 func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.Image, error) {
+	if m.downloadPhotoFunc != nil {
+		return m.downloadPhotoFunc()
+	}
 	return nil, nil
 }
 func (m *mockTGClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
@@ -63,6 +80,108 @@ func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.Typing
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
 var _ internaltg.Client = (*mockTGClient)(nil)
+
+func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
+	mc := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
+
+	newMsg := store.Message{ID: 101, ChatID: 1, Photo: &store.PhotoRef{ID: 9}}
+	_, cmd := m.Update(store.Event{Kind: store.EventNewMessage, Message: newMsg})
+	require.NotNil(t, cmd) // download command batched
+}
+
+func TestRoot_HistoryChunk_FiresPhotoDownload(t *testing.T) {
+	mc := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mc) // chat ID 1 is the active chat
+
+	older := []store.Message{{ID: 150, ChatID: 1, Photo: &store.PhotoRef{ID: 5}}}
+	_, cmd := m.Update(ui.HistoryChunkMsgForTest(1, older))
+	require.NotNil(t, cmd)
+}
+
+func TestRoot_ChatOpenFailure_ClearsSpinnerAndShowsError(t *testing.T) {
+	mc := &mockTGClient{historyErr: errors.New("timeout")}
+	st := store.NewMemory()
+	chat := store.Chat{ID: 7, Title: "Bob", Peer: store.Peer{ID: 7, Type: store.PeerUser}}
+	st.SetChat(chat)
+	m := ui.NewRootModel(mc, st, 50, false).WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = newM.(ui.RootModel)
+
+	newM, cmd := m.Update(screens.OpenChatMsg{Chat: chat})
+	require.NotNil(t, cmd)
+	// drain the batched open cmd; one branch yields the chat load error
+	m = newM.(ui.RootModel)
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm, _ := m.Update(inner)
+		m = nm.(ui.RootModel)
+	}
+	assert.Contains(t, m.View().Content, "timeout")
+}
+
+func TestDownloadPhotoCmd_RefreshesOnExpiredRef(t *testing.T) {
+	calls := 0
+	mc := &mockTGClient{
+		downloadPhotoFunc: func() (image.Image, error) {
+			calls++
+			if calls == 1 {
+				return nil, &tgerr.Error{Code: 400, Type: "FILE_REFERENCE_EXPIRED"}
+			}
+			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
+		},
+		refreshFunc: func(msgID int) (store.Message, error) {
+			return store.Message{ID: msgID, ChatID: 7, Photo: &store.PhotoRef{ID: 1, FileReference: []byte("fresh")}}, nil
+		},
+	}
+	cmd := ui.DownloadPhotoCmdForTest(mc, store.Peer{ID: 7, Type: store.PeerUser}, 100, store.PhotoRef{ID: 1})
+
+	msgs := drainMsgs(cmd())
+	assert.Equal(t, 2, calls) // retried once after refresh
+	var ready *ui.PhotoReadyMsg
+	for _, m := range msgs {
+		if r, ok := m.(ui.PhotoReadyMsg); ok {
+			rr := r
+			ready = &rr
+		}
+	}
+	require.NotNil(t, ready)
+	assert.NotNil(t, ready.Image)
+	assert.Len(t, msgs, 2) // ready image + store-update after refresh
+}
+
+// drainMsgs flattens a (possibly batched) cmd result into its concrete messages.
+func drainMsgs(msg tea.Msg) []tea.Msg {
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
+	}
+	var out []tea.Msg
+	for _, c := range batch {
+		out = append(out, c())
+	}
+	return out
+}
+
+func TestRoot_StatusErrMsg_SetsAndSchedulesClear(t *testing.T) {
+	m := ui.NewRootModel(nil, nil, 50, false).WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	newM, cmd := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "network down", Sev: components.SeverityError})
+	root := newM.(ui.RootModel)
+	assert.Contains(t, root.View().Content, "network down")
+	require.NotNil(t, cmd) // an auto-clear tick was scheduled
+}
+
+func TestRoot_ClearStatusErrMsg_StaleSerialKeepsError(t *testing.T) {
+	m := ui.NewRootModel(nil, nil, 50, false).WithScreen(ui.ScreenMain)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m2, _ := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "first", Sev: components.SeverityError})
+	root := m2.(ui.RootModel)
+	m3, _ := root.Update(ui.ClearStatusErrMsg{Serial: -999}) // never a real serial
+	assert.Contains(t, m3.(ui.RootModel).View().Content, "first")
+}
 
 func TestRoot_InitialScreen_Login(t *testing.T) {
 	m := ui.NewRootModel(nil, nil, 50, false)

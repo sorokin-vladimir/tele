@@ -14,6 +14,45 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
+// RefreshMessage re-fetches one message and returns it with fresh media refs.
+func (c *GotdClient) RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error) {
+	c.mu.RLock()
+	api := c.api
+	c.mu.RUnlock()
+	if api == nil {
+		return store.Message{}, fmt.Errorf("not connected")
+	}
+
+	ids := []tg.InputMessageClass{&tg.InputMessageID{ID: msgID}}
+	var out store.Message
+	err := WithRetry(ctx, func() error {
+		var (
+			result tg.MessagesMessagesClass
+			err    error
+		)
+		if peer.Type == store.PeerChannel || peer.Type == store.PeerSuperGroup {
+			result, err = api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+				Channel: &tg.InputChannel{ChannelID: peer.ID, AccessHash: peer.AccessHash},
+				ID:      ids,
+			})
+		} else {
+			result, err = api.MessagesGetMessages(ctx, ids)
+		}
+		if err != nil {
+			c.log.Error("RefreshMessage failed", zap.Error(err))
+			return err
+		}
+		msgs := parseHistory(result, peer.ID)
+		m, ok := selectMessageByID(msgs, msgID)
+		if !ok {
+			return fmt.Errorf("refresh message %d: not found", msgID)
+		}
+		out = m
+		return nil
+	})
+	return out, err
+}
+
 func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error) {
 	c.mu.RLock()
 	api := c.api
@@ -262,6 +301,16 @@ func forwardInfo(fwd tg.MessageFwdHeader, resolve func(int64) string) *store.For
 		}
 	}
 	return &store.ForwardInfo{From: from}
+}
+
+// selectMessageByID returns the message with the given id from a parsed slice.
+func selectMessageByID(msgs []store.Message, id int) (store.Message, bool) {
+	for _, m := range msgs {
+		if m.ID == id {
+			return m, true
+		}
+	}
+	return store.Message{}, false
 }
 
 func parseHistory(result tg.MessagesMessagesClass, chatID int64) []store.Message {

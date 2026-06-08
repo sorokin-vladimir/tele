@@ -9,6 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMemory_UpdateMessageMedia(t *testing.T) {
+	s := store.NewMemory()
+	s.SetMessages(7, []store.Message{
+		{ID: 100, ChatID: 7, Photo: &store.PhotoRef{ID: 1, FileReference: []byte("old")}},
+	})
+	fresh := &store.PhotoRef{ID: 1, FileReference: []byte("new")}
+	s.UpdateMessageMedia(7, 100, fresh, nil)
+	got := s.Messages(7)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].Photo)
+	assert.Equal(t, []byte("new"), got[0].Photo.FileReference)
+}
+
 func TestMemory_SetGetChat(t *testing.T) {
 	s := store.NewMemory()
 	chat := store.Chat{ID: 42, Title: "Test"}

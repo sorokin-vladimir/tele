@@ -13,6 +13,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestChatModel_LoadError_ShownWhenNotLoading(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetLoading(false)
+	m.SetLoadError("load history failed: timeout")
+	assert.Contains(t, m.View(), "load history failed: timeout")
+}
+
+func TestChatModel_LoadError_ClearedByEmptyString(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetLoadError("boom")
+	m.SetLoadError("")
+	assert.NotContains(t, m.View(), "boom")
+}
+
 func TestChat_View_ShowsMessages(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	m.SetMessages([]store.Message{

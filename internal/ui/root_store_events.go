@@ -31,7 +31,7 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		}
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
-			return m, m.markReadCmd()
+			return m, tea.Batch(m.markReadCmd(), m.pendingDownloadCmds([]store.Message{msg.Message}))
 		}
 	case store.EventReadInbox:
 		m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID)

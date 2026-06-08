@@ -13,6 +13,9 @@ type Client interface {
 	GetDialogs(ctx context.Context) ([]store.Chat, error)
 	GetDialogFilters(ctx context.Context) ([]store.FolderFilter, error)
 	GetHistory(ctx context.Context, peer store.Peer, offsetID int, limit int) ([]store.Message, error)
+	// RefreshMessage re-fetches a single message to obtain fresh media file
+	// references (Telegram FileReferences expire).
+	RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error)
 	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error)
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
 	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)

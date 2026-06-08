@@ -70,6 +70,46 @@ func TestStatusBar_NoKeyMap_NoHints(t *testing.T) {
 	assert.NotContains(t, view, "->")
 }
 
+func TestStatusBar_SetError_ShownInView(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	sb.SetError("download failed", components.SeverityError)
+	assert.Contains(t, sb.View(), "download failed")
+}
+
+func TestStatusBar_ClearError_StaleSerialIsNoop(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	serial := sb.SetError("first", components.SeverityError)
+	sb.SetError("second", components.SeverityWarning) // bumps serial
+	sb.ClearError(serial)                             // stale → ignored
+	assert.Contains(t, sb.View(), "second")
+}
+
+func TestStatusBar_ClearError_CurrentSerialClears(t *testing.T) {
+	sb := components.NewStatusBar(80)
+	serial := sb.SetError("boom", components.SeverityError)
+	sb.ClearError(serial)
+	assert.NotContains(t, sb.View(), "boom")
+}
+
+func TestStatusBar_SeparatesSegments(t *testing.T) {
+	sb := components.NewStatusBar(120)
+	sb.SetKeyMap(keys.DefaultKeyMap())
+	sb.SetActivePane("chatlist")
+	sb.SetError("network down", components.SeverityError)
+	view := sb.View()
+	assert.Contains(t, view, "network down")
+	assert.Contains(t, view, "│") // segment separator present
+}
+
+func TestStatusBar_ErrorReplacesStatus(t *testing.T) {
+	sb := components.NewStatusBar(120)
+	sb.SetStatus("12 chats")
+	sb.SetError("boom", components.SeverityError)
+	view := sb.View()
+	assert.Contains(t, view, "boom")
+	assert.NotContains(t, view, "12 chats")
+}
+
 func TestStatusBar_HintsAppendedAfterStatus(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(120)

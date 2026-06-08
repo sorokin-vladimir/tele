@@ -9,9 +9,24 @@ import (
 )
 
 var (
-	barBg     = lipgloss.Color("236")
-	modeStyle = lipgloss.NewStyle().Bold(true).Padding(0, 1).Background(barBg)
-	barStyle  = lipgloss.NewStyle().Background(barBg)
+	barBg    = lipgloss.Color("236")
+	barFg    = lipgloss.Color("252")
+	barStyle = lipgloss.NewStyle().Background(barBg).Foreground(barFg)
+
+	barSepStyle = lipgloss.NewStyle().Background(barBg).Foreground(lipgloss.Color("240"))
+
+	modeBase   = lipgloss.NewStyle().Bold(true).Padding(0, 1).Foreground(lipgloss.Color("231"))
+	normalMode = modeBase.Background(lipgloss.Color("33")) // blue
+	insertMode = modeBase.Background(lipgloss.Color("35")) // green
+)
+
+// Severity classifies a transient status-bar message.
+type Severity int
+
+const (
+	SeverityInfo Severity = iota
+	SeverityWarning
+	SeverityError
 )
 
 type StatusBar struct {
@@ -22,6 +37,9 @@ type StatusBar struct {
 	lastKey    string
 	activePane string
 	keyMap     keys.KeyMap
+	errText    string
+	errSev     Severity
+	errSerial  int
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -36,20 +54,59 @@ func (sb *StatusBar) SetLastKey(k string)      { sb.lastKey = k }
 func (sb *StatusBar) SetActivePane(p string)   { sb.activePane = p }
 func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 
+// SetError shows a transient, severity-tagged message and returns the serial
+// identifying it, so a later ClearError only clears this exact message.
+func (sb *StatusBar) SetError(text string, sev Severity) int {
+	sb.errSerial++
+	sb.errText = text
+	sb.errSev = sev
+	return sb.errSerial
+}
+
+// ClearError clears the error only when serial matches the current one, so a
+// stale auto-clear timer cannot wipe a newer error.
+func (sb *StatusBar) ClearError(serial int) {
+	if serial == sb.errSerial {
+		sb.errText = ""
+	}
+}
+
 func (sb *StatusBar) View() string {
+	modeStyle := normalMode
 	label := "NORMAL"
 	if sb.mode == keys.ModeInsert {
+		modeStyle = insertMode
 		label = "INSERT"
 	}
-	left := modeStyle.Render(label)
-	line := fmt.Sprintf("%s  %s", left, sb.status)
+
+	segs := []string{modeStyle.Render(label)}
+
+	if sb.errText != "" {
+		segs = append(segs, errStyle(sb.errSev).Render(sb.errText))
+	} else if sb.status != "" {
+		segs = append(segs, barStyle.Render(sb.status))
+	}
 	if h := sb.hints(); h != "" {
-		line += " | " + h
+		segs = append(segs, barStyle.Render(h))
 	}
 	if sb.verbose {
-		line += fmt.Sprintf("  [pane:%s key:%s]", sb.activePane, sb.lastKey)
+		segs = append(segs, barStyle.Render(fmt.Sprintf("pane:%s key:%s", sb.activePane, sb.lastKey)))
 	}
-	return barStyle.Width(sb.width).Render(line)
+
+	sep := barSepStyle.Render(" │ ")
+	return barStyle.Width(sb.width).Render(strings.Join(segs, sep))
+}
+
+func errStyle(sev Severity) lipgloss.Style {
+	base := lipgloss.NewStyle().Background(barBg).Bold(true)
+	switch sev {
+	case SeverityError:
+		return base.Foreground(lipgloss.Color("203")) // red
+	case SeverityWarning:
+		return base.Foreground(lipgloss.Color("214")) // amber
+	default:
+		return base.Foreground(lipgloss.Color("75")) // blue/info
+	}
 }
 
 func (sb *StatusBar) hints() string {
@@ -118,5 +175,5 @@ func joinHints(parts ...string) string {
 			out = append(out, p)
 		}
 	}
-	return strings.Join(out, " | ")
+	return strings.Join(out, " · ")
 }

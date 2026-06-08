@@ -43,7 +43,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			return m, tea.Batch(retransmit, func() tea.Msg {
 				msgs, err := client.GetHistory(context.Background(), peer, 0, limit)
 				if err != nil {
-					return nil
+					return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
 				}
 				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
 			})
@@ -59,6 +59,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				}
 				m.chat.SetMessages(m.st.Messages(msg.ChatID))
 				m.chat.SetLoading(false)
+				m.chat.SetLoadError("")
 				if chat, ok := m.st.GetChat(msg.ChatID); ok && chat.UnreadCount > 0 {
 					m.chat.ScrollToFirstUnread(chat.ReadInboxMaxID)
 				}
@@ -91,7 +92,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, func() tea.Msg {
 			msgs, err := client.GetHistory(context.Background(), peer, offsetID, limit)
 			if err != nil {
-				return nil
+				return StatusErrMsg{Text: "load history failed: " + err.Error(), Sev: components.SeverityWarning}
 			}
 			return historyChunkMsg{chatID: chatID, messages: msgs}
 		}
@@ -102,6 +103,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			combined := append(msg.messages, existing...)
 			m.st.SetMessages(msg.chatID, combined)
 			m.chat.PrependMessages(msg.messages) // preserves viewport position
+			return m, m.pendingDownloadCmds(msg.messages)
 		}
 		return m, nil
 
@@ -133,7 +135,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		}
 		// No photo on the request → a video message; open the full file in a player.
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			return m, openDocumentCmd(m.tgClient, ref, m.tmpDir)
+			return m, openDocumentCmd(m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
 		}
 		return m, nil
 

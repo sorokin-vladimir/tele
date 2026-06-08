@@ -101,6 +101,41 @@ type FolderFiltersMsg struct {
 
 type clearTypingMsg struct{ serial int }
 
+// StatusErrMsg surfaces a transient, severity-tagged error in the status bar.
+type StatusErrMsg struct {
+	Text string
+	Sev  components.Severity
+}
+
+// ClearStatusErrMsg clears the status-bar error identified by Serial.
+type ClearStatusErrMsg struct{ Serial int }
+
+// chatLoadErrMsg reports a failed chat-open history load.
+type chatLoadErrMsg struct {
+	chatID int64
+	text   string
+}
+
+// mediaRefRefreshedMsg carries refreshed media refs after a FILE_REFERENCE_EXPIRED,
+// so the store can keep the fresh refs for subsequent opens.
+type mediaRefRefreshedMsg struct {
+	chatID int64
+	msgID  int
+	photo  *store.PhotoRef
+	doc    *store.DocumentRef
+}
+
+func durationFor(sev components.Severity) time.Duration {
+	switch sev {
+	case components.SeverityError:
+		return 10 * time.Second
+	case components.SeverityWarning:
+		return 8 * time.Second
+	default:
+		return 5 * time.Second
+	}
+}
+
 type RootModel struct {
 	screen            Screen
 	focus             Focus
@@ -293,6 +328,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleReactConfirmed(msg)
 	case components.DeleteMsgRequest:
 		return m.handleDeleteMsg(msg)
+	case StatusErrMsg:
+		return m.handleStatusErr(msg)
+	case ClearStatusErrMsg:
+		m.statusBar.ClearError(msg.Serial)
+		return m, nil
+	case chatLoadErrMsg:
+		return m.handleChatLoadErr(msg)
+	case mediaRefRefreshedMsg:
+		if m.st != nil {
+			m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
+		}
+		return m, nil
 	// network/data messages
 	case screens.OpenChatMsg,
 		ChatHistoryMsg,
@@ -476,7 +523,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			return m, openDocumentCmd(m.tgClient, ref, m.tmpDir)
+			return m, openDocumentCmd(m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
 		}
 		return m, nil
 	}
@@ -568,35 +615,149 @@ func openInViewer(img image.Image, tmpDir string) {
 	openPath(name)
 }
 
-func downloadPhotoCmd(client internaltg.Client, ref store.PhotoRef) tea.Cmd {
-	return func() tea.Msg {
-		img, err := client.DownloadPhoto(context.Background(), ref)
-		if err != nil {
-			return nil
-		}
-		return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+func (m RootModel) handleStatusErr(msg StatusErrMsg) (RootModel, tea.Cmd) {
+	serial := m.statusBar.SetError(msg.Text, msg.Sev)
+	d := durationFor(msg.Sev)
+	return m, tea.Tick(d, func(time.Time) tea.Msg { return ClearStatusErrMsg{Serial: serial} })
+}
+
+func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
+	if msg.chatID == m.currentChatID {
+		m.chat.SetLoading(false)
+		m.chat.SetLoadError(msg.text)
 	}
+	serial := m.statusBar.SetError(msg.text, components.SeverityError)
+	return m, tea.Tick(durationFor(components.SeverityError), func(time.Time) tea.Msg {
+		return ClearStatusErrMsg{Serial: serial}
+	})
+}
+
+// downloadWithRefresh runs download(ref); on a FILE_REFERENCE_EXPIRED error it
+// refreshes the message's media refs once via RefreshMessage and retries with the
+// fresh ref. On a successful retry it returns the refreshed message so the caller
+// can persist the new ref.
+func downloadWithRefresh[T any, R any](
+	client internaltg.Client,
+	peer store.Peer,
+	msgID int,
+	ref R,
+	download func(R) (T, error),
+	pickRef func(store.Message) (R, bool),
+) (result T, refreshed *store.Message, err error) {
+	result, err = download(ref)
+	if err == nil {
+		return result, nil, nil
+	}
+	if !internaltg.IsFileReferenceExpired(err) {
+		return result, nil, err
+	}
+	msg, rerr := client.RefreshMessage(context.Background(), peer, msgID)
+	if rerr != nil {
+		return result, nil, err
+	}
+	newRef, ok := pickRef(msg)
+	if !ok {
+		return result, nil, err
+	}
+	result, err = download(newRef)
+	if err != nil {
+		return result, nil, err
+	}
+	return result, &msg, nil
+}
+
+func downloadPhotoCmd(client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+	return func() tea.Msg {
+		img, refreshed, err := downloadWithRefresh(client, peer, msgID, ref,
+			func(r store.PhotoRef) (image.Image, error) {
+				return client.DownloadPhoto(context.Background(), r)
+			},
+			func(m store.Message) (store.PhotoRef, bool) {
+				if m.Photo == nil {
+					return store.PhotoRef{}, false
+				}
+				return *m.Photo, true
+			},
+		)
+		if err != nil {
+			return StatusErrMsg{Text: "photo download failed: " + err.Error(), Sev: components.SeverityWarning}
+		}
+		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		if refreshed != nil {
+			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, photo: refreshed.Photo})
+		}
+		return ready
+	}
+}
+
+// DownloadPhotoCmdForTest exposes downloadPhotoCmd for tests.
+func DownloadPhotoCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
+	return downloadPhotoCmd(c, peer, msgID, ref)
+}
+
+// HistoryChunkMsgForTest builds a historyChunkMsg for tests.
+func HistoryChunkMsgForTest(chatID int64, msgs []store.Message) tea.Msg {
+	return historyChunkMsg{chatID: chatID, messages: msgs}
+}
+
+// refreshedBatch emits both the ready image and the store-update message after a
+// successful refresh+retry.
+func refreshedBatch(ready, refreshed tea.Msg) tea.Msg {
+	return tea.BatchMsg{
+		func() tea.Msg { return ready },
+		func() tea.Msg { return refreshed },
+	}
+}
+
+// currentPeer returns the peer of the currently open chat, or the zero peer.
+func (m RootModel) currentPeer() store.Peer {
+	if m.st != nil {
+		if chat, ok := m.st.GetChat(m.currentChatID); ok {
+			return chat.Peer
+		}
+	}
+	return store.Peer{}
 }
 
 // openDocumentCmd downloads a document in full and opens it in the OS default
 // application (e.g. a video player). Runs async; the download may be large.
-func openDocumentCmd(client internaltg.Client, ref store.DocumentRef, tmpDir string) tea.Cmd {
+func openDocumentCmd(client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, tmpDir string) tea.Cmd {
 	return func() tea.Msg {
-		data, err := client.DownloadDocument(context.Background(), ref)
-		if err != nil || len(data) == 0 {
+		data, refreshed, err := downloadWithRefresh(client, peer, msgID, ref,
+			func(r store.DocumentRef) ([]byte, error) {
+				return client.DownloadDocument(context.Background(), r)
+			},
+			pickDocumentRef,
+		)
+		if err != nil {
+			return StatusErrMsg{Text: "open file failed: " + err.Error(), Sev: components.SeverityWarning}
+		}
+		if len(data) == 0 {
 			return nil
 		}
 		ext := filepath.Ext(ref.FileName)
 		if ext == "" {
 			ext = extFromMime(ref.MimeType)
 		}
-		name, err := writeTempMediaFile(data, tmpDir, ext)
-		if err != nil {
-			return nil
+		name, werr := writeTempMediaFile(data, tmpDir, ext)
+		if werr != nil {
+			return StatusErrMsg{Text: "open file failed: " + werr.Error(), Sev: components.SeverityWarning}
 		}
 		openPath(name)
+		if refreshed != nil {
+			return mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document}
+		}
 		return nil
 	}
+}
+
+// pickDocumentRef extracts a message's fresh document ref, used as the refresh
+// selector for document downloads.
+func pickDocumentRef(m store.Message) (store.DocumentRef, bool) {
+	if m.Document == nil {
+		return store.DocumentRef{}, false
+	}
+	return *m.Document, true
 }
 
 // extFromMime maps common video MIME types to a file extension so the OS picks
@@ -631,16 +792,28 @@ func (m RootModel) handlePlayVoice() (RootModel, tea.Cmd) {
 	if m.voicePlayer.Toggle(ref.ID) {
 		return m, nil // same message: paused/resumed
 	}
-	return m, downloadVoiceCmd(m.tgClient, ref)
+	return m, downloadVoiceCmd(m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref)
 }
 
-func downloadVoiceCmd(client internaltg.Client, ref store.DocumentRef) tea.Cmd {
+func downloadVoiceCmd(client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef) tea.Cmd {
 	return func() tea.Msg {
-		data, err := client.DownloadDocument(context.Background(), ref)
-		if err != nil || len(data) == 0 {
+		data, refreshed, err := downloadWithRefresh(client, peer, msgID, ref,
+			func(r store.DocumentRef) ([]byte, error) {
+				return client.DownloadDocument(context.Background(), r)
+			},
+			pickDocumentRef,
+		)
+		if err != nil {
+			return StatusErrMsg{Text: "voice download failed: " + err.Error(), Sev: components.SeverityWarning}
+		}
+		if len(data) == 0 {
 			return nil
 		}
-		return voicePlayReadyMsg{docID: ref.ID, data: data}
+		ready := voicePlayReadyMsg{docID: ref.ID, data: data}
+		if refreshed != nil {
+			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
+		}
+		return ready
 	}
 }
 
@@ -648,42 +821,84 @@ func voiceTickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return voiceTickMsg{} })
 }
 
-func downloadVideoThumbCmd(client internaltg.Client, ref store.DocumentRef, crop bool) tea.Cmd {
+func downloadVideoThumbCmd(client internaltg.Client, peer store.Peer, msgID int, ref store.DocumentRef, crop bool) tea.Cmd {
 	return func() tea.Msg {
-		img, err := client.DownloadDocumentThumb(context.Background(), ref)
+		img, refreshed, err := downloadWithRefresh(client, peer, msgID, ref,
+			func(r store.DocumentRef) (image.Image, error) {
+				return client.DownloadDocumentThumb(context.Background(), r)
+			},
+			func(m store.Message) (store.DocumentRef, bool) {
+				if m.Document == nil {
+					return store.DocumentRef{}, false
+				}
+				return *m.Document, true
+			},
+		)
 		if err != nil || img == nil {
+			if err != nil {
+				return StatusErrMsg{Text: "video thumb download failed: " + err.Error(), Sev: components.SeverityWarning}
+			}
 			return nil
 		}
 		if crop {
 			img = media.CircleCrop(img) // round video note → circle
 		}
 		// Reuse the photo-ready path; the cache is keyed by id (here the document id).
-		return PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		ready := PhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		if refreshed != nil {
+			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, doc: refreshed.Document})
+		}
+		return ready
 	}
 }
 
-func downloadFullPhotoCmd(client internaltg.Client, ref store.PhotoRef) tea.Cmd {
+func downloadFullPhotoCmd(client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef) tea.Cmd {
 	fullRef := ref
 	fullRef.ThumbSize = ref.FullThumbSize
 	return func() tea.Msg {
-		img, err := client.DownloadPhoto(context.Background(), fullRef)
+		img, refreshed, err := downloadWithRefresh(client, peer, msgID, fullRef,
+			func(r store.PhotoRef) (image.Image, error) {
+				return client.DownloadPhoto(context.Background(), r)
+			},
+			func(m store.Message) (store.PhotoRef, bool) {
+				if m.Photo == nil {
+					return store.PhotoRef{}, false
+				}
+				r := *m.Photo
+				r.ThumbSize = r.FullThumbSize
+				return r, true
+			},
+		)
 		if err != nil || img == nil {
+			if err != nil {
+				return StatusErrMsg{Text: "full photo download failed: " + err.Error(), Sev: components.SeverityWarning}
+			}
 			return nil
 		}
-		return FullPhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		ready := FullPhotoReadyMsg{PhotoID: ref.ID, Image: img}
+		if refreshed != nil {
+			return refreshedBatch(ready, mediaRefRefreshedMsg{chatID: peer.ID, msgID: msgID, photo: refreshed.Photo})
+		}
+		return ready
 	}
 }
 
 func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 	var cmds []tea.Cmd
 	for _, msg := range msgs {
+		var peer store.Peer
+		if m.st != nil {
+			if chat, ok := m.st.GetChat(msg.ChatID); ok {
+				peer = chat.Peer
+			}
+		}
 		if msg.Photo != nil {
 			if _, ok := m.imageCache[msg.Photo.ID]; !ok {
-				cmds = append(cmds, downloadPhotoCmd(m.tgClient, *msg.Photo))
+				cmds = append(cmds, downloadPhotoCmd(m.tgClient, peer, msg.ID, *msg.Photo))
 			}
 			if m.cfg != nil && m.cfg.Photos.EagerFullQuality && msg.Photo.FullThumbSize != "" {
 				if _, ok := m.fullImageCache[msg.Photo.ID]; !ok {
-					cmds = append(cmds, downloadFullPhotoCmd(m.tgClient, *msg.Photo))
+					cmds = append(cmds, downloadFullPhotoCmd(m.tgClient, peer, msg.ID, *msg.Photo))
 				}
 			}
 		}
@@ -693,7 +908,7 @@ func (m RootModel) pendingDownloadCmds(msgs []store.Message) tea.Cmd {
 				// Round video notes are cropped to a circle, but only in Kitty mode
 				// (PNG alpha); block-art has no transparency, so keep it square there.
 				crop := msg.Media.Kind == store.MediaVideoNote && m.imageMode == media.ModeKitty
-				cmds = append(cmds, downloadVideoThumbCmd(m.tgClient, *msg.Document, crop))
+				cmds = append(cmds, downloadVideoThumbCmd(m.tgClient, peer, msg.ID, *msg.Document, crop))
 			}
 		}
 	}
@@ -796,7 +1011,7 @@ func (m RootModel) markReadCmd() tea.Cmd {
 	chatID := chat.ID
 	return func() tea.Msg {
 		if err := client.MarkRead(context.Background(), peer, maxID); err != nil {
-			return nil
+			return StatusErrMsg{Text: "mark read failed: " + err.Error(), Sev: components.SeverityInfo}
 		}
 		return markReadDoneMsg{chatID: chatID, maxID: maxID}
 	}

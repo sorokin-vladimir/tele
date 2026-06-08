@@ -125,6 +125,24 @@ func (s *memoryStore) UpdateMessageReactions(chatID int64, msgID int, reactions 
 	}
 }
 
+// UpdateMessageMedia replaces the photo/document refs of a message, e.g. after
+// refreshing an expired FileReference. A nil ref leaves that field unchanged.
+func (s *memoryStore) UpdateMessageMedia(chatID int64, msgID int, photo *PhotoRef, document *DocumentRef) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.messages[chatID] {
+		if s.messages[chatID][i].ID == msgID {
+			if photo != nil {
+				s.messages[chatID][i].Photo = photo
+			}
+			if document != nil {
+				s.messages[chatID][i].Document = document
+			}
+			return
+		}
+	}
+}
+
 func (s *memoryStore) RemoveMessage(chatID int64, msgID int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

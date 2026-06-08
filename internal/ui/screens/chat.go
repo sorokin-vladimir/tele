@@ -47,6 +47,7 @@ type ChatModel struct {
 	editMsgID       int
 	spinner         components.Spinner
 	loading         bool
+	loadErr         string
 	logo            components.LogoLoader
 	typingBase      string
 	typingDots      components.TypingDots
@@ -73,6 +74,10 @@ func NewChatModel(width, height int) *ChatModel {
 
 // SetLoading shows or hides the loading spinner in the chat pane.
 func (m *ChatModel) SetLoading(v bool) { m.loading = v }
+
+// SetLoadError shows an inline error in the chat pane (e.g. when history fails
+// to load). Empty string clears it.
+func (m *ChatModel) SetLoadError(s string) { m.loadErr = s }
 
 // TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
 func (m *ChatModel) TickSpinner() { m.spinner.Tick() }
@@ -372,6 +377,14 @@ func (m *ChatModel) View() string {
 		}
 		centered := lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, m.spinner.View()+" Loading...")
 		return centered
+	}
+	if m.loadErr != "" {
+		listH := m.height - m.composer.VisualHeight()
+		if listH < 1 {
+			listH = 1
+		}
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+		return lipgloss.Place(m.width, listH, lipgloss.Center, lipgloss.Center, style.Render(m.loadErr))
 	}
 	if m.chat == nil && m.msgList.Count() == 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.logo.View())

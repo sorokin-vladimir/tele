@@ -35,6 +35,13 @@ const (
 	ActionDeleteMe        Action = "delete_me"
 	ActionJumpToOriginal  Action = "jump_to_original"
 	ActionPlayVoice       Action = "play_voice"
+	ActionMarkRead        Action = "mark_read"
+	ActionMarkUnread      Action = "mark_unread"
+	ActionMute            Action = "mute"
+	ActionUnmute          Action = "unmute"
+	ActionAddToFolder     Action = "add_to_folder"
+	ActionArchive         Action = "archive"
+	ActionUnarchive       Action = "unarchive"
 )
 
 type VimState struct {

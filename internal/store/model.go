@@ -108,6 +108,12 @@ type Chat struct {
 	IsBot           bool
 	IsMuted         bool
 	Online          bool
+	// UnreadMark is the Telegram dialog `unread_mark` flag: a manual
+	// "mark as unread" that is independent of UnreadCount.
+	UnreadMark bool
+	// IsArchived reports whether the chat lives in the built-in Archive
+	// folder (folder_id 1).
+	IsArchived bool
 }
 
 type FolderFilter struct {

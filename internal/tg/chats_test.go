@@ -69,7 +69,7 @@ func TestParseDialogs_IncludesBots(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{bot},
 	}
-	chats := c.parseDialogs(result)
+	chats := c.parseDialogs(result, false)
 	require.Len(t, chats, 1)
 	assert.Equal(t, "CoolBot", chats[0].Title)
 }
@@ -87,7 +87,7 @@ func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{self},
 	}
-	chats := c.parseDialogs(result)
+	chats := c.parseDialogs(result, false)
 	require.Len(t, chats, 1)
 	assert.Equal(t, "Saved Messages", chats[0].Title)
 }
@@ -106,7 +106,24 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 		Messages: []tg.MessageClass{msg},
 		Users:    []tg.UserClass{user},
 	}
-	chats := c.parseDialogs(result)
+	chats := c.parseDialogs(result, false)
 	require.Len(t, chats, 1)
 	assert.Equal(t, 5, chats[0].UnreadCount)
+}
+
+func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
+	dialog := &tg.Dialog{
+		Peer:       &tg.PeerUser{UserID: 7},
+		TopMessage: 10,
+	}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{&tg.Message{ID: 10, Date: 1}},
+		Users:    []tg.UserClass{user},
+	}
+	out := c.parseDialogs(result, true)
+	require.Len(t, out, 1)
+	assert.True(t, out[0].IsArchived)
 }

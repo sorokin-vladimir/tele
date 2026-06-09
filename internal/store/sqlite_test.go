@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	_ "modernc.org/sqlite"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
@@ -310,4 +312,70 @@ func TestSQLite_UpdateChatReadMaxID_ReturnsFalseWhenNotAdvanced(t *testing.T) {
 func TestSQLite_UpdateChatReadMaxID_ReturnsFalseWhenMissing(t *testing.T) {
 	s := newTestSQLite(t)
 	assert.False(t, s.UpdateChatReadMaxID(999, 10))
+}
+
+func TestSQLite_UnreadMarkAndArchived_Persist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tele.db")
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(store.Chat{ID: 42, Title: "Bob", UnreadMark: true, IsArchived: true})
+	require.NoError(t, s.Close())
+
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	c, ok := s2.GetChat(42)
+	require.True(t, ok)
+	assert.True(t, c.UnreadMark)
+	assert.True(t, c.IsArchived)
+}
+
+func TestSQLite_MigratesMissingChatColumns(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tele.db")
+
+	// Create a legacy DB whose chats table lacks the new columns.
+	db, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE chats (
+		id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
+		peer_type INTEGER NOT NULL DEFAULT 0, peer_access_hash INTEGER NOT NULL DEFAULT 0,
+		pinned INTEGER NOT NULL DEFAULT 0, unread_count INTEGER NOT NULL DEFAULT 0,
+		read_inbox_max_id INTEGER NOT NULL DEFAULT 0, read_outbox_max_id INTEGER NOT NULL DEFAULT 0,
+		last_message TEXT, is_contact INTEGER NOT NULL DEFAULT 0,
+		is_bot INTEGER NOT NULL DEFAULT 0, is_muted INTEGER NOT NULL DEFAULT 0,
+		online INTEGER NOT NULL DEFAULT 0)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO chats (id, title) VALUES (7, 'Legacy')`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	// Opening through NewSQLite must migrate and load without error.
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s.Close() }()
+	c, ok := s.GetChat(7)
+	require.True(t, ok)
+	assert.False(t, c.UnreadMark)
+	assert.False(t, c.IsArchived)
+}
+
+func TestSQLite_ChatStateMutators(t *testing.T) {
+	s := store.NewMemory()
+	s.SetChat(store.Chat{ID: 1, Title: "A"})
+
+	s.SetChatMuted(1, true)
+	s.SetChatUnreadMark(1, true)
+	s.SetChatArchived(1, true)
+
+	c, ok := s.GetChat(1)
+	require.True(t, ok)
+	assert.True(t, c.IsMuted)
+	assert.True(t, c.UnreadMark)
+	assert.True(t, c.IsArchived)
+
+	// Missing chat is a no-op, not a panic.
+	s.SetChatMuted(999, true)
 }

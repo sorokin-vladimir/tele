@@ -44,6 +44,16 @@ func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _
 
 func (m *mockClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
 
+func (m *mockClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error { return nil }
+
+func (m *mockClient) SetMuted(_ context.Context, _ store.Peer, _ bool) error { return nil }
+
+func (m *mockClient) AddToFolder(_ context.Context, _ int, _ store.Peer, _ bool) error { return nil }
+
+func (m *mockClient) GetArchivedDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
+
+func (m *mockClient) SetArchived(_ context.Context, _ store.Peer, _ bool) error { return nil }
+
 func (m *mockClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.Image, error) {
 	return nil, nil
 }

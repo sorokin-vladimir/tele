@@ -59,6 +59,17 @@ func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, _ string, 
 	return 42, nil
 }
 func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
+func (m *mockTGClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error {
+	return nil
+}
+func (m *mockTGClient) SetMuted(_ context.Context, _ store.Peer, _ bool) error { return nil }
+func (m *mockTGClient) AddToFolder(_ context.Context, _ int, _ store.Peer, _ bool) error {
+	return nil
+}
+func (m *mockTGClient) GetArchivedDialogs(_ context.Context) ([]store.Chat, error) {
+	return nil, nil
+}
+func (m *mockTGClient) SetArchived(_ context.Context, _ store.Peer, _ bool) error { return nil }
 func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.Image, error) {
 	if m.downloadPhotoFunc != nil {
 		return m.downloadPhotoFunc()
@@ -1132,4 +1143,51 @@ func TestRoot_StartupCatchup_ServerReadClearsStaleBadge(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 0, chat2.UnreadCount, "authoritative server read state must clear stale unread badge")
+}
+
+func TestRoot_Space_OpensChatMenu_OnChatList(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "A", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).
+		WithScreen(ui.ScreenMain).WithFocus(ui.FocusChatList)
+	// TransitionToMainMsg populates the chat list from the store.
+	nm, _ := m.Update(screens.TransitionToMainMsg{})
+	m = nm.(ui.RootModel)
+
+	nm, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	m = nm.(ui.RootModel)
+	assert.True(t, m.ChatMenuOpen())
+}
+
+func TestRoot_ToggleMute_OptimisticUpdate(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "A", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
+
+	updated, _ := m.Update(components.ToggleMuteRequest{Peer: store.Peer{ID: 1}, Muted: true})
+	rm := updated.(ui.RootModel)
+	assert.False(t, rm.ChatMenuOpen(), "menu closes after action")
+
+	c, _ := st.GetChat(1)
+	assert.True(t, c.IsMuted, "store updated optimistically")
+}
+
+func TestRoot_MarkUnread_OptimisticUpdate(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
+
+	m.Update(components.ToggleUnreadRequest{Peer: store.Peer{ID: 1}, Unread: true})
+	c, _ := st.GetChat(1)
+	assert.True(t, c.UnreadMark)
+}
+
+func TestRoot_ToggleArchive_OptimisticUpdate(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	m := ui.NewRootModel(&mockTGClient{}, st, 50, false).WithScreen(ui.ScreenMain)
+
+	m.Update(components.ToggleArchiveRequest{Peer: store.Peer{ID: 1}, Archived: true})
+	c, _ := st.GetChat(1)
+	assert.True(t, c.IsArchived)
 }

@@ -166,6 +166,7 @@ type RootModel struct {
 	onChatOpen        func(int64)
 	nextSentinel      int
 	contextMenu       *components.ContextMenu
+	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
 	reactionTargetID  int
 	folderBar         *screens.FoldersModel
@@ -251,6 +252,7 @@ func (m RootModel) WithKeyMap(km keys.KeyMap) RootModel {
 func (m RootModel) SearchActive() bool           { return m.searchModel != nil }
 func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }
+func (m RootModel) ChatMenuOpen() bool            { return m.chatMenu != nil }
 func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != nil }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
@@ -276,12 +278,33 @@ func (m RootModel) filteredChats() []store.Chat {
 		return nil
 	}
 	all := m.st.Chats()
-	if m.activeFilter == nil {
-		return all
+
+	// Archive virtual folder: only archived chats.
+	if m.activeFilter != nil && m.activeFilter.ID == store.ArchiveFolderID {
+		out := make([]store.Chat, 0)
+		for _, c := range all {
+			if c.IsArchived {
+				out = append(out, c)
+			}
+		}
+		return out
 	}
+
+	// All Chats: every non-archived chat.
+	if m.activeFilter == nil {
+		out := make([]store.Chat, 0, len(all))
+		for _, c := range all {
+			if !c.IsArchived {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+
+	// Custom filter: matches and not archived.
 	out := make([]store.Chat, 0, len(all))
 	for _, c := range all {
-		if m.activeFilter.Matches(c) {
+		if !c.IsArchived && m.activeFilter.Matches(c) {
 			out = append(out, c)
 		}
 	}
@@ -385,6 +408,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		screens.AuthRequestMsg,
 		screens.ConnectedMsg,
 		screens.AuthErrorMsg,
+		components.ToggleMuteRequest,
+		components.ToggleUnreadRequest,
+		components.AddToFolderRequest,
+		components.ToggleArchiveRequest,
 		tea.PasteMsg:
 		return m.updateUIMsg(msg)
 	// key input
@@ -410,6 +437,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.contextMenu != nil {
 		newCM, cmd := m.contextMenu.Update(msg)
 		m.contextMenu = newCM
+		return m, cmd
+	}
+	if m.chatMenu != nil {
+		newCM, cmd := m.chatMenu.Update(msg)
+		m.chatMenu = newCM
 		return m, cmd
 	}
 
@@ -486,6 +518,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.focus == FocusChatList {
 		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
 		if res == keys.MatchPending {
+			return m, nil
+		}
+		if action == keys.ActionOpenContextMenu {
+			if chat, ok := m.chatList.CursorChat(); ok && m.st != nil {
+				m.chatMenu = components.NewChatContextMenu(chat, m.st.FolderFilters(), m.keyMap)
+			}
 			return m, nil
 		}
 		if action != keys.ActionNone {
@@ -1199,6 +1237,7 @@ func (m RootModel) View() tea.View {
 
 		var main string
 		var chatPanelLeft, chatBoxW int
+		var chatListLeft, chatListBoxW int
 		if m.folderBar != nil && m.folderBar.HasFolders() {
 			const sidebarW = 18
 			_, chatlistW, chatW := layout.SplitThree(m.width, sidebarW, 0.30)
@@ -1208,6 +1247,8 @@ func (m RootModel) View() tea.View {
 			main = lipgloss.JoinHorizontal(lipgloss.Top, foldersView, chatListView, chatView)
 			chatPanelLeft = sidebarW + chatlistW
 			chatBoxW = chatW
+			chatListLeft = sidebarW
+			chatListBoxW = chatlistW
 		} else {
 			leftW, rightW := layout.SplitHorizontal(m.width, m.height, 0.30)
 			chatListWidth := leftW - 2*borderSize + 2
@@ -1217,6 +1258,8 @@ func (m RootModel) View() tea.View {
 			main = lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
 			chatPanelLeft = chatListWidth
 			chatBoxW = chatWidth
+			chatListLeft = 0
+			chatListBoxW = chatListWidth
 		}
 
 		content = main + "\n" + m.statusBar.View()
@@ -1225,6 +1268,9 @@ func (m RootModel) View() tea.View {
 		}
 		if m.contextMenu != nil {
 			content = m.overlayMenuNearBubble(content, m.contextMenu.View(), chatPanelLeft, chatBoxW)
+		}
+		if m.chatMenu != nil {
+			content = m.overlayMenuNearChatRow(content, m.chatMenu.View(), chatListLeft, chatListBoxW)
 		}
 		if m.reactionPicker != nil {
 			content = m.overlayMenuNearBubble(content, m.reactionPicker.View(), chatPanelLeft, chatBoxW)
@@ -1263,6 +1309,31 @@ func (m RootModel) overlayMenuNearBubble(content, menu string, chatPanelLeft, ch
 
 	menuW, menuH := measureBox(menu)
 	top, left := anchorMenu(bubble, area, menuW, menuH, m.chat.SelectedMessageIsOut())
+	return overlayAt(content, menu, m.width, m.height, top, left)
+}
+
+// overlayMenuNearChatRow places a menu to the right of the selected
+// chat-list row, top-aligned to that row and clamped to the main content
+// area so it stays on screen.
+func (m RootModel) overlayMenuNearChatRow(content, menu string, chatListLeft, chatListBoxW int) string {
+	row := m.chatList.CursorViewportRow()
+	// The chat-list box sits at terminal row 0; RenderBox adds a 1-cell
+	// top/left border, so the first row of content is terminal row 1.
+	rowRect := components.Rect{
+		Top:    1 + row,
+		Left:   chatListLeft,
+		Height: 1,
+		Width:  chatListBoxW,
+	}
+	area := components.Rect{
+		Top:    1,
+		Left:   chatListLeft,
+		Height: m.chatList.Height(),
+		Width:  m.width - chatListLeft,
+	}
+	menuW, menuH := measureBox(menu)
+	// onLeft=false anchors to the right of the row (into the chat pane).
+	top, left := anchorMenu(rowRect, area, menuW, menuH, false)
 	return overlayAt(content, menu, m.width, m.height, top, left)
 }
 

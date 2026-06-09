@@ -15,6 +15,14 @@ import (
 )
 
 func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
+	return c.getDialogs(ctx, 0)
+}
+
+func (c *GotdClient) GetArchivedDialogs(ctx context.Context) ([]store.Chat, error) {
+	return c.getDialogs(ctx, 1)
+}
+
+func (c *GotdClient) getDialogs(ctx context.Context, folderID int) ([]store.Chat, error) {
 	c.mu.RLock()
 	api := c.api
 	c.mu.RUnlock()
@@ -41,12 +49,16 @@ func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
 		var result tg.MessagesDialogsClass
 		err := WithRetry(ctx, func() error {
 			var err error
-			result, err = api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
+			req := &tg.MessagesGetDialogsRequest{
 				Limit:      pageSize,
 				OffsetDate: offsetDate,
 				OffsetID:   offsetID,
 				OffsetPeer: offsetPeer,
-			})
+			}
+			if folderID != 0 {
+				req.SetFolderID(folderID)
+			}
+			result, err = api.MessagesGetDialogs(ctx, req)
 			if err != nil {
 				c.log.Error("MessagesGetDialogs failed", zap.Error(err))
 			}
@@ -166,7 +178,7 @@ func (c *GotdClient) GetDialogs(ctx context.Context) ([]store.Chat, error) {
 		Users:    userSlice,
 		Chats:    chatSlice,
 	}
-	chats := c.parseDialogs(synthetic)
+	chats := c.parseDialogs(synthetic, folderID == 1)
 	c.log.Debug("GetDialogs done", zap.Int("count", len(chats)))
 	return chats, nil
 }
@@ -193,7 +205,7 @@ type dialogMeta struct {
 	lastMsgAt time.Time
 }
 
-func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
+func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass, archived bool) []store.Chat {
 	var dialogs []tg.DialogClass
 	var msgs []tg.MessageClass
 	var users []tg.UserClass
@@ -282,6 +294,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 			continue
 		}
 		chat.IsMuted = isMuted(dlg)
+		chat.IsArchived = archived
 		chat.Pinned = m.pinned
 		chat.UnreadCount = dlg.UnreadCount
 		chat.ReadInboxMaxID = dlg.ReadInboxMaxID

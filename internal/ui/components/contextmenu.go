@@ -56,6 +56,10 @@ const (
 type menuItem struct {
 	label  string
 	action keys.Action
+	// Chat-menu-only fields (ignored by the message menu).
+	separator bool // non-navigable divider row
+	isFolder  bool // folder-picker entry in the add-to-folder submenu
+	filterID  int  // folder id for isFolder entries
 }
 
 var (

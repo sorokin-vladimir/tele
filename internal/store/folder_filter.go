@@ -1,5 +1,10 @@
 package store
 
+// ArchiveFolderID is the sentinel filter ID for the Archive virtual
+// folder. Real Telegram filter IDs are positive; 0 is the "All Chats"
+// sentinel, so -1 is unambiguous.
+const ArchiveFolderID = -1
+
 func (f FolderFilter) Matches(chat Chat) bool {
 	// Excluded peers never match
 	for _, id := range f.ExcludePeers {
@@ -35,6 +40,9 @@ func (f FolderFilter) Matches(chat Chat) bool {
 		return false
 	}
 	if f.ExcludeMuted && chat.IsMuted {
+		return false
+	}
+	if f.ExcludeArchived && chat.IsArchived {
 		return false
 	}
 	return true

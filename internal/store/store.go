@@ -20,6 +20,9 @@ type Store interface {
 	UpdateChatReadMaxID(chatID int64, maxID int) bool
 	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
 	UpdateChatOnline(userID int64, online bool) bool
+	SetChatMuted(chatID int64, muted bool)
+	SetChatUnreadMark(chatID int64, mark bool)
+	SetChatArchived(chatID int64, archived bool)
 	FolderFilters() []FolderFilter
 	SetFolderFilters(filters []FolderFilter)
 	ClearForNewAccount(ownerID int64)

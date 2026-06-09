@@ -276,3 +276,24 @@ func TestChatList_View_OnlineDotWidthConsistent(t *testing.T) {
 	w1 := lipgloss.Width(lines[1])
 	assert.Equal(t, w0, w1, "online and offline rows must have the same visual width")
 }
+
+func TestChatList_CursorChat(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetChats([]store.Chat{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
+	m.SetCursorByID(2)
+	c, ok := m.CursorChat()
+	require.True(t, ok)
+	assert.Equal(t, int64(2), c.ID)
+}
+
+func TestChatList_CursorViewportRow_Scrolled(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(20, 3) // 3 visible rows
+	chats := make([]store.Chat, 10)
+	for i := range chats {
+		chats[i] = store.Chat{ID: int64(i + 1)}
+	}
+	m.SetChats(chats)
+	m.SetCursorByID(6) // index 5: start = 5-3+1 = 3, row = 5-3 = 2
+	assert.Equal(t, 2, m.CursorViewportRow())
+}

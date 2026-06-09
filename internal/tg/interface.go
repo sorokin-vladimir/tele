@@ -18,6 +18,18 @@ type Client interface {
 	RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error)
 	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error)
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
+	// MarkDialogUnread sets or clears the manual unread mark on a dialog.
+	MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error
+	// SetMuted mutes (indefinitely) or unmutes a peer's notifications.
+	SetMuted(ctx context.Context, peer store.Peer, muted bool) error
+	// AddToFolder adds or removes a peer from an existing dialog filter's
+	// include list.
+	AddToFolder(ctx context.Context, filterID int, peer store.Peer, add bool) error
+	// GetArchivedDialogs fetches dialogs in the built-in Archive folder
+	// (folder_id 1); every returned chat has IsArchived set.
+	GetArchivedDialogs(ctx context.Context) ([]store.Chat, error)
+	// SetArchived moves a peer into (archived) or out of the Archive folder.
+	SetArchived(ctx context.Context, peer store.Peer, archived bool) error
 	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)
 	// DownloadDocument fetches the full document file as raw bytes.
 	DownloadDocument(ctx context.Context, ref store.DocumentRef) ([]byte, error)

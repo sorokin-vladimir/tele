@@ -54,7 +54,7 @@ func TestKeyFor_SameLengthBindings_ReturnsAlphabeticallyFirst(t *testing.T) {
 
 func TestKeyFor_UnknownAction_ReturnsEmpty(t *testing.T) {
 	km := keys.DefaultKeyMap()
-	assert.Equal(t, "", km.KeyFor(keys.ContextChatList, keys.ActionOpenContextMenu))
+	assert.Equal(t, "", km.KeyFor(keys.ContextChatList, keys.ActionReply))
 }
 
 func TestKeyFor_UnknownContext_ReturnsEmpty(t *testing.T) {
@@ -65,4 +65,12 @@ func TestKeyFor_UnknownContext_ReturnsEmpty(t *testing.T) {
 func TestKeyFor_NilMap_ReturnsEmpty(t *testing.T) {
 	var km keys.KeyMap
 	assert.Equal(t, "", km.KeyFor(keys.ContextGlobal, keys.ActionDown))
+}
+
+func TestKeyMap_ChatMenuBindings(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	assert.Equal(t, keys.ActionMute, km.Resolve(keys.ContextChatMenu, "m"))
+	assert.Equal(t, keys.ActionAddToFolder, km.Resolve(keys.ContextChatMenu, "f"))
+	assert.Equal(t, keys.ActionConfirm, km.Resolve(keys.ContextFolderSubMenu, "enter"))
+	assert.Equal(t, keys.ActionOpenContextMenu, km.Resolve(keys.ContextChatList, "space"))
 }

@@ -11,6 +11,8 @@ const (
 	ContextSearch        Context = "search"
 	ContextContextMenu   Context = "context_menu"
 	ContextDeleteSubMenu Context = "delete_submenu"
+	ContextChatMenu      Context = "chat_menu"
+	ContextFolderSubMenu Context = "folder_submenu"
 )
 
 const (
@@ -60,6 +62,7 @@ func DefaultKeyMap() KeyMap {
 			"/":      ActionSearch,
 			"ctrl+d": ActionScrollHalfDown,
 			"ctrl+u": ActionScrollHalfUp,
+			"space":  ActionOpenContextMenu,
 		},
 		// ContextChat is the live source for chat-pane keys, resolved through
 		// the Matcher. "g g" is a chord (space-separated key tokens).
@@ -112,6 +115,28 @@ func DefaultKeyMap() KeyMap {
 			"esc":   ActionCancel,
 			"a":     ActionDeleteRevoke,
 			"m":     ActionDeleteMe,
+		},
+		ContextChatMenu: {
+			"j":     ActionDown,
+			"down":  ActionDown,
+			"k":     ActionUp,
+			"up":    ActionUp,
+			"enter": ActionConfirm,
+			"space": ActionCancel,
+			"esc":   ActionCancel,
+			"r":     ActionMarkRead,
+			"u":     ActionMarkUnread,
+			"m":     ActionMute,
+			"f":     ActionAddToFolder,
+			"a":     ActionArchive,
+		},
+		ContextFolderSubMenu: {
+			"j":     ActionDown,
+			"down":  ActionDown,
+			"k":     ActionUp,
+			"up":    ActionUp,
+			"enter": ActionConfirm,
+			"esc":   ActionCancel,
 		},
 		ContextSearch: {
 			"esc":    ActionCancel,

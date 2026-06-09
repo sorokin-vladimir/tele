@@ -98,3 +98,12 @@ func TestFolderFilter_NoFlagsNoMatches(t *testing.T) {
 	assert.False(t, f.Matches(dmChat))
 	assert.False(t, f.Matches(groupChat))
 }
+
+func TestMatches_ExcludeArchived(t *testing.T) {
+	f := store.FolderFilter{Groups: true, ExcludeArchived: true}
+	group := store.Chat{ID: 1, Peer: store.Peer{Type: store.PeerGroup}}
+	assert.True(t, f.Matches(group))
+
+	archived := store.Chat{ID: 2, Peer: store.Peer{Type: store.PeerGroup}, IsArchived: true}
+	assert.False(t, f.Matches(archived))
+}

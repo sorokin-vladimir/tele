@@ -124,6 +124,31 @@ func (m *ChatListModel) SetSize(width, height int) {
 	m.height = height
 }
 
+// CursorChat returns the chat currently under the cursor.
+func (m *ChatListModel) CursorChat() (store.Chat, bool) {
+	if m.cursor < 0 || m.cursor >= len(m.chats) {
+		return store.Chat{}, false
+	}
+	return m.chats[m.cursor], true
+}
+
+// Height returns the pane's content height in rows.
+func (m *ChatListModel) Height() int { return m.height }
+
+// CursorViewportRow returns the cursor's row index within the visible
+// viewport, accounting for scroll. It mirrors the scroll math in View.
+func (m *ChatListModel) CursorViewportRow() int {
+	visible := m.height
+	if visible <= 0 {
+		return m.cursor
+	}
+	start := 0
+	if m.cursor >= visible {
+		start = m.cursor - visible + 1
+	}
+	return m.cursor - start
+}
+
 func (m *ChatListModel) Init() tea.Cmd { return nil }
 
 func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {

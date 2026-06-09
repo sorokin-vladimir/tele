@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS chats (
 	is_contact         INTEGER NOT NULL DEFAULT 0,
 	is_bot             INTEGER NOT NULL DEFAULT 0,
 	is_muted           INTEGER NOT NULL DEFAULT 0,
-	online             INTEGER NOT NULL DEFAULT 0
+	online             INTEGER NOT NULL DEFAULT 0,
+	unread_mark        INTEGER NOT NULL DEFAULT 0,
+	is_archived        INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS update_state (
 	user_id INTEGER PRIMARY KEY,
@@ -129,6 +131,10 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureChatColumns(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	s := &SQLiteStore{
 		chats:        make(map[int64]Chat),
 		messages:     make(map[int64][]Message),
@@ -210,7 +216,7 @@ func (s *SQLiteStore) Close() error {
 func (s *SQLiteStore) loadChats() error {
 	rows, err := s.db.Query(`SELECT id, title, peer_type, peer_access_hash, pinned,
 		unread_count, read_inbox_max_id, read_outbox_max_id, last_message,
-		is_contact, is_bot, is_muted, online FROM chats`)
+		is_contact, is_bot, is_muted, online, unread_mark, is_archived FROM chats`)
 	if err != nil {
 		return err
 	}
@@ -218,11 +224,12 @@ func (s *SQLiteStore) loadChats() error {
 	for rows.Next() {
 		var c Chat
 		var lastMsgJSON []byte
-		var pinned, isContact, isBot, isMuted, online int
+		var pinned, isContact, isBot, isMuted, online, unreadMark, isArchived int
 		err := rows.Scan(
 			&c.ID, &c.Title, &c.Peer.Type, &c.Peer.AccessHash,
 			&pinned, &c.UnreadCount, &c.ReadInboxMaxID, &c.ReadOutboxMaxID,
 			&lastMsgJSON, &isContact, &isBot, &isMuted, &online,
+			&unreadMark, &isArchived,
 		)
 		if err != nil {
 			return err
@@ -233,6 +240,8 @@ func (s *SQLiteStore) loadChats() error {
 		c.IsBot = isBot == 1
 		c.IsMuted = isMuted == 1
 		c.Online = online == 1
+		c.UnreadMark = unreadMark == 1
+		c.IsArchived = isArchived == 1
 		if len(lastMsgJSON) > 0 {
 			var m Message
 			if err := json.Unmarshal(lastMsgJSON, &m); err == nil {
@@ -251,6 +260,47 @@ func boolInt(b bool) int {
 	return 0
 }
 
+// ensureChatColumns adds chat columns introduced after the original
+// schema to pre-existing databases. CREATE TABLE IF NOT EXISTS never
+// alters an existing table, so new columns need an explicit ALTER. Each
+// ALTER runs only when PRAGMA table_info shows the column is absent, so
+// the migration is idempotent.
+func ensureChatColumns(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(chats)`)
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	migrations := []struct{ col, ddl string }{
+		{"unread_mark", `ALTER TABLE chats ADD COLUMN unread_mark INTEGER NOT NULL DEFAULT 0`},
+		{"is_archived", `ALTER TABLE chats ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0`},
+	}
+	for _, m := range migrations {
+		if _, ok := existing[m.col]; ok {
+			continue
+		}
+		if _, err := db.Exec(m.ddl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // persistChat writes (upserts) a single chat to SQLite. Logs errors; does not return them
 // because Store interface methods do not propagate errors.
 func (s *SQLiteStore) persistChat(c Chat) {
@@ -262,16 +312,48 @@ func (s *SQLiteStore) persistChat(c Chat) {
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO chats
 		(id, title, peer_type, peer_access_hash, pinned, unread_count,
 		 read_inbox_max_id, read_outbox_max_id, last_message,
-		 is_contact, is_bot, is_muted, online)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 is_contact, is_bot, is_muted, online, unread_mark, is_archived)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, c.Title, c.Peer.Type, c.Peer.AccessHash,
 		boolInt(c.Pinned), c.UnreadCount, c.ReadInboxMaxID, c.ReadOutboxMaxID,
 		lastMsgJSON,
 		boolInt(c.IsContact), boolInt(c.IsBot), boolInt(c.IsMuted), boolInt(c.Online),
+		boolInt(c.UnreadMark), boolInt(c.IsArchived),
 	)
 	if err != nil {
 		s.log.Error("persist chat failed", zap.Int64("chat_id", c.ID), zap.Error(err))
 	}
+}
+
+// SetChatMuted updates the mute flag for a chat and persists it.
+func (s *SQLiteStore) SetChatMuted(chatID int64, muted bool) {
+	s.setChatField(chatID, func(c *Chat) { c.IsMuted = muted })
+}
+
+// SetChatUnreadMark updates the manual unread-mark flag and persists it.
+func (s *SQLiteStore) SetChatUnreadMark(chatID int64, mark bool) {
+	s.setChatField(chatID, func(c *Chat) { c.UnreadMark = mark })
+}
+
+// SetChatArchived updates the archived flag and persists it.
+func (s *SQLiteStore) SetChatArchived(chatID int64, archived bool) {
+	s.setChatField(chatID, func(c *Chat) { c.IsArchived = archived })
+}
+
+// setChatField applies mutate to a chat under the lock and write-through
+// persists it. No-op when the chat is unknown. These flags do not affect
+// display order, so the sorted view is not invalidated.
+func (s *SQLiteStore) setChatField(chatID int64, mutate func(*Chat)) {
+	s.mu.Lock()
+	c, ok := s.chats[chatID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	mutate(&c)
+	s.chats[chatID] = c
+	s.mu.Unlock()
+	s.persistChat(c)
 }
 
 func (s *SQLiteStore) GetChat(id int64) (Chat, bool) {

@@ -104,6 +104,14 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 
 	case components.CloseContextMenuMsg:
 		m.contextMenu = nil
+		m.chatMenu = nil
+		return m, nil
+
+	case components.ToggleMuteRequest, components.ToggleUnreadRequest,
+		components.AddToFolderRequest, components.ToggleArchiveRequest:
+		if rm, cmd, ok := m.handleChatMenuRequest(msg); ok {
+			return rm, cmd
+		}
 		return m, nil
 
 	case components.ReactMsgRequest:

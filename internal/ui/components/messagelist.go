@@ -520,6 +520,15 @@ func (ml *MessageList) ViewHeight() int { return ml.viewHeight }
 // is no selected message or View() has not run yet.
 func (ml *MessageList) SelectedBubbleRect() (Rect, bool) { return ml.selRect, ml.selRectOK }
 func (ml *MessageList) AtTop() bool                      { return ml.viewStart == 0 && ml.lineOffset == 0 }
+
+// AtBottom reports whether the viewport is anchored at the natural bottom (the
+// newest content is fully visible). It uses the current item heights, so a
+// caller can capture it before an async height change (e.g. a Kitty placement
+// finishing transmission) and re-anchor afterward to keep the tail pinned.
+func (ml *MessageList) AtBottom() bool {
+	botIdx, botOff := ml.positionAtBottom()
+	return ml.viewStart == botIdx && ml.lineOffset >= botOff
+}
 func (ml *MessageList) SetIsGroup(v bool)                { ml.isGroup = v }
 func (ml *MessageList) SetOutboxReadMaxID(id int)        { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)         { ml.inboxReadMaxID = id }
@@ -735,9 +744,14 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	}
 
 	if msg.Media != nil {
-		if id, ok := PreviewImageID(msg); ok {
+		cols := ml.photoContentCols()
+		// Reserve the full image footprint only when the renderer will actually
+		// draw it. While a Kitty placement is still being transmitted, Render
+		// yields the 1-line text placeholder, so msgHeight must match that or the
+		// bottom clamp parks the viewport inside lines that never render and the
+		// new tail message is hidden/unreachable (issue #115).
+		if id, ok := PreviewImageID(msg); ok && ml.renderer.CanRender(id, cols) {
 			if img, has := ml.images[id]; has {
-				cols := ml.photoContentCols()
 				b := img.Bounds()
 				h += ml.renderer.Footprint(b.Dx(), b.Dy(), cols)
 				if videoOverlayLabel(msg.Media) != "" {

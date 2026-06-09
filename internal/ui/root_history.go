@@ -115,7 +115,17 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	case kittyTransmittedMsg:
 		// Placement is now on the terminal; advertise it so the next render
 		// emits the placeholder grid over an existing placement.
+		//
+		// Marking it transmitted grows the photo from its 1-line text
+		// placeholder to its full footprint, which moves the natural bottom
+		// down. Nothing else re-pins the viewport, so capture whether we were at
+		// the bottom (with pre-growth heights) and re-anchor afterward to keep
+		// the newest message fully visible (issue #115).
+		wasAtBottom := m.chat.AtBottom()
 		m.kittyStore.MarkTransmitted(msg.photoID, msg.cols)
+		if wasAtBottom {
+			m.chat.ScrollToBottom()
+		}
 		return m, nil
 
 	case FullPhotoReadyMsg:

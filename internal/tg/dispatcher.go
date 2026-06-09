@@ -28,9 +28,13 @@ func setupDispatcher(
 		log.Warn("droppable event dropped", zap.String("kind", kind), zap.Int64("total_drops", n))
 	}
 
-	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewMessage) error {
-		peerID := extractPeerID(upd.Message)
-		msg, ok := convertMessage(upd.Message, peerID)
+	// handleNewMessage converts a raw incoming message and, unless suppressed,
+	// emits a store.EventNewMessage. It is shared by the UpdateNewMessage
+	// (users/basic groups) and UpdateNewChannelMessage (channels/supergroups)
+	// handlers, which carry an identically shaped Message field.
+	handleNewMessage := func(ctx context.Context, e tg.Entities, raw tg.MessageClass) error {
+		peerID := extractPeerID(raw)
+		msg, ok := convertMessage(raw, peerID)
 		if !ok {
 			return nil
 		}
@@ -55,7 +59,7 @@ func setupDispatcher(
 				msg.SenderName = groupTitle(chat)
 			}
 		}
-		if m, ok := upd.Message.(*tg.Message); ok {
+		if m, ok := raw.(*tg.Message); ok {
 			if fwd, ok := m.GetFwdFrom(); ok {
 				msg.Forward = forwardInfo(fwd, func(id int64) string {
 					if user, ok := e.Users[id]; ok {
@@ -82,6 +86,17 @@ func setupDispatcher(
 		case <-ctx.Done():
 		}
 		return nil
+	}
+
+	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewMessage) error {
+		return handleNewMessage(ctx, e, upd.Message)
+	})
+
+	// UpdateNewChannelMessage covers channels and supergroups; UpdateNewMessage
+	// does not. Without this the chat list never bumps or increments unread for
+	// supergroup/channel messages during live updates (issue #116).
+	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNewChannelMessage) error {
+		return handleNewMessage(ctx, e, upd.Message)
 	})
 
 	dispatcher.OnReadHistoryInbox(func(ctx context.Context, e tg.Entities, upd *tg.UpdateReadHistoryInbox) error {

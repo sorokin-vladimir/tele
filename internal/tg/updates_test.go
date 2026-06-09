@@ -277,6 +277,64 @@ func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T
 	}
 }
 
+func TestSetupDispatcher_NewChannelMessage_EmitsEvent(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	ctx := context.Background()
+	rawMsg := &tg.Message{
+		ID:      11,
+		PeerID:  &tg.PeerChannel{ChannelID: 600},
+		Message: "supergroup message",
+		Date:    int(time.Now().Unix()),
+		// FromID is nil — anonymous channel post
+	}
+	update := &tg.UpdateNewChannelMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
+
+	err := dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{update},
+		Chats:   []tg.ChatClass{&tg.Channel{ID: 600, Title: "Supergroup"}},
+	})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventNewMessage, evt.Kind)
+		assert.Equal(t, "supergroup message", evt.Message.Text)
+		assert.Equal(t, int64(600), evt.Message.ChatID)
+		assert.Equal(t, "Supergroup", evt.Message.SenderName)
+	case <-time.After(time.Second):
+		t.Fatal("no event received for channel message")
+	}
+}
+
+func TestSetupDispatcher_NewChannelMessage_Suppressed(t *testing.T) {
+	suppressed := map[int]bool{12: true}
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, func(id int) bool {
+		return suppressed[id]
+	})
+
+	ctx := context.Background()
+	rawMsg := &tg.Message{
+		ID:      12,
+		PeerID:  &tg.PeerChannel{ChannelID: 600},
+		Message: "echo",
+		Date:    int(time.Now().Unix()),
+	}
+	update := &tg.UpdateNewChannelMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
+
+	err := dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{update},
+	})
+	require.NoError(t, err)
+
+	select {
+	case <-mustDeliver:
+		t.Fatal("suppressed channel message must not reach events channel")
+	case <-time.After(100 * time.Millisecond):
+		// expected: no event
+	}
+}
+
 func TestConvertTypingAction_Typing(t *testing.T) {
 	assert.Equal(t, store.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
 }

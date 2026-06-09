@@ -252,7 +252,7 @@ func (m RootModel) WithKeyMap(km keys.KeyMap) RootModel {
 func (m RootModel) SearchActive() bool           { return m.searchModel != nil }
 func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }
-func (m RootModel) ChatMenuOpen() bool            { return m.chatMenu != nil }
+func (m RootModel) ChatMenuOpen() bool           { return m.chatMenu != nil }
 func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != nil }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).

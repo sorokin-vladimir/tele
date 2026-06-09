@@ -115,7 +115,7 @@ func (a *App) Run() error {
 		a.log.Warn("keybindings: " + w)
 	}
 	root := ui.NewRootModel(a.client, a.st, a.cfg.UI.HistoryLimit, a.verbose)
-	root = root.WithConfig(a.cfg).WithKeyMap(km)
+	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetOnChatOpen(func(id int64) {
 		atomic.StoreInt64(&a.currentChatID, id)

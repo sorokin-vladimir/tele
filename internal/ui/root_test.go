@@ -28,6 +28,7 @@ type mockTGClient struct {
 	lastReplyToMsgID  int
 	downloadPhotoFunc func() (image.Image, error)
 	refreshFunc       func(msgID int) (store.Message, error)
+	lastSendCtx       context.Context
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
@@ -46,7 +47,8 @@ func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int
 	}
 	return store.Message{}, nil
 }
-func (m *mockTGClient) SendMessage(_ context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
+	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
 	if m.sendErr != nil {
 		return 0, m.sendErr
@@ -106,6 +108,23 @@ func TestRoot_SendFailure_SurfacesErrorAndRemovesSentinel(t *testing.T) {
 	}
 	assert.True(t, sawErr, "send failure should surface a StatusErrMsg")
 	assert.Empty(t, st.Messages(1), "failed sentinel should be rolled back")
+}
+
+type ctxKey struct{}
+
+func TestRoot_ThreadsAppContextIntoCommands(t *testing.T) {
+	appCtx := context.WithValue(context.Background(), ctxKey{}, "tele")
+	mock := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mock)
+	m = m.WithContext(appCtx)
+
+	_, cmd := m.Update(screens.SendMsgRequest{Peer: store.Peer{ID: 1, Type: store.PeerUser}, Text: "hi"})
+	require.NotNil(t, cmd)
+	cmd() // run the SendMessage cmd
+
+	require.NotNil(t, mock.lastSendCtx)
+	assert.Equal(t, "tele", mock.lastSendCtx.Value(ctxKey{}),
+		"command should use the app context, not context.Background()")
 }
 
 func TestRoot_ReactionFailure_SurfacesError(t *testing.T) {

@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"context"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -36,12 +34,13 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		retransmit := m.retransmitChatCmd()
 		if m.tgClient != nil {
 			m.chat.SetLoading(true)
+			ctx := m.ctx
 			client := m.tgClient
 			peer := msg.Chat.Peer
 			chatID := msg.Chat.ID
 			limit := m.historyLimit
 			return m, tea.Batch(retransmit, func() tea.Msg {
-				msgs, err := client.GetHistory(context.Background(), peer, 0, limit)
+				msgs, err := client.GetHistory(ctx, peer, 0, limit)
 				if err != nil {
 					return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
 				}
@@ -84,13 +83,14 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
+		ctx := m.ctx
 		client := m.tgClient
 		peer := chat.Peer
 		offsetID := msg.OffsetID
 		limit := m.historyLimit
 		chatID := msg.ChatID
 		return m, func() tea.Msg {
-			msgs, err := client.GetHistory(context.Background(), peer, offsetID, limit)
+			msgs, err := client.GetHistory(ctx, peer, offsetID, limit)
 			if err != nil {
 				return StatusErrMsg{Text: "load history failed: " + err.Error(), Sev: components.SeverityWarning}
 			}
@@ -135,7 +135,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		}
 		// No photo on the request → a video message; open the full file in a player.
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			return m, openDocumentCmd(m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
+			return m, openDocumentCmd(m.ctx, m.tgClient, m.currentPeer(), m.chat.SelectedMessageID(), ref, m.tmpDir)
 		}
 		return m, nil
 

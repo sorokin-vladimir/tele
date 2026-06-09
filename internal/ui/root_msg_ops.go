@@ -52,13 +52,14 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 		m.st.AppendMessage(sentinel)
 		m.chat.SetMessages(m.st.Messages(m.currentChatID))
 	}
+	ctx := m.ctx
 	client := m.tgClient
 	peer := msg.Peer
 	text := msg.Text
 	replyToMsgID := msg.ReplyToMsgID
 	chatID := m.currentChatID
 	return m, func() tea.Msg {
-		realID, err := client.SendMessage(context.Background(), peer, text, replyToMsgID)
+		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID)
 		if err != nil {
 			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: 0, failed: true}
 		}
@@ -92,12 +93,13 @@ func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.C
 	origMessages := m.st.Messages(chatID)
 	m.st.UpdateMessageText(chatID, msg.MsgID, msg.Text, time.Now())
 	m.chat.SetMessages(m.st.Messages(chatID))
+	ctx := m.ctx
 	client := m.tgClient
 	peer := msg.Peer
 	msgID := msg.MsgID
 	text := msg.Text
 	return m, func() tea.Msg {
-		if err := client.EditMessage(context.Background(), peer, msgID, text); err != nil {
+		if err := client.EditMessage(ctx, peer, msgID, text); err != nil {
 			return editMsgFailedMsg{chatID: chatID, messages: origMessages}
 		}
 		return nil
@@ -118,15 +120,18 @@ func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea
 	if m.tgClient == nil {
 		return m, nil
 	}
+	appCtx := m.ctx
 	client := m.tgClient
 	peer := msg.Peer
 	action := msg.Action
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Run as a managed tea.Cmd (not a detached goroutine) so the RPC is bound to
+	// the app lifecycle context and cancelled on shutdown.
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 		defer cancel()
 		_ = client.SetTyping(ctx, peer, action)
-	}()
-	return m, nil
+		return nil
+	}
 }
 
 func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootModel, tea.Cmd) {
@@ -165,10 +170,11 @@ func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootM
 	if !ok {
 		return m, nil
 	}
+	ctx := m.ctx
 	client := m.tgClient
 	peer := chat.Peer
 	return m, func() tea.Msg {
-		if err := client.SendReaction(context.Background(), peer, msgID, sendEmoji); err != nil {
+		if err := client.SendReaction(ctx, peer, msgID, sendEmoji); err != nil {
 			return reactionFailedMsg{chatID: chatID, msgID: msgID, reactions: origReactions}
 		}
 		return nil
@@ -201,12 +207,13 @@ func (m RootModel) handleDeleteMsg(msg components.DeleteMsgRequest) (RootModel, 
 	if !ok {
 		return m, nil
 	}
+	ctx := m.ctx
 	client := m.tgClient
 	peer := chat.Peer
 	msgID := msg.MsgID
 	revoke := msg.Revoke
 	return m, func() tea.Msg {
-		if err := client.DeleteMessages(context.Background(), peer, []int{msgID}, revoke); err != nil {
+		if err := client.DeleteMessages(ctx, peer, []int{msgID}, revoke); err != nil {
 			return deleteMsgFailedMsg{chatID: chatID, messages: origMessages}
 		}
 		return nil

@@ -10,7 +10,23 @@ const defaultCellAspect = 2.0
 var (
 	cellAspectOnce sync.Once
 	cellAspectVal  float64
+
+	cellPxOnce sync.Once
+	cellPxW    float64
+	cellPxH    float64
 )
+
+// CellPx returns the terminal's real cell pixel width and height, detected once
+// from the controlling TTY. Returns (0,0) when the terminal does not report
+// pixel dimensions. Used to transmit images at the reserved box's true pixel
+// size so terminals that do not upscale Unicode-placeholder images still fill
+// the box.
+func CellPx() (float64, float64) {
+	cellPxOnce.Do(func() {
+		cellPxW, cellPxH = detectCellPx()
+	})
+	return cellPxW, cellPxH
+}
 
 // CellAspect returns the terminal's real cell aspect ratio (height/width),
 // detected once from the controlling TTY. Falls back to defaultCellAspect when

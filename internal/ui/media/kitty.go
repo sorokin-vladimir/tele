@@ -76,13 +76,55 @@ func DeleteAllSeq() string {
 	return ansi.KittyGraphics(nil, opts.Options()...)
 }
 
-// TransmitSeq encodes a transmit-and-virtual-place sequence for an image scaled
-// into cols×rows cells. The image is downscaled to bound bandwidth.
-func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
-	maxPx := uint(cols * transmitCellPx)
-	if b := img.Bounds(); maxPx > 0 && uint(b.Dx()) > maxPx {
-		img = resize.Resize(maxPx, 0, img, resize.Bilinear) // 0 height preserves aspect
+// maxTransmitPx caps the transmitted image width so an extreme cell size or
+// column count cannot produce an absurdly large upload.
+const maxTransmitPx = 2048
+
+// transmitTargetWidth returns the pixel width to transmit an image at so it
+// fills cols cells at the terminal's real cell width. Returns 0 when the width
+// should be left unchanged (cell size unknown and no bandwidth bound applies).
+//
+// When the terminal reports its cell pixel size we size the image to the box's
+// true pixel width (scaling up small thumbnails too): terminals such as Ghostty
+// render Unicode-placeholder images at the image's own resolution rather than
+// stretching them to the c×r cell box, so a small thumbnail otherwise shows up
+// shrunken in the corner of its reserved space. When the cell size is unknown we
+// fall back to a width bound that only downscales (the prior behavior).
+func transmitTargetWidth(curW, cols int, cellW float64) int {
+	if cellW > 0 {
+		target := int(float64(cols)*cellW + 0.5)
+		if target > maxTransmitPx {
+			target = maxTransmitPx
+		}
+		if target <= 0 || target == curW {
+			return 0
+		}
+		return target
 	}
+	// Unknown cell size: bound bandwidth by downscaling only, never upscale.
+	maxPx := cols * transmitCellPx
+	if maxPx > 0 && curW > maxPx {
+		return maxPx
+	}
+	return 0
+}
+
+// scaleForTransmit resizes img to fill cols cells at the terminal's real cell
+// width, preserving aspect ratio. See transmitTargetWidth for the rationale.
+func scaleForTransmit(img image.Image, cols int) image.Image {
+	cw, _ := CellPx()
+	target := transmitTargetWidth(img.Bounds().Dx(), cols, cw)
+	if target == 0 {
+		return img
+	}
+	return resize.Resize(uint(target), 0, img, resize.Bilinear) // 0 height preserves aspect
+}
+
+// TransmitSeq encodes a transmit-and-virtual-place sequence for an image scaled
+// into cols×rows cells. The image is resized to the reserved box's real pixel
+// size so it fills the placement regardless of terminal upscaling behavior.
+func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
+	img = scaleForTransmit(img, cols)
 	var buf bytes.Buffer
 	opts := &kitty.Options{
 		Action: kitty.TransmitAndPut,

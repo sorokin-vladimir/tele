@@ -529,10 +529,10 @@ func (ml *MessageList) AtBottom() bool {
 	botIdx, botOff := ml.positionAtBottom()
 	return ml.viewStart == botIdx && ml.lineOffset >= botOff
 }
-func (ml *MessageList) SetIsGroup(v bool)                { ml.isGroup = v }
-func (ml *MessageList) SetOutboxReadMaxID(id int)        { ml.outboxReadMaxID = id }
-func (ml *MessageList) SetInboxReadMaxID(id int)         { ml.inboxReadMaxID = id }
-func (ml *MessageList) SetDarkBackground(isDark bool)    { ml.hasDarkBackground = isDark }
+func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v }
+func (ml *MessageList) SetOutboxReadMaxID(id int)     { ml.outboxReadMaxID = id }
+func (ml *MessageList) SetInboxReadMaxID(id int)      { ml.inboxReadMaxID = id }
+func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
 
 func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
 	idx := senderID % 8

@@ -21,10 +21,25 @@ func kittyTailMsgs() []store.Message {
 	}
 }
 
+// photoBubbleHeight returns the rendered line count of the tail photo bubble by
+// rendering a tall viewport (no trimming) and counting the bordered rows.
+func photoBubbleHeight(ml *components.MessageList) int {
+	ml.SetSize(80, 200)
+	defer ml.SetSize(80, 200)
+	lines := strings.Split(stripANSI(ml.View()), "\n")
+	n := 0
+	for _, l := range lines {
+		if strings.Contains(l, "│") || strings.Contains(l, "╭") || strings.Contains(l, "╰") {
+			n++
+		}
+	}
+	return n
+}
+
 // Issue #115: in Kitty mode the image bytes can be known (in ml.images) while
-// the placement is still being transmitted (store not Ready). msgHeight must not
-// reserve the full footprint then, or positionAtBottom parks the viewport inside
-// lines the renderer only draws as a 1-line placeholder, hiding the new tail.
+// the placement is still being transmitted (store not Ready). The bubble reserves
+// the image's full footprint immediately and draws a full-height placeholder box,
+// so the new tail message is fully visible (not clipped) even before transmit.
 func TestMessageList_Kitty_TailPhoto_NotTransmitted_StaysVisible(t *testing.T) {
 	store0 := media.NewKittyStore()
 	ml := components.NewMessageList(10, 80)
@@ -35,15 +50,13 @@ func TestMessageList_Kitty_TailPhoto_NotTransmitted_StaysVisible(t *testing.T) {
 
 	out := stripANSI(ml.View())
 	assert.Len(t, strings.Split(out, "\n"), 10, "viewport must always be exactly viewHeight lines")
-	assert.Contains(t, out, "the tail", "new tail message must be visible before the image is transmitted")
-	assert.True(t, ml.AtBottom(), "viewport must report at-bottom while the placeholder is shown")
+	assert.Contains(t, out, "the tail", "new tail caption must be visible before the image is transmitted")
 }
 
-// Issue #115: once the placement transmits, the photo grows to its full
-// footprint, moving the natural bottom down. The root handler re-anchors using
-// AtBottom (captured before) + ScrollToBottom (after). This verifies those
-// primitives keep the new tail fully visible across the height growth.
-func TestMessageList_Kitty_TailPhoto_TransmitReanchorsToBottom(t *testing.T) {
+// Part A invariant: the bubble height is identical before and after the Kitty
+// placement transmits — the image swaps into the already-reserved full-height
+// placeholder box, so there is no scroll jump and no re-anchor is needed.
+func TestMessageList_Kitty_TailPhoto_HeightStableAcrossTransmit(t *testing.T) {
 	store0 := media.NewKittyStore()
 	ml := components.NewMessageList(10, 80)
 	ml.SetRenderer(media.NewKittyRenderer(store0))
@@ -51,35 +64,10 @@ func TestMessageList_Kitty_TailPhoto_TransmitReanchorsToBottom(t *testing.T) {
 	ml.SetMessages(kittyTailMsgs())
 	ml.SetImage(42, image.NewRGBA(image.Rect(0, 0, 400, 400)))
 
-	// Mirror RootModel.kittyTransmittedMsg: capture at-bottom with pre-growth
-	// heights, mark transmitted (heights grow), then re-anchor.
-	wasAtBottom := ml.AtBottom()
+	before := photoBubbleHeight(ml)
 	store0.MarkTransmitted(42, ml.PhotoContentCols())
-	if wasAtBottom {
-		ml.ScrollToBottom()
-	}
+	after := photoBubbleHeight(ml)
 
-	out := stripANSI(ml.View())
-	lines := strings.Split(out, "\n")
-	assert.Len(t, lines, 10, "viewport must be exactly viewHeight lines")
-	assert.Contains(t, out, "the tail", "newest message caption must be visible after the photo expands")
-	// The very last viewport line is the tail bubble's bottom border, proving the
-	// true tail is reached rather than clipped above the fold.
-	assert.Contains(t, lines[len(lines)-1], "╰", "last line must be the tail bubble's bottom border")
-}
-
-// Guards the contract that CanRender is exactly "Render(...) != nil"; the height
-// calc relies on this equivalence to stay in lock-step with renderMessage.
-func TestKittyRenderer_CanRender_MatchesRenderNil(t *testing.T) {
-	store0 := media.NewKittyStore()
-	r := media.NewKittyRenderer(store0)
-	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
-	const cols = 40
-
-	assert.False(t, r.CanRender(42, cols))
-	assert.Nil(t, r.Render(42, img, cols), "Render must be nil while CanRender is false")
-
-	store0.MarkTransmitted(42, cols)
-	assert.True(t, r.CanRender(42, cols))
-	assert.NotNil(t, r.Render(42, img, cols), "Render must be non-nil once CanRender is true")
+	assert.Equal(t, before, after, "photo bubble height must not change when the placement transmits")
+	assert.Greater(t, before, 3, "bytes-known photo must reserve its full footprint, not a 1-line placeholder")
 }

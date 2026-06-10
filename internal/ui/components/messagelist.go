@@ -520,15 +520,6 @@ func (ml *MessageList) ViewHeight() int { return ml.viewHeight }
 // is no selected message or View() has not run yet.
 func (ml *MessageList) SelectedBubbleRect() (Rect, bool) { return ml.selRect, ml.selRectOK }
 func (ml *MessageList) AtTop() bool                      { return ml.viewStart == 0 && ml.lineOffset == 0 }
-
-// AtBottom reports whether the viewport is anchored at the natural bottom (the
-// newest content is fully visible). It uses the current item heights, so a
-// caller can capture it before an async height change (e.g. a Kitty placement
-// finishing transmission) and re-anchor afterward to keep the tail pinned.
-func (ml *MessageList) AtBottom() bool {
-	botIdx, botOff := ml.positionAtBottom()
-	return ml.viewStart == botIdx && ml.lineOffset >= botOff
-}
 func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v }
 func (ml *MessageList) SetOutboxReadMaxID(id int)     { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)      { ml.inboxReadMaxID = id }
@@ -745,12 +736,12 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 
 	if msg.Media != nil {
 		cols := ml.photoContentCols()
-		// Reserve the full image footprint only when the renderer will actually
-		// draw it. While a Kitty placement is still being transmitted, Render
-		// yields the 1-line text placeholder, so msgHeight must match that or the
-		// bottom clamp parks the viewport inside lines that never render and the
-		// new tail message is hidden/unreachable (issue #115).
-		if id, ok := PreviewImageID(msg); ok && ml.renderer.CanRender(id, cols) {
+		// Reserve the full image footprint as soon as the image bytes are known,
+		// regardless of whether a Kitty placement has been transmitted yet. The
+		// renderer draws a full-height placeholder box until the image is ready,
+		// so the rendered height always equals this reserved height: no hidden
+		// tail (issue #115) and no scroll jump when the placement lands.
+		if id, ok := PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				b := img.Bounds()
 				h += ml.renderer.Footprint(b.Dx(), b.Dy(), cols)
@@ -758,10 +749,10 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 					h++ // play/duration overlay line under the thumbnail
 				}
 			} else {
-				h++ // placeholder line
+				h++ // text placeholder line (bytes not downloaded yet)
 			}
 		} else {
-			h++ // placeholder line
+			h++ // text placeholder line
 		}
 		if msg.Text != "" {
 			h++ // blank separator line between media and caption
@@ -1108,13 +1099,20 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	}
 
 	if msg.Media != nil {
+		cols := ml.photoContentCols()
 		var artLines []string
+		hasBytes, footprint := false, 0
 		if id, ok := PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
-				artLines = ml.renderer.Render(id, img, ml.photoContentCols())
+				hasBytes = true
+				bb := img.Bounds()
+				footprint = ml.renderer.Footprint(bb.Dx(), bb.Dy(), cols)
+				artLines = ml.renderer.Render(id, img, cols)
 			}
 		}
-		if artLines != nil {
+		blankRow := bs.Render(b.Left) + strings.Repeat(" ", innerW) + bs.Render(b.Right)
+		switch {
+		case artLines != nil:
 			for _, al := range artLines {
 				lw := lipgloss.Width(al)
 				if lw < actualW {
@@ -1125,16 +1123,31 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 			if overlay := videoOverlayLabel(msg.Media); overlay != "" {
 				sideLines = append(sideLines, labelLine(overlay, actualW, b, bs))
 			}
-		} else if msg.Media.Kind == store.MediaVoice && msg.Document != nil &&
-			msg.Document.ID == ml.playingVoiceID {
+		case hasBytes:
+			// Bytes are known but the Kitty placement is not transmitted yet. Fill
+			// the full reserved footprint with a placeholder box (label on the first
+			// row) so the rendered height matches msgHeight — the image swaps in at
+			// the same size with no scroll jump or hidden tail (issue #115).
+			for i := 0; i < footprint; i++ {
+				if i == 0 {
+					sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
+				} else {
+					sideLines = append(sideLines, blankRow)
+				}
+			}
+			if videoOverlayLabel(msg.Media) != "" {
+				sideLines = append(sideLines, labelLine(videoOverlayLabel(msg.Media), actualW, b, bs))
+			}
+		case msg.Media.Kind == store.MediaVoice && msg.Document != nil &&
+			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
 			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
 			sideLines = append(sideLines, labelLine(label, actualW, b, bs))
-		} else {
+		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}
 		if msg.Text != "" {
-			sideLines = append(sideLines, bs.Render(b.Left)+strings.Repeat(" ", innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, blankRow)
 		}
 	}
 

@@ -89,12 +89,6 @@ func (r *BlockRenderer) Footprint(imgW, imgH, cols int) int {
 	return PhotoTermLines(imgW, imgH, cols)
 }
 
-// CanRender is always true: block-art is drawn synchronously from the decoded
-// image, so Render never returns nil once the image bytes are known.
-func (r *BlockRenderer) CanRender(photoID int64, cols int) bool {
-	return true
-}
-
 // Reset clears the render cache (call when the target width changes).
 func (r *BlockRenderer) Reset() {
 	clear(r.cache)

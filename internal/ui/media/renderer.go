@@ -13,12 +13,6 @@ type Renderer interface {
 	// imgW×imgH image at cols columns. Callers (layout height calc, Kitty
 	// transmit, placeholder grid) share it to stay in lock-step.
 	Footprint(imgW, imgH, cols int) int
-	// CanRender reports whether Render will return image lines (rather than nil)
-	// for this photo at cols right now. The layout height calc uses it to avoid
-	// reserving the full Footprint while Render would still yield only the text
-	// placeholder (Kitty: image not yet transmitted). It is exactly equivalent to
-	// "Render(...) != nil" but cheap and side-effect free.
-	CanRender(photoID int64, cols int) bool
 	// Reset drops any cached output (call on width change).
 	Reset()
 }

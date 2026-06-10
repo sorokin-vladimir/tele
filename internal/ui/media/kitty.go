@@ -58,6 +58,7 @@ func (s *KittyStore) MarkTransmitted(photoID int64, cols int) {
 	s.colsByPhoto[photoID] = cols
 }
 
+
 // Clear marks every image untransmitted (ids stay stable). Call after sending
 // DeleteAllSeq so images re-transmit on demand.
 func (s *KittyStore) Clear() {
@@ -174,14 +175,6 @@ func (r *KittyRenderer) SetCellAspect(a float64) {
 // cell aspect ratio.
 func (r *KittyRenderer) Footprint(imgW, imgH, cols int) int {
 	return kittyTermLines(imgW, imgH, cols, r.cellAspect)
-}
-
-// CanRender reports whether the image is transmitted at cols, i.e. whether
-// Render will emit the placeholder grid instead of nil. It mirrors Render's
-// readiness gate so the layout height calc reserves the footprint only once the
-// placement actually exists (issue #115).
-func (r *KittyRenderer) CanRender(photoID int64, cols int) bool {
-	return r.store.Ready(photoID, cols)
 }
 
 // Render returns placeholder lines, or nil if the image is not yet transmitted

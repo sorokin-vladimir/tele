@@ -115,10 +115,16 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		}
 	}()
 
+	dialer := proxy.FromEnvironment()
+	if dialer != proxy.Direct {
+		c.log.Info("using system proxy from ALL_PROXY")
+	}
 	resolver := dcs.Plain(dcs.PlainOptions{
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			d := proxy.FromEnvironment()
-			return d.(proxy.ContextDialer).DialContext(ctx, network, addr)
+			if cd, ok := dialer.(proxy.ContextDialer); ok {
+				return cd.DialContext(ctx, network, addr)
+			}
+			return dialer.Dial(network, addr)
 		},
 	})
 

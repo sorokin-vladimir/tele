@@ -20,6 +20,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- Desktop notifications are no longer shown for muted chats or chats in the
+  Archive folder (archived chats are now treated as muted)
+- Mute/unmute performed on another device is now reflected at runtime, so muted
+  chats stop notifying without needing an app restart
 - Emoji reaction picker now responds to non-Latin keyboard layouts (e.g. the
   Russian `hjkl` navigation keys), matching the remap used everywhere else
 

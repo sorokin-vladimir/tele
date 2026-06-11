@@ -83,6 +83,24 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 				m.chat.SetChat(&chat)
 			}
 		}
+	case store.EventMuteUpdate:
+		// Mute toggled on another device. Sync the store's single source of
+		// truth, then refresh the list (mute marker) and folder bar (ExcludeMuted
+		// folders depend on it). Skip all UI work when nothing actually changed.
+		chat, ok := m.st.GetChat(msg.ChatID)
+		if !ok || chat.IsMuted == msg.Muted {
+			return m, nil
+		}
+		m.st.SetChatMuted(msg.ChatID, msg.Muted)
+		m.chatList.SetChats(m.filteredChats())
+		if m.folderBar != nil {
+			m.syncFolderBar()
+		}
+		if msg.ChatID == m.currentChatID {
+			if c, ok := m.st.GetChat(msg.ChatID); ok {
+				m.chat.SetChat(&c)
+			}
+		}
 	case store.EventTyping:
 		if msg.ChatID != m.currentChatID {
 			return m, nil

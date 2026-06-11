@@ -335,6 +335,68 @@ func TestSetupDispatcher_NewChannelMessage_Suppressed(t *testing.T) {
 	}
 }
 
+func TestSetupDispatcher_NotifySettings_Muted_EmitsMuteEvent(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	var settings tg.PeerNotifySettings
+	settings.SetMuteUntil(2147483647) // math.MaxInt32: muted indefinitely
+	upd := &tg.UpdateNotifySettings{
+		Peer:           &tg.NotifyPeer{Peer: &tg.PeerChannel{ChannelID: 500}},
+		NotifySettings: settings,
+	}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventMuteUpdate, evt.Kind)
+		assert.Equal(t, int64(500), evt.ChatID)
+		assert.True(t, evt.Muted)
+	case <-time.After(time.Second):
+		t.Fatal("no mute event received")
+	}
+}
+
+func TestSetupDispatcher_NotifySettings_Unmuted_EmitsMuteEvent(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	var settings tg.PeerNotifySettings
+	settings.SetMuteUntil(0)
+	upd := &tg.UpdateNotifySettings{
+		Peer:           &tg.NotifyPeer{Peer: &tg.PeerUser{UserID: 42}},
+		NotifySettings: settings,
+	}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventMuteUpdate, evt.Kind)
+		assert.Equal(t, int64(42), evt.ChatID)
+		assert.False(t, evt.Muted)
+	case <-time.After(time.Second):
+		t.Fatal("no mute event received")
+	}
+}
+
+func TestSetupDispatcher_NotifySettings_GlobalCategory_Ignored(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	upd := &tg.UpdateNotifySettings{
+		Peer:           &tg.NotifyUsers{},
+		NotifySettings: tg.PeerNotifySettings{},
+	}
+	err := dispatcher.Handle(context.Background(), &tg.Updates{Updates: []tg.UpdateClass{upd}})
+	require.NoError(t, err)
+
+	select {
+	case <-mustDeliver:
+		t.Fatal("global category notify settings must not emit a per-chat mute event")
+	case <-time.After(100 * time.Millisecond):
+		// expected: no event
+	}
+}
+
 func TestConvertTypingAction_Typing(t *testing.T) {
 	assert.Equal(t, store.TypingActionTyping, convertTypingAction(&tg.SendMessageTypingAction{}))
 }

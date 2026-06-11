@@ -199,6 +199,32 @@ func setupDispatcher(
 		return nil
 	})
 
+	// Mute/unmute performed on another device. Keeps the store's per-chat mute
+	// flag in sync at runtime so notifications and the chat list stay correct
+	// without a restart. NotifySettings is a generic (non-pts) update, so it is
+	// safe to handle via the dispatcher.
+	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, upd *tg.UpdateNotifySettings) error {
+		// We only track per-chat mute state; ignore global category defaults
+		// (NotifyUsers/NotifyChats/NotifyBroadcasts) and forum-topic settings.
+		np, ok := upd.Peer.(*tg.NotifyPeer)
+		if !ok {
+			return nil
+		}
+		chatID := peerIDFromPeer(np.Peer)
+		if chatID == 0 {
+			return nil
+		}
+		select {
+		case mustDeliver <- store.Event{
+			Kind:   store.EventMuteUpdate,
+			ChatID: chatID,
+			Muted:  mutedFromSettings(upd.NotifySettings),
+		}:
+		case <-ctx.Done():
+		}
+		return nil
+	})
+
 	// OnReadHistoryOutbox / OnReadChannelOutbox are NOT registered here.
 	// They are intercepted before pts-tracking in outboxHook (see client.go),
 	// because pts gaps cause updates.Manager to silently drop these events.

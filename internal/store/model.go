@@ -171,6 +171,9 @@ const (
 	EventDeleteMessages
 	EventUserPresence
 	EventTyping
+	// EventMuteUpdate reports that a chat's mute state changed server-side
+	// (e.g. muted/unmuted from another device).
+	EventMuteUpdate
 )
 
 type TypingAction int
@@ -224,4 +227,5 @@ type Event struct {
 	Reactions    []Reaction
 	Online       bool
 	TypingAction TypingAction
+	Muted        bool
 }

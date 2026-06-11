@@ -388,7 +388,13 @@ func convertChannel(ch *tg.Channel) (store.Chat, bool) {
 }
 
 func isMuted(d *tg.Dialog) bool {
-	muteUntil, hasMute := d.NotifySettings.GetMuteUntil()
+	return mutedFromSettings(d.NotifySettings)
+}
+
+// mutedFromSettings reports whether the given notify settings mean the peer is
+// currently muted. Shared by initial dialog parsing and live UpdateNotifySettings.
+func mutedFromSettings(s tg.PeerNotifySettings) bool {
+	muteUntil, hasMute := s.GetMuteUntil()
 	if !hasMute {
 		return false
 	}

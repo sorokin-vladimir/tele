@@ -221,14 +221,17 @@ list of action names and what each one does.
 
 ## Roadmap
 
-Tracked via [GitHub milestones](https://github.com/sorokin-vladimir/tele/milestones).
+Planned work lives on the public [**project board**](https://github.com/users/sorokin-vladimir/projects/2),
+grouped into release [milestones](https://github.com/sorokin-vladimir/tele/milestones).
 
-| Milestone                  | Focus                                  |
-| -------------------------- | -------------------------------------- |
-| Security & Reliability     | safer event handling, logging, cleanup |
-| Architecture & Performance | caching, memory caps, optimization     |
-| Feature Completeness       | forwarding, mentions, drafts, search   |
-| Power User & Polish        | themes, vim motions, command palette   |
+| Release   | Focus                                                                                |
+| --------- | ------------------------------------------------------------------------------------ |
+| `v1.4.0`  | Reliability and media correctness — OOM-safe downloads, scroll and image-height fixes, static stickers |
+| `v1.5.0`  | Composer media sending, mentions, drafts, inline GIF                                  |
+| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search            |
+
+Work is also categorized by theme (Security & Reliability, Architecture & Performance,
+Feature Completeness, Power User & Polish) via the board's **Theme** field.
 
 ---
 

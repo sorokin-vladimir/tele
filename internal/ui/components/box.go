@@ -15,9 +15,18 @@ var hintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 // by one border character and spaces on each side. Pass "" to omit.
 // bottomHint is rendered in a dim color.
 // borderFg sets the border foreground color; nil means no color.
-func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Border, borderFg color.Color, w, h int) string {
+func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Border, borderFg color.Color, w, h int, scrollbar ...*Scrollbar) string {
 	innerW := w - 2
 	innerH := h - 2
+
+	var sb *Scrollbar
+	if len(scrollbar) > 0 {
+		sb = scrollbar[0]
+	}
+	thumbStart, thumbSize, showThumb := 0, 0, false
+	if sb != nil {
+		thumbStart, thumbSize, showThumb = sb.Info.Thumb(sb.TrackLen)
+	}
 
 	cb := func(s string) string { return s }
 	if borderFg != nil {
@@ -73,12 +82,19 @@ func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Borde
 
 	result := make([]string, 0, innerH+2)
 	result = append(result, top)
-	for _, l := range lines {
+	for ri, l := range lines {
 		lw := lipgloss.Width(l)
 		if lw < innerW {
 			l += strings.Repeat(" ", innerW-lw)
 		}
-		result = append(result, cb(b.Left)+l+cb(b.Right))
+		rightChar := b.Right
+		if showThumb && sb != nil && ri >= sb.TrackTop && ri < sb.TrackTop+sb.TrackLen {
+			tr := ri - sb.TrackTop
+			if tr >= thumbStart && tr < thumbStart+thumbSize {
+				rightChar = scrollThumbChar
+			}
+		}
+		result = append(result, cb(b.Left)+l+cb(rightChar))
 	}
 	result = append(result, bot)
 	return strings.Join(result, "\n")

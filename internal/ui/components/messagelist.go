@@ -528,6 +528,22 @@ func (ml *MessageList) ViewStart() int  { return ml.viewStart }
 func (ml *MessageList) LineOffset() int { return ml.lineOffset }
 func (ml *MessageList) ViewHeight() int { return ml.viewHeight }
 
+// ScrollInfo reports the message list's scroll position in rendered lines,
+// measured over the currently loaded window. Total grows as older history is
+// prepended; the viewport is top-anchored so visible content does not jump.
+func (ml *MessageList) ScrollInfo() ScrollInfo {
+	total := 0
+	for i := range ml.items {
+		total += ml.itemHeight(i)
+	}
+	offset := 0
+	for i := 0; i < ml.viewStart && i < len(ml.items); i++ {
+		offset += ml.itemHeight(i)
+	}
+	offset += ml.lineOffset
+	return ScrollInfo{Total: total, Visible: ml.viewHeight, Offset: offset}
+}
+
 // VisiblePhotoIDs returns the inline-image cache keys (PreviewImageID) for the
 // messages currently within the viewport, top to bottom. Kitty placements are a
 // bounded terminal resource, so the root transmits/keeps only on-screen images.

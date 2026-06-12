@@ -88,3 +88,48 @@ func TestRenderBox_WithSuffix_SpacesAroundDot(t *testing.T) {
 	require.Greater(t, dotIdx, 0)
 	assert.Equal(t, " ", string(lines[0][dotIdx-1]))
 }
+
+func TestRenderBox_Scrollbar_DrawsThumb(t *testing.T) {
+	// 6-tall box => innerH = 4. Content overflows: 100 rows, 4 visible, at top.
+	sb := &components.Scrollbar{
+		Info:     components.ScrollInfo{Total: 100, Visible: 4, Offset: 0},
+		TrackTop: 0,
+		TrackLen: 4,
+	}
+	out := components.RenderBox("a\nb\nc\nd", "", "", "", lipgloss.RoundedBorder(), nil, 6, 6, sb)
+	lines := strings.Split(out, "\n")
+	// lines[0] top border, lines[1..4] content, lines[5] bottom border.
+	// At top, thumb is row 0 of the track (content line 1), size 1.
+	assert.True(t, strings.HasSuffix(lines[1], "█"), "thumb on first content row")
+	assert.True(t, strings.HasSuffix(lines[2], "│"), "track elsewhere")
+	assert.True(t, strings.HasSuffix(lines[4], "│"), "track elsewhere")
+}
+
+func TestRenderBox_Scrollbar_NoOverflowPlainBorder(t *testing.T) {
+	sb := &components.Scrollbar{
+		Info:     components.ScrollInfo{Total: 2, Visible: 4, Offset: 0},
+		TrackTop: 0,
+		TrackLen: 4,
+	}
+	out := components.RenderBox("a\nb\nc\nd", "", "", "", lipgloss.RoundedBorder(), nil, 6, 6, sb)
+	assert.NotContains(t, out, "█", "content fits, no thumb")
+}
+
+func TestRenderBox_Scrollbar_SubRangeTrack(t *testing.T) {
+	// Track covers only the first 2 inner rows (e.g. message-list region);
+	// the remaining rows must keep a plain border even on overflow.
+	sb := &components.Scrollbar{
+		Info:     components.ScrollInfo{Total: 100, Visible: 2, Offset: 100},
+		TrackTop: 0,
+		TrackLen: 2,
+	}
+	out := components.RenderBox("a\nb\nc\nd", "", "", "", lipgloss.RoundedBorder(), nil, 6, 6, sb)
+	lines := strings.Split(out, "\n")
+	assert.True(t, strings.HasSuffix(lines[3], "│"), "row outside track is plain")
+	assert.True(t, strings.HasSuffix(lines[4], "│"), "row outside track is plain")
+}
+
+func TestRenderBox_NilScrollbar_Unchanged(t *testing.T) {
+	out := components.RenderBox("a\nb", "", "", "", lipgloss.RoundedBorder(), nil, 6, 6, nil)
+	assert.NotContains(t, out, "█")
+}

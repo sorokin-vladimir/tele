@@ -158,6 +158,19 @@ func (m *ChatListModel) CursorChat() (store.Chat, bool) {
 // Height returns the pane's content height in rows.
 func (m *ChatListModel) Height() int { return m.height }
 
+// ScrollInfo reports the chat list's scroll position for the pane scrollbar.
+// Offset mirrors the scroll math in View / CursorViewportRow.
+func (m *ChatListModel) ScrollInfo() components.ScrollInfo {
+	if m.height <= 0 {
+		return components.ScrollInfo{Total: len(m.chats), Visible: len(m.chats), Offset: 0}
+	}
+	start := 0
+	if m.cursor >= m.height {
+		start = m.cursor - m.height + 1
+	}
+	return components.ScrollInfo{Total: len(m.chats), Visible: m.height, Offset: start}
+}
+
 // CursorViewportRow returns the cursor's row index within the visible
 // viewport, accounting for scroll. It mirrors the scroll math in View.
 func (m *ChatListModel) CursorViewportRow() int {

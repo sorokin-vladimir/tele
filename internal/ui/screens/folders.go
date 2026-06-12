@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 )
@@ -101,6 +102,13 @@ func (m *FoldersModel) Focused() bool                      { return m.focused }
 func (m *FoldersModel) SetSize(width, height int)          { m.width = width; m.height = height }
 func (m *FoldersModel) SetUnreadCounts(counts map[int]int) { m.unreadCounts = counts }
 func (m *FoldersModel) Cursor() int                        { return m.cursor }
+
+// ScrollInfo reports the folders pane scroll position. The folders view does
+// not currently clip/scroll, so Offset is always 0; the indicator is shown only
+// if the list overflows the pane height (rare).
+func (m *FoldersModel) ScrollInfo() components.ScrollInfo {
+	return components.ScrollInfo{Total: len(m.folders), Visible: m.height, Offset: 0}
+}
 func (m *FoldersModel) Folders() []store.FolderFilter      { return m.folders }
 func (m *FoldersModel) Context() keys.Context              { return keys.ContextFolders }
 

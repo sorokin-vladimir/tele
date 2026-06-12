@@ -1410,3 +1410,22 @@ func TestMessageList_AudioMetadata(t *testing.T) {
 	assert.Contains(t, view, "Artist")
 	assert.Contains(t, view, "3:20")
 }
+
+func TestMessageList_ScrollInfo_TopAndBottom(t *testing.T) {
+	ml := components.NewMessageList(5, 40) // viewHeight 5
+	msgs := make([]store.Message, 0, 30)
+	for i := 1; i <= 30; i++ {
+		msgs = append(msgs, store.Message{ID: i, Text: "line"})
+	}
+	ml.SetMessages(msgs) // anchors at bottom
+
+	bottom := ml.ScrollInfo()
+	assert.Equal(t, 5, bottom.Visible)
+	assert.Greater(t, bottom.Total, bottom.Visible, "content overflows")
+	assert.Equal(t, bottom.Total-bottom.Visible, bottom.Offset, "anchored at bottom")
+
+	ml.ScrollToTop()
+	top := ml.ScrollInfo()
+	assert.Equal(t, 0, top.Offset, "scrolled to top")
+	assert.Equal(t, bottom.Total, top.Total, "total unchanged by scrolling")
+}

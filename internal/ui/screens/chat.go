@@ -143,6 +143,9 @@ func (m *ChatModel) SelectedBubbleRect() (components.Rect, bool) {
 // MessageListHeight is the number of rows the message list occupies, used to
 // bound where a menu anchored to a bubble may be placed.
 func (m *ChatModel) MessageListHeight() int      { return m.msgList.ViewHeight() }
+
+// ScrollInfo reports the message list's scroll position for the pane scrollbar.
+func (m *ChatModel) ScrollInfo() components.ScrollInfo { return m.msgList.ScrollInfo() }
 func (m *ChatModel) ScrollToMessage(id int) bool { return m.msgList.ScrollToMessage(id) }
 func (m *ChatModel) ReplyToMsgID() int           { return m.replyToMsgID }
 func (m *ChatModel) EditMsgID() int              { return m.editMsgID }

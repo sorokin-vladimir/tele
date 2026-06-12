@@ -356,3 +356,24 @@ func TestChatList_CursorViewportRow_Scrolled(t *testing.T) {
 	m.SetCursorByID(6) // index 5: start = 5-3+1 = 3, row = 5-3 = 2
 	assert.Equal(t, 2, m.CursorViewportRow())
 }
+
+func TestChatListModel_ScrollInfo(t *testing.T) {
+	m := screens.NewChatListModel()
+	chats := make([]store.Chat, 20)
+	for i := range chats {
+		chats[i] = store.Chat{ID: int64(i + 1), Title: "c"}
+	}
+	m.SetChats(chats)
+	m.SetSize(20, 5) // 5 visible rows
+
+	info := m.ScrollInfo()
+	assert.Equal(t, 20, info.Total)
+	assert.Equal(t, 5, info.Visible)
+	assert.Equal(t, 0, info.Offset, "cursor at top")
+
+	for i := 0; i < 19; i++ {
+		m.Update(keys.ActionMsg{Action: keys.ActionDown})
+	}
+	info = m.ScrollInfo()
+	assert.Equal(t, 15, info.Offset, "cursor at bottom => start = 20-5")
+}

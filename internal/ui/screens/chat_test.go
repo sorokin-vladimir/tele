@@ -501,3 +501,14 @@ func TestChatModel_Typing_CancelOnEscape(t *testing.T) {
 	require.True(t, ok, "escape after typing must emit SetTypingRequest, got %T", msg)
 	assert.Equal(t, store.TypingActionCancel, req.Action)
 }
+
+func TestChatModel_ScrollInfo_DelegatesToMessageList(t *testing.T) {
+	m := screens.NewChatModel(40, 12)
+	msgs := make([]store.Message, 0, 40)
+	for i := 1; i <= 40; i++ {
+		msgs = append(msgs, store.Message{ID: i, Text: "line"})
+	}
+	m.SetMessages(msgs)
+	info := m.ScrollInfo()
+	assert.Greater(t, info.Total, info.Visible, "overflowing chat reports overflow")
+}

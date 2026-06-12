@@ -167,3 +167,13 @@ func TestFolders_ArchivePreservesSelectionByID(t *testing.T) {
 	m.SetArchivePresent(false)
 	assert.Equal(t, 1, m.Cursor())
 }
+
+func TestFoldersModel_ScrollInfo(t *testing.T) {
+	m := screens.NewFoldersModel()
+	m.SetFolders([]store.FolderFilter{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}})
+	m.SetSize(18, 10)
+	info := m.ScrollInfo()
+	assert.Equal(t, 10, info.Visible)
+	assert.Equal(t, 0, info.Offset)
+	assert.LessOrEqual(t, info.Total, info.Visible) // fits => no thumb
+}

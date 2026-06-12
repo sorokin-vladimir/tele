@@ -21,6 +21,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 - Incoming reactions on your own messages no longer flip them to "edited";
   Telegram's hidden-edit flag is now respected (#118)
+- Returning from idle no longer fires a burst of desktop notifications for the
+  backlog of caught-up messages; only genuinely fresh messages now notify (#123)
 
 ## [1.3.0] - 2026-06-11 — Mute-aware notifications, incoming edits & proxy support
 

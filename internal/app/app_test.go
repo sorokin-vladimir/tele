@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ func TestMaybeNotify_SendsForOtherChat(t *testing.T) {
 	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ChatID: 2, Text: "hello there"},
+		Message: store.Message{ChatID: 2, Text: "hello there", Date: time.Now()},
 	}
 	maybeNotify(n, st, evt, 1)
 	require.Len(t, n.calls, 1)
@@ -53,7 +54,7 @@ func TestMaybeNotify_TruncatesLongText(t *testing.T) {
 	}
 	evt := store.Event{
 		Kind:    store.EventNewMessage,
-		Message: store.Message{ChatID: 2, Text: string(b)},
+		Message: store.Message{ChatID: 2, Text: string(b), Date: time.Now()},
 	}
 	maybeNotify(n, st, evt, 0)
 	require.Len(t, n.calls, 1)
@@ -93,6 +94,33 @@ func TestMaybeNotify_SilentForMutedChat(t *testing.T) {
 	}
 	maybeNotify(n, st, evt, 1)
 	assert.Empty(t, n.calls)
+}
+
+func TestMaybeNotify_SilentForStaleCatchUp(t *testing.T) {
+	n := &mockNotifier{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	// A backlog message recovered via getDifference carries its original
+	// (old) send time. It must not raise a notification (#123).
+	evt := store.Event{
+		Kind:    store.EventNewMessage,
+		Message: store.Message{ChatID: 2, Text: "missed while idle", Date: time.Now().Add(-time.Minute)},
+	}
+	maybeNotify(n, st, evt, 1)
+	assert.Empty(t, n.calls)
+}
+
+func TestMaybeNotify_SendsForFreshMessage(t *testing.T) {
+	n := &mockNotifier{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 2, Title: "Bob"})
+	evt := store.Event{
+		Kind:    store.EventNewMessage,
+		Message: store.Message{ChatID: 2, Text: "live now", Date: time.Now()},
+	}
+	maybeNotify(n, st, evt, 1)
+	require.Len(t, n.calls, 1)
+	assert.Equal(t, "Bob", n.calls[0].title)
 }
 
 func TestMaybeNotify_SilentForArchivedChat(t *testing.T) {

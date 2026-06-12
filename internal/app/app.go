@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/gen2brain/beeep"
@@ -40,25 +41,49 @@ func truncate(s string, n int) string {
 	return string(runes[:n]) + "…"
 }
 
-func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64) {
+// notifyFreshnessWindow bounds how old an incoming message may be and still
+// raise a desktop notification. Catch-up/backlog messages recovered via
+// getDifference after an idle period carry their original (old) send time, so
+// anything older than this window is treated as catch-up and stays silent
+// (#123). Live delivery latency is typically well under this.
+const notifyFreshnessWindow = 10 * time.Second
+
+// shouldNotify decides whether evt warrants a desktop notification. Pure and
+// clock-injected so the freshness rule is unit-testable. now is the reference
+// time the message age is measured against (time.Now() in production).
+func shouldNotify(st store.Store, evt store.Event, currentChatID int64, now time.Time) bool {
 	if evt.Kind != store.EventNewMessage {
-		return
+		return false
 	}
 	if evt.Message.IsOut {
-		return
+		return false
 	}
 	if evt.Message.ChatID == currentChatID {
-		return
+		return false
 	}
 	chat, ok := st.GetChat(evt.Message.ChatID)
 	if !ok {
-		return
+		return false
 	}
 	// Suppress notifications for muted chats and anything in the Archive
 	// folder (archived chats are treated as muted).
 	if chat.IsMuted || chat.IsArchived {
+		return false
+	}
+	// Suppress catch-up backlog: an old-dated message is a difference-recovery
+	// message, not live traffic (#123).
+	if now.Sub(evt.Message.Date) > notifyFreshnessWindow {
+		return false
+	}
+	return true
+}
+
+func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64) {
+	if !shouldNotify(st, evt, currentChatID, time.Now()) {
 		return
 	}
+	// shouldNotify guarantees the chat exists.
+	chat, _ := st.GetChat(evt.Message.ChatID)
 	_ = notifier.Notify(chat.Title, truncate(evt.Message.Text, 100))
 }
 

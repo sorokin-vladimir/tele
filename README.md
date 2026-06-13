@@ -227,7 +227,7 @@ grouped into release [milestones](https://github.com/sorokin-vladimir/tele/miles
 | Release   | Focus                                                                                |
 | --------- | ------------------------------------------------------------------------------------ |
 | `v1.4.0`  | Reliability and media correctness — OOM-safe downloads, scroll and image-height fixes, static stickers |
-| `v1.5.0`  | Composer media sending, mentions, drafts, inline GIF                                  |
+| `v1.5.0`  | Outbound media — send photos, videos, voice and files from the composer, GIF previews, drafts |
 | `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search            |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,

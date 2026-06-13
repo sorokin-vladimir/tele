@@ -790,6 +790,16 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 
 	h := 0
 
+	if msg.Forward != nil {
+		// "Forwarded from" label + origin name (renderForwardLines → 2 rows).
+		h += 2
+		// Blank separator between the forward header and any following content,
+		// matching renderMessage; without this the tail clips (issue #115).
+		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil {
+			h++
+		}
+	}
+
 	if msg.ReplyToMsgID != 0 {
 		if ml.findMessage(msg.ReplyToMsgID) != nil {
 			h += 2

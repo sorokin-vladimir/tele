@@ -178,6 +178,7 @@ photos:
   mode: auto              # auto | kitty | blocks — inline image renderer
   eager_full_quality: true
   kitty_placement_cap: 16 # max inline images kept on the terminal at once
+  max_long_side_px: 800   # cap a rendered image's long side; height also ≤ 2/3 pane
 ```
 
 > **`kitty_placement_cap`** bounds how many Kitty image placements are live on
@@ -185,6 +186,11 @@ photos:
 > scrolled-past) are transmitted; older ones are evicted. Transmitting an entire
 > heavy chat at once can exceed the terminal's image limit and corrupt
 > placements (shrunken/shifted photos) — lower the cap if you still see that.
+
+> **`max_long_side_px`** caps a rendered inline image's long side in pixels
+> (mirrors the desktop clients' fixed media size). The height is additionally
+> bounded to 2/3 of the chat pane so a tall photo never dominates the view.
+> Raise it for larger inline images, lower it for more compact ones.
 
 ### Customizing keybindings
 

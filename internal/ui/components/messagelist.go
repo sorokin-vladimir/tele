@@ -264,6 +264,7 @@ type MessageList struct {
 	showIndicator     bool
 	hasDarkBackground bool
 	renderer          media.Renderer
+	maxMediaPx        int // photos.max_long_side_px; 0 => media package default
 
 	// Voice playback state: the document being played, its progress (0..1) and
 	// current position in seconds. playingVoiceID == 0 means nothing is playing.
@@ -305,10 +306,28 @@ func (ml *MessageList) PhotoContentCols() int {
 	return ml.photoContentCols()
 }
 
-// PhotoFootprint exposes the active renderer's row footprint for an image, so
-// callers (e.g. Kitty transmit) stay in lock-step with the rendered grid.
-func (ml *MessageList) PhotoFootprint(imgW, imgH, cols int) int {
-	return ml.renderer.Footprint(imgW, imgH, cols)
+// photoBox returns the capped (cols, rows) cell box for an image in the chat
+// pane: width from photoContentCols, height bounded by the viewport and the
+// fixed 480px ceiling. All photo sizing (height reservation, render, Kitty
+// transmit, bubble width) goes through this so footprints stay in lock-step.
+func (ml *MessageList) photoBox(imgW, imgH int) (cols, rows int) {
+	cw, ch := media.CellPx()
+	return media.PhotoBox(imgW, imgH, ml.photoContentCols(), ml.viewHeight, ml.maxMediaPx, cw, ch, media.CellAspect())
+}
+
+// SetMaxMediaPx sets the long-side pixel cap for inline images
+// (photos.max_long_side_px). Zero leaves the media-package default in effect.
+func (ml *MessageList) SetMaxMediaPx(px int) {
+	if px != ml.maxMediaPx && ml.renderer != nil {
+		ml.renderer.Reset()
+	}
+	ml.maxMediaPx = px
+}
+
+// PhotoBox exposes the capped photo cell box to callers (Kitty transmit,
+// retransmit sizing) so they match the rendered grid.
+func (ml *MessageList) PhotoBox(imgW, imgH int) (int, int) {
+	return ml.photoBox(imgW, imgH)
 }
 
 // SetImage caches a downloaded photo for rendering.
@@ -834,7 +853,6 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	}
 
 	if msg.Media != nil {
-		cols := ml.photoContentCols()
 		// Reserve the full image footprint as soon as the image bytes are known,
 		// regardless of whether a Kitty placement has been transmitted yet. The
 		// renderer draws a full-height placeholder box until the image is ready,
@@ -843,7 +861,8 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 		if id, ok := PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				b := img.Bounds()
-				h += ml.renderer.Footprint(b.Dx(), b.Dy(), cols)
+				_, rows := ml.photoBox(b.Dx(), b.Dy())
+				h += rows
 				if videoOverlayLabel(msg.Media) != "" {
 					h++ // play/duration overlay line under the thumbnail
 				}
@@ -1050,6 +1069,14 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	}
 	if widenToPhotoCols {
 		photoCols := ml.photoContentCols()
+		// Once bytes are known, the rendered width may be narrower than the full
+		// budget (480px / viewport caps), so size the bubble to the actual image.
+		if id, ok := PreviewImageID(msg); ok {
+			if img, has := ml.images[id]; has {
+				bb := img.Bounds()
+				photoCols, _ = ml.photoBox(bb.Dx(), bb.Dy())
+			}
+		}
 		if photoCols > actualW {
 			actualW = photoCols
 		}
@@ -1191,14 +1218,14 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	}
 
 	if msg.Media != nil {
-		cols := ml.photoContentCols()
 		var artLines []string
 		hasBytes, footprint := false, 0
 		if id, ok := PreviewImageID(msg); ok {
 			if img, has := ml.images[id]; has {
 				hasBytes = true
 				bb := img.Bounds()
-				footprint = ml.renderer.Footprint(bb.Dx(), bb.Dy(), cols)
+				cols, rows := ml.photoBox(bb.Dx(), bb.Dy())
+				footprint = rows
 				artLines = ml.renderer.Render(id, img, cols)
 			}
 		}

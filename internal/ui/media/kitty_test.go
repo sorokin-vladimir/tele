@@ -81,7 +81,7 @@ func TestKittyRenderer_NilUntilTransmitted(t *testing.T) {
 	require.NotNil(t, r.Render(100, img, 8), "output once transmitted")
 }
 
-func TestKittyRenderer_FootprintMatchesPhotoTermLines(t *testing.T) {
+func TestKittyRenderer_FootprintMatchesPhotoRows(t *testing.T) {
 	s := media.NewKittyStore()
 	r := media.NewKittyRenderer(s)
 	img := sampleImage(20, 30)
@@ -89,7 +89,7 @@ func TestKittyRenderer_FootprintMatchesPhotoTermLines(t *testing.T) {
 	s.MarkTransmitted(100, cols)
 	lines := r.Render(100, img, cols)
 	b := img.Bounds()
-	require.Len(t, lines, media.PhotoTermLines(b.Dx(), b.Dy(), cols))
+	require.Len(t, lines, media.PhotoRows(b.Dx(), b.Dy(), cols, media.CellAspect()))
 }
 
 func TestKittyRenderer_LineWidthEqualsCols(t *testing.T) {

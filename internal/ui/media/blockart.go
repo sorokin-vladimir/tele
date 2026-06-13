@@ -22,13 +22,10 @@ func RenderBlockArt(img image.Image, cols int) []string {
 	if srcW == 0 || srcH == 0 {
 		return nil
 	}
-	// Half-blocks (▄) give 2 image rows per terminal row, which already compensates
-	// for the ~2:1 terminal cell aspect ratio — no additional scaling needed.
-	targetH := uint(cols) * uint(srcH) / uint(srcW)
-	if targetH == 0 {
-		targetH = 2
-	}
-	scaled := resize.Resize(uint(cols), targetH, img, resize.Bilinear)
+	// Block-art packs 2 image rows per terminal row (▄). Resize to the shared box
+	// height so the footprint matches PhotoRows / Kitty on any cell aspect.
+	rows := PhotoRows(srcW, srcH, cols, CellAspect())
+	scaled := resize.Resize(uint(cols), uint(rows*2), img, resize.Bilinear)
 	sb := scaled.Bounds()
 	width := sb.Dx()
 	height := sb.Dy()
@@ -84,11 +81,6 @@ func (r *BlockRenderer) Render(photoID int64, img image.Image, cols int) []strin
 	return v
 }
 
-// Footprint returns the half-block row height (2 image rows per cell).
-func (r *BlockRenderer) Footprint(imgW, imgH, cols int) int {
-	return PhotoTermLines(imgW, imgH, cols)
-}
-
 // Reset clears the render cache (call when the target width changes).
 func (r *BlockRenderer) Reset() {
 	clear(r.cache)
@@ -101,32 +93,12 @@ func (r *BlockRenderer) Reset() {
 // Cols are independently capped well below this by photoContentCols.
 const maxPhotoRows = 256
 
-// PhotoTermLines returns the number of terminal lines RenderBlockArt produces
-// for an image of imgW×imgH pixels scaled to cols columns. The result is capped
-// at maxPhotoRows; because every renderer and the layout height calc all go
-// through this function, the cap keeps their footprints in lock-step.
-func PhotoTermLines(imgW, imgH, cols int) int {
-	if imgW == 0 || cols == 0 {
-		return 1
-	}
-	targetH := cols * imgH / imgW
-	if targetH == 0 {
-		targetH = 2
-	}
-	rows := (targetH + 1) / 2
-	if rows > maxPhotoRows {
-		rows = maxPhotoRows
-	}
-	return rows
-}
-
-// kittyTermLines returns the terminal-row footprint for an image rendered as
-// real pixels (Kitty), scaling by the terminal's true cell aspect ratio
-// (cellAspect = cellHeight/cellWidth) so the cols×rows cell box matches the
-// image's aspect. Unlike PhotoTermLines (which assumes 2:1 for half-blocks),
-// this prevents the picture from being shorter than its reserved box.
-func kittyTermLines(imgW, imgH, cols int, cellAspect float64) int {
-	if imgW == 0 || cols == 0 {
+// PhotoRows returns the terminal-row height an imgW×imgH image occupies at cols
+// columns for a cell aspect (height/width). One formula shared by every renderer
+// so a photo is the same size in block-art and Kitty. Capped at maxPhotoRows
+// (the Kitty diacritic table bound).
+func PhotoRows(imgW, imgH, cols int, cellAspect float64) int {
+	if imgW <= 0 || cols <= 0 {
 		return 1
 	}
 	if cellAspect <= 0 {
@@ -140,6 +112,67 @@ func kittyTermLines(imgW, imgH, cols int, cellAspect float64) int {
 		rows = maxPhotoRows
 	}
 	return rows
+}
+
+// defaultMaxLongSidePx caps the rendered long side in pixels when the caller
+// passes a non-positive maxLongSidePx (config unset). Mirrors the desktop
+// client's fixed media ceiling. Applied per-axis (width and height), which is
+// equivalent to bounding the longest side while preserving aspect ratio.
+const defaultMaxLongSidePx = 800
+
+// PhotoBox returns the capped (cols, rows) cell box an imgW×imgH image renders
+// into. Width is the smaller of maxCols and the maxLongSidePx-equivalent; height
+// is the smaller of 2/3 of the chat pane, the maxLongSidePx-equivalent, and the
+// diacritic safety cap. maxLongSidePx ≤ 0 falls back to defaultMaxLongSidePx.
+// cellW/cellH are the terminal cell pixel size (0 when unknown — then the px
+// ceilings are inert and width falls back to maxCols, height to 2/3 viewport).
+// cellAspect (cell height/width) maps cols to rows. Downscale only; never larger
+// than the un-capped box.
+func PhotoBox(imgW, imgH, maxCols, viewHeight, maxLongSidePx int, cellW, cellH, cellAspect float64) (cols, rows int) {
+	if imgW <= 0 || imgH <= 0 || maxCols <= 0 {
+		return 0, 0
+	}
+	if cellAspect <= 0 {
+		cellAspect = defaultCellAspect
+	}
+	if maxLongSidePx <= 0 {
+		maxLongSidePx = defaultMaxLongSidePx
+	}
+	// Width ceiling: existing budget, tightened by the long-side px cap.
+	if cellW > 0 {
+		if c := int(float64(maxLongSidePx)/cellW + 0.5); c > 0 && c < maxCols {
+			maxCols = c
+		}
+	}
+	// Height ceiling: min(2/3 viewport, long-side px, diacritic safety).
+	rowsCap := maxPhotoRows
+	if viewHeight > 0 {
+		if r := viewHeight * 2 / 3; r < rowsCap {
+			rowsCap = r
+		}
+	}
+	if cellH > 0 {
+		if r := int(float64(maxLongSidePx)/cellH + 0.5); r > 0 && r < rowsCap {
+			rowsCap = r
+		}
+	}
+	if rowsCap < 1 {
+		rowsCap = 1
+	}
+	cols = maxCols
+	rows = PhotoRows(imgW, imgH, cols, cellAspect)
+	if rows > rowsCap {
+		// rows is linear in cols; scale cols down to land within the cap.
+		cols = cols * rowsCap / rows
+		if cols < 1 {
+			cols = 1
+		}
+		rows = PhotoRows(imgW, imgH, cols, cellAspect)
+		if rows > rowsCap {
+			rows = rowsCap // guard against rounding overshoot
+		}
+	}
+	return cols, rows
 }
 
 func clamp(v, lo, hi int) int {

@@ -111,11 +111,11 @@ func (m *ChatModel) SetKnownImages(cache map[int64]image.Image) { m.msgList.SetK
 func (m *ChatModel) SetRenderer(r media.Renderer)               { m.msgList.SetRenderer(r) }
 func (m *ChatModel) VisiblePhotoIDs() []int64                   { return m.msgList.VisiblePhotoIDs() }
 func (m *ChatModel) PhotoContentCols() int                      { return m.msgList.PhotoContentCols() }
-func (m *ChatModel) PhotoFootprint(imgW, imgH, cols int) int {
-	return m.msgList.PhotoFootprint(imgW, imgH, cols)
-}
-func (m *ChatModel) SetOutboxReadMaxID(id int) { m.msgList.SetOutboxReadMaxID(id) }
-func (m *ChatModel) SetInboxReadMaxID(id int)  { m.msgList.SetInboxReadMaxID(id) }
+func (m *ChatModel) PhotoBox(imgW, imgH int) (int, int)         { return m.msgList.PhotoBox(imgW, imgH) }
+func (m *ChatModel) PhotoViewHeight() int                       { return m.msgList.ViewHeight() }
+func (m *ChatModel) SetMaxMediaPx(px int)                       { m.msgList.SetMaxMediaPx(px) }
+func (m *ChatModel) SetOutboxReadMaxID(id int)                  { m.msgList.SetOutboxReadMaxID(id) }
+func (m *ChatModel) SetInboxReadMaxID(id int)                   { m.msgList.SetInboxReadMaxID(id) }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
 	return m.msgList.ScrollToFirstUnread(readMaxID)
 }

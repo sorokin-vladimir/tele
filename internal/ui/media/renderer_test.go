@@ -49,28 +49,19 @@ func TestBlockRenderer_ResetClearsCache(t *testing.T) {
 	require.NotSame(t, &first[0], &second[0])
 }
 
-func TestPhotoTermLines_CapsTallImages(t *testing.T) {
+func TestPhotoRows_CapsTallImages(t *testing.T) {
 	// A very tall, narrow image would otherwise need >297 rows, overflowing the
 	// Kitty diacritic table. The cap keeps it bounded and addressable.
-	rows := media.PhotoTermLines(10, 100000, 60)
+	rows := media.PhotoRows(10, 100000, 60, 2.0)
 	require.LessOrEqual(t, rows, 256)
 	require.Greater(t, rows, 0)
 }
 
-func TestKittyRenderer_FootprintUsesCellAspect(t *testing.T) {
-	// The Kitty path scales real pixels by the terminal's true cell aspect.
-	// Taller cells (larger H/W) must reserve FEWER rows for the same image,
+func TestPhotoRows_TallerCellsReserveFewerRows(t *testing.T) {
+	// Taller cells (larger height/width) reserve FEWER rows for the same image,
 	// otherwise the picture is shorter than its reserved box (gap / "smaller").
-	r := media.NewKittyRenderer(media.NewKittyStore())
-	const cols = 60
-	img := sampleImage(40, 30) // landscape 4:3
-
-	r.SetCellAspect(2.0)
-	base := r.Footprint(img.Bounds().Dx(), img.Bounds().Dy(), cols)
-
-	r.SetCellAspect(2.5)
-	taller := r.Footprint(img.Bounds().Dx(), img.Bounds().Dy(), cols)
-
+	base := media.PhotoRows(40, 30, 60, 2.0)
+	taller := media.PhotoRows(40, 30, 60, 2.5)
 	require.Less(t, taller, base, "taller cells must reserve fewer rows")
 }
 
@@ -81,7 +72,7 @@ func TestKittyRenderer_TallImageStaysWithinDiacritics(t *testing.T) {
 	cols := 60
 	store.MarkTransmitted(1, cols)
 	lines := r.Render(1, img, cols)
-	require.Len(t, lines, media.PhotoTermLines(10, 100000, cols))
+	require.Len(t, lines, media.PhotoRows(10, 100000, cols, media.CellAspect()))
 	require.LessOrEqual(t, len(lines), 256, "rows must stay within the diacritic table")
 }
 
@@ -100,7 +91,7 @@ func TestRenderers_FootprintParity(t *testing.T) {
 		store.MarkTransmitted(kID, cols)
 		k := kr.Render(kID, img, cols)
 		b := br.Render(bID, img, cols)
-		want := media.PhotoTermLines(d[0], d[1], cols)
+		want := media.PhotoRows(d[0], d[1], cols, media.CellAspect())
 		require.Len(t, k, want, "kitty footprint")
 		require.Len(t, b, want, "block footprint")
 	}

@@ -11,8 +11,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- `photos.max_long_side_px` config option (default 800) caps a rendered inline
+  image's long side in pixels (#125)
+
 ### Fixed
 
+- A tall image could render taller than the chat pane, pushing the surrounding
+  messages out of view. Inline images are now bounded — long side to a fixed
+  pixel cap and height to at most 2/3 of the chat pane — preserving aspect ratio
+  and re-evaluated on resize; block-art and Kitty render at the same size (#125)
 - A newly arrived message could be clipped or left unreachable below the bottom
   of an open chat (only its top border visible, "can't scroll down"), surviving
   refresh and restart. The viewport height estimate under-counted forwarded

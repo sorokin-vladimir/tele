@@ -9,4 +9,5 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("photos.eager_full_quality", true)
 	v.SetDefault("photos.mode", "auto")
 	v.SetDefault("photos.kitty_placement_cap", 16)
+	v.SetDefault("photos.max_long_side_px", 800)
 }

@@ -26,6 +26,10 @@ type PhotosConfig struct {
 	// limit and corrupts placements, so only on-screen images (plus a few
 	// recently scrolled-past) stay transmitted. Lower it if images still corrupt.
 	KittyPlacementCap int `mapstructure:"kitty_placement_cap"`
+	// MaxLongSidePx caps a rendered inline image's long side in pixels (mirrors
+	// the desktop client's fixed media ceiling). Height is additionally bounded
+	// to a fraction of the chat pane. Raise it for larger inline images.
+	MaxLongSidePx int `mapstructure:"max_long_side_px"`
 }
 
 type Config struct {

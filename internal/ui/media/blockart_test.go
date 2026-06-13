@@ -39,15 +39,13 @@ func TestRenderBlockArt_ZeroCols(t *testing.T) {
 	require.Nil(t, lines)
 }
 
-func TestPhotoTermLines_Basic(t *testing.T) {
-	// 100x100 image at 10 cols: targetH = 10*100/100 = 10, termRows = 5
-	result := media.PhotoTermLines(100, 100, 10)
-	require.Equal(t, 5, result)
+func TestPhotoRows_Basic(t *testing.T) {
+	// 100x100 at 10 cols, aspect 2.0: round(10*1/2) = 5 (matches old PhotoTermLines).
+	require.Equal(t, 5, media.PhotoRows(100, 100, 10, 2.0))
 }
 
-func TestPhotoTermLines_ZeroWidth(t *testing.T) {
-	result := media.PhotoTermLines(0, 100, 10)
-	require.Equal(t, 1, result)
+func TestPhotoRows_ZeroWidth(t *testing.T) {
+	require.Equal(t, 1, media.PhotoRows(0, 100, 10, 2.0))
 }
 
 // stripANSI removes ANSI escape sequences for visual width checking.

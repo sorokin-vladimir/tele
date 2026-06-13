@@ -167,6 +167,7 @@ type RootModel struct {
 	imageMode        media.Mode
 	kittyStore       *media.KittyStore
 	lastPhotoCols    int
+	lastPaneHeight   int
 	retransmitGen    int
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
@@ -255,6 +256,7 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	}
 	m.kittyCap = cfg.Photos.KittyPlacementCap
+	m.chat.SetMaxMediaPx(cfg.Photos.MaxLongSidePx)
 	return m
 }
 
@@ -1024,10 +1026,9 @@ func (m RootModel) transmitPhotoCmd(photoID int64, img image.Image) tea.Cmd {
 	if m.imageMode != media.ModeKitty || img == nil {
 		return nil
 	}
-	cols := m.chat.PhotoContentCols()
 	id := m.kittyStore.IDFor(photoID)
 	b := img.Bounds()
-	rows := m.chat.PhotoFootprint(b.Dx(), b.Dy(), cols)
+	cols, rows := m.chat.PhotoBox(b.Dx(), b.Dy())
 	// Order matters: write the placement to the terminal FIRST, then mark the
 	// image ready (kittyTransmittedMsg) so the next render emits placeholders
 	// only once the placement exists. Marking ready before the transmit lands
@@ -1060,10 +1061,15 @@ const retransmitDebounce = 90 * time.Millisecond
 // column count unchanged. Only the latest scheduled tick performs the work.
 func (m *RootModel) retransmitOnColsChange() tea.Cmd {
 	cols := m.chat.PhotoContentCols()
-	if cols == m.lastPhotoCols {
+	// A tall photo's effective width depends on the pane height (the 2/3-viewport
+	// and 480px height caps shrink cols), so a height-only resize can change a
+	// photo's box without changing photoContentCols. Track both.
+	paneH := m.chat.PhotoViewHeight()
+	if cols == m.lastPhotoCols && paneH == m.lastPaneHeight {
 		return nil
 	}
 	m.lastPhotoCols = cols
+	m.lastPaneHeight = paneH
 	m.retransmitGen++
 	gen := m.retransmitGen
 	return tea.Tick(retransmitDebounce, func(time.Time) tea.Msg {

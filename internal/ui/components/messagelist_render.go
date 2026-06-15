@@ -10,8 +10,22 @@ import (
 
 const indicatorChar = "┃"
 
+// bubbleMetrics holds the finalized geometry and border-row content for a
+// message bubble, computed once by measureBubble and consumed by the border and
+// content rendering steps.
+type bubbleMetrics struct {
+	actualW  int // content width (inside the padding)
+	innerW   int // actualW + 2 padding columns
+	b        lipgloss.Border
+	bs       lipgloss.Style
+	tsStr    string // timestamp + status, right side of the bottom border
+	tsW      int
+	reactStr string // reactions, left side of the bottom border
+	reactW   int
+}
+
 // renderMessage returns the display lines for a single message bubble.
-// selected: when true, injects << / >> indicator into allLines[1] (added in Task 2).
+// selected: when true, draws the selection indicator bar beside the bubble.
 func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string {
 	if ml.viewWidth <= 0 {
 		return []string{""}
@@ -19,6 +33,23 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 	if ml.isBareMedia(msg) {
 		return ml.renderBareMedia(msg, selected)
 	}
+
+	m := ml.measureBubble(msg)
+	top, bottom := ml.bubbleBorders(msg, m)
+	sideLines := ml.bubbleContentLines(msg, m)
+
+	allLines := make([]string, 0, len(sideLines)+2)
+	allLines = append(allLines, top)
+	allLines = append(allLines, sideLines...)
+	allLines = append(allLines, bottom)
+
+	return ml.alignBubbleLines(allLines, msg.IsOut, selected)
+}
+
+// measureBubble computes the finalized bubble geometry and border-row content
+// (timestamp, reactions) for a message, widening as needed for the text, media
+// placeholder/art, forward and reply blocks, and the sender-name title.
+func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 	maxBubbleW := ml.viewWidth * 3 / 4
 	if maxBubbleW < 10 {
 		maxBubbleW = 10
@@ -162,8 +193,25 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		}
 	}
 
+	return bubbleMetrics{
+		actualW:  actualW,
+		innerW:   innerW,
+		b:        b,
+		bs:       bs,
+		tsStr:    tsStr,
+		tsW:      tsW,
+		reactStr: reactStr,
+		reactW:   reactW,
+	}
+}
+
+// bubbleBorders builds the top and bottom border rows of a message bubble. The
+// top border carries the sender name (incoming group messages); the bottom
+// border carries reactions on the left and the timestamp on the right.
+func (ml *MessageList) bubbleBorders(msg store.Message, m bubbleMetrics) (top, bottom string) {
+	b, bs := m.b, m.bs
+
 	// Top border: sender/indicator left-aligned for incoming; plain for outgoing.
-	var top string
 	if !msg.IsOut {
 		var senderStyled string
 		if ml.isGroup {
@@ -178,21 +226,29 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 			titleStr = " " + senderStyled + " "
 		}
 		titleW := lipgloss.Width(titleStr)
-		rightFill := innerW - titleW - 1 // 1 fill char on the left
+		rightFill := m.innerW - titleW - 1 // 1 fill char on the left
 		if rightFill < 0 {
 			rightFill = 0
 		}
 		top = bs.Render(b.TopLeft+b.Top) + titleStr + bs.Render(strings.Repeat(b.Top, rightFill)+b.TopRight)
 	} else {
-		top = bs.Render(b.TopLeft + strings.Repeat(b.Top, innerW) + b.TopRight)
+		top = bs.Render(b.TopLeft + strings.Repeat(b.Top, m.innerW) + b.TopRight)
 	}
 
 	// Bottom border: reactions left, timestamp right.
-	fillW := innerW - reactW - tsW
+	fillW := m.innerW - m.reactW - m.tsW
 	if fillW < 0 {
 		fillW = 0
 	}
-	bottom := bs.Render(b.BottomLeft) + reactStr + bs.Render(strings.Repeat(b.Bottom, fillW)) + tsStr + bs.Render(b.BottomRight)
+	bottom = bs.Render(b.BottomLeft) + m.reactStr + bs.Render(strings.Repeat(b.Bottom, fillW)) + m.tsStr + bs.Render(b.BottomRight)
+	return top, bottom
+}
+
+// bubbleContentLines builds the interior rows of a message bubble: the forward
+// header (if any), the reply quote block (if a reply), media art or its
+// placeholder (if any), then the wrapped message text.
+func (ml *MessageList) bubbleContentLines(msg store.Message, m bubbleMetrics) []string {
+	actualW, innerW, b, bs := m.actualW, m.innerW, m.b, m.bs
 
 	// Content lines: forward header (if any), reply quote block (if reply),
 	// photo art (if any), then text.
@@ -294,13 +350,15 @@ func (ml *MessageList) renderMessage(msg store.Message, selected bool) []string 
 		sideLines = []string{bs.Render(b.Left) + strings.Repeat(" ", innerW) + bs.Render(b.Right)}
 	}
 
-	allLines := make([]string, 0, len(sideLines)+2)
-	allLines = append(allLines, top)
-	allLines = append(allLines, sideLines...)
-	allLines = append(allLines, bottom)
+	return sideLines
+}
 
+// alignBubbleLines right-aligns outgoing bubbles (incoming stay at the left
+// margin) and draws the selection indicator bar beside the bubble on every
+// content line.
+func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool) []string {
 	// Outgoing bubbles are right-aligned; incoming stay at the left margin.
-	if msg.IsOut {
+	if isOut {
 		bubbleW := lipgloss.Width(allLines[0])
 		leftPad := ml.viewWidth - bubbleW
 		if leftPad < 0 {

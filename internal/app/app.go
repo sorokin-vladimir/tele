@@ -110,7 +110,7 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 		st:       sqliteStore,
 		client:   internaltg.NewGotdClient(log, stateStorage, trace),
 		verbose:  verbose,
-		notifier: beeepNotifier{},
+		notifier: newNotifier(log),
 	}, nil
 }
 

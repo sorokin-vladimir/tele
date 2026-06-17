@@ -23,7 +23,7 @@ func DetectMIME(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("detect mime: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var buf [512]byte
 	n, _ := f.Read(buf[:]) // a short read (or io.EOF) is fine; sniff what we have

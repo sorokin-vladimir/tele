@@ -41,6 +41,24 @@ checksum:
   name_template: "checksums.txt"
 
 brews:
+  # Primary, canonical tap. Install via: brew tap sorokin-vladimir/tap
+  - name: tele
+    ids:
+      - tarballs
+    repository:
+      owner: sorokin-vladimir
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/sorokin-vladimir/tele"
+    description: "TUI Telegram client"
+    install: |
+      bin.install "tele"
+    test: |
+      system "#{bin}/tele", "--version"
+
+  # Deprecated tap, kept in sync for now so `brew upgrade tele` keeps working
+  # for existing users. The caveats print a migration notice on every install.
   - name: tele
     ids:
       - tarballs
@@ -50,7 +68,11 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/sorokin-vladimir/tele"
-    description: "TUI Telegram client"
+    description: "TUI Telegram client (deprecated tap — use sorokin-vladimir/tap)"
+    caveats: |
+      This tap is deprecated. Please migrate to the unified tap:
+        brew untap sorokin-vladimir/tele
+        brew tap sorokin-vladimir/tap
     install: |
       bin.install "tele"
     test: |

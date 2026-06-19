@@ -52,14 +52,14 @@ It also runs lean — typically ~35MB RSS at idle vs several hundred MB for desk
 
 ---
 
-| Feature              | tele       | Telegram Desktop | Web        |
-| -------------------- | ---------- | ---------------- | ---------- |
-| Terminal-native      | ✅         | ❌               | ❌         |
-| Keyboard-first       | ✅         | ⚠️ partial       | ⚠️ partial |
-| Works over SSH       | ✅         | ❌               | ❌         |
-| Single static binary | ✅         | ❌               | ❌         |
-| Full media support   | ⚠️ photos, voice, video | ✅    | ✅         |
-| Voice/video calls    | ❌ planned | ✅               | ✅         |
+| Feature              | tele                    | Telegram Desktop | Web        |
+| -------------------- | ----------------------- | ---------------- | ---------- |
+| Terminal-native      | ✅                      | ❌               | ❌         |
+| Keyboard-first       | ✅                      | ⚠️ partial       | ⚠️ partial |
+| Works over SSH       | ✅                      | ❌               | ❌         |
+| Single static binary | ✅                      | ❌               | ❌         |
+| Full media support   | ⚠️ photos, voice, video | ✅               | ✅         |
+| Voice/video calls    | ❌ planned              | ✅               | ✅         |
 
 ---
 
@@ -104,7 +104,7 @@ YAML-based config with sensible defaults.
 ### macOS / Linux — Homebrew
 
 ```sh
-brew tap sorokin-vladimir/tele
+brew tap sorokin-vladimir/tap
 brew install tele
 ```
 
@@ -141,29 +141,29 @@ Then prompts for:
 
 ## Flags
 
-| Flag               | Description                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------- |
-| `--config <path>`  | Path to config file (default `~/.config/tele/config.yml`)                                      |
-| `-e`               | Enable debug logging                                                                            |
-| `--trace`          | Log sensitive metadata (peer IDs, message lengths). Never use on shared or synced file systems |
-| `--version`        | Print version and exit                                                                          |
+| Flag              | Description                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `--config <path>` | Path to config file (default `~/.config/tele/config.yml`)                                      |
+| `-e`              | Enable debug logging                                                                           |
+| `--trace`         | Log sensitive metadata (peer IDs, message lengths). Never use on shared or synced file systems |
+| `--version`       | Print version and exit                                                                         |
 
 ---
 
 ## Keybindings
 
-| Key             | Action                            |
-| --------------- | --------------------------------- |
-| `j` / `k`       | Navigate chats or scroll messages |
-| `ctrl+j` / `ctrl+k` | Select next / previous message |
-| `i`             | Compose message                   |
-| `r`             | Reply                             |
-| `e` / `d`       | Edit / delete message             |
-| `t`             | React                             |
-| `o` / `p`       | Open media externally / play voice |
-| `/`             | Search chats                      |
-| `0` / `1` / `2` | Focus panes                       |
-| `q`             | Quit                              |
+| Key                 | Action                             |
+| ------------------- | ---------------------------------- |
+| `j` / `k`           | Navigate chats or scroll messages  |
+| `ctrl+j` / `ctrl+k` | Select next / previous message     |
+| `i`                 | Compose message                    |
+| `r`                 | Reply                              |
+| `e` / `d`           | Edit / delete message              |
+| `t`                 | React                              |
+| `o` / `p`           | Open media externally / play voice |
+| `/`                 | Search chats                       |
+| `0` / `1` / `2`     | Focus panes                        |
+| `q`                 | Quit                               |
 
 Full reference: [docs/keybindings.md](docs/keybindings.md)
 
@@ -181,10 +181,10 @@ ui:
   theme: default
 
 photos:
-  mode: auto              # auto | kitty | blocks — inline image renderer
+  mode: auto # auto | kitty | blocks — inline image renderer
   eager_full_quality: true
   kitty_placement_cap: 16 # max inline images kept on the terminal at once
-  max_long_side_px: 800   # cap a rendered image's long side; height also ≤ 2/3 pane
+  max_long_side_px: 800 # cap a rendered image's long side; height also ≤ 2/3 pane
 ```
 
 > **`kitty_placement_cap`** bounds how many Kitty image placements are live on
@@ -208,13 +208,13 @@ by **context**, then by **action**:
 ```yaml
 keybindings:
   chat:
-    reply: "R"              # a single key
-    go_top: ["g g", "gg"]   # several keys for one action
+    reply: "R" # a single key
+    go_top: ["g g", "gg"] # several keys for one action
   chatlist:
     confirm: "l"
 ```
 
-- **Replace semantics:** the keys you list become the *only* keys for that
+- **Replace semantics:** the keys you list become the _only_ keys for that
   action in that context. Actions you don't mention keep their defaults.
 - **Chords:** a multi-key sequence is written as space-separated key tokens —
   `"g g"` means press `g` then `g`. Tokens use the terminal key names
@@ -236,11 +236,11 @@ list of action names and what each one does.
 Planned work lives on the public [**project board**](https://github.com/users/sorokin-vladimir/projects/2),
 grouped into release [milestones](https://github.com/sorokin-vladimir/tele/milestones).
 
-| Release   | Focus                                                                                |
-| --------- | ------------------------------------------------------------------------------------ |
+| Release   | Focus                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------ |
 | `v1.4.0`  | Reliability and media correctness — OOM-safe downloads, scroll and image-height fixes, static stickers |
-| `v1.5.0`  | Outbound media — send photos, videos, voice and files from the composer, GIF previews, drafts |
-| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search            |
+| `v1.5.0`  | Outbound media — send photos, videos, voice and files from the composer, GIF previews, drafts          |
+| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search                             |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.

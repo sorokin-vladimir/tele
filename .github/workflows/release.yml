@@ -84,4 +84,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
+
+      # Publish the Homebrew formula to both taps from dist/checksums.txt.
+      - name: Update Homebrew formula
+        run: bash scripts/update-formula.sh "${GITHUB_REF_NAME}"
+        env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

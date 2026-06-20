@@ -9,7 +9,7 @@ A human title for a release is written as an em-dash suffix on its heading,
 e.g. `## [1.2.0] - 2026-06-11 — Archived folders & image layout fixes`.
 Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
-## [Unreleased]
+## [Unreleased] — Send media & inline video/GIF playback
 
 ### Added
 
@@ -67,6 +67,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   fall back to the previous generic notifications (beeep). Previously every
   notification went through beeep and, on macOS, clicking one opened Script
   Editor instead of the terminal (#17)
+- Homebrew is now installed from the unified tap `sorokin-vladimir/tap` (`brew
+  tap sorokin-vladimir/tap && brew install tele`). The old single-tool tap
+  `sorokin-vladimir/tele` is deprecated but still updated for now, so existing
+  installs keep working with `brew upgrade`; it prints a migration notice on use.
+  Formulae are published by an in-repo release script rather than GoReleaser's
+  deprecated `brews` publisher
 
 ### Fixed
 

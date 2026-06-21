@@ -280,6 +280,27 @@ func TestSQLite_WriteBehind_FlushesOnClose(t *testing.T) {
 	assert.Equal(t, 42, chat.ReadInboxMaxID)
 }
 
+func TestSQLite_SetChatDraft_UpdatesInMemory(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChat(store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+
+	s.SetChatDraft(1, "unsent draft")
+	got, ok := s.GetChat(1)
+	require.True(t, ok)
+	assert.Equal(t, "unsent draft", got.Draft)
+
+	s.SetChatDraft(1, "")
+	got, _ = s.GetChat(1)
+	assert.Equal(t, "", got.Draft)
+}
+
+func TestSQLite_SetChatDraft_UnknownChatNoOp(t *testing.T) {
+	s := newTestSQLite(t)
+	s.SetChatDraft(999, "ghost") // must not panic on unknown chat
+	_, ok := s.GetChat(999)
+	assert.False(t, ok)
+}
+
 func TestSQLite_UpdateChatOnline_ReturnsTrueOnFlip(t *testing.T) {
 	s := newTestSQLite(t)
 	s.SetChat(store.Chat{ID: 1, Title: "Alice"})

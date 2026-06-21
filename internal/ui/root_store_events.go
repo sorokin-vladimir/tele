@@ -70,6 +70,20 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
 		}
+	case store.EventDraftMessage:
+		// Draft changed on another device (or cleared server-side on send). Keep
+		// the store as the source of truth (#62). Reflect it live only when this
+		// chat is open and the user is not actively typing — otherwise we would
+		// clobber an in-progress local edit. For other chats, seed the session
+		// cache without overwriting a newer unsent local draft.
+		m.st.SetChatDraft(msg.ChatID, msg.Draft)
+		if msg.ChatID == m.currentChatID {
+			if !m.chat.ComposerFocused() {
+				m.chat.SetComposerValue(msg.Draft)
+			}
+		} else {
+			m.chat.SeedDraft(msg.ChatID, msg.Draft)
+		}
 	case store.EventReactionsUpdate:
 		m.st.UpdateMessageReactions(msg.ChatID, msg.MsgID, msg.Reactions)
 		if msg.ChatID == m.currentChatID {

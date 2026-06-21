@@ -40,6 +40,9 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			result, cmd := m.focusPane(FocusChat)
 			return result.(RootModel), cmd
 		}
+		// Persist the chat we are leaving as a Telegram draft before switching
+		// (#62). Captured here while currentChatID still points at the old chat.
+		draftFlush := m.flushCurrentDraftCmd()
 		m.currentChatID = msg.Chat.ID
 		m.stopGifAnim()
 		// Drop decoded GIF frames from the previous chat; they are large (up to
@@ -49,6 +52,13 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.chatList.SetActiveByID(msg.Chat.ID)
 		if m.onChatOpen != nil {
 			m.onChatOpen(msg.Chat.ID)
+		}
+		// Seed the incoming chat's composer from its server-known draft, unless a
+		// newer local draft is already cached for it (SeedDraft does not clobber).
+		if m.st != nil {
+			if c, ok := m.st.GetChat(msg.Chat.ID); ok {
+				m.chat.SeedDraft(msg.Chat.Peer.ID, c.Draft)
+			}
 		}
 		m.chat.ClearPendingAction()
 		m.chat.SetChat(&msg.Chat)
@@ -70,15 +80,16 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			peer := msg.Chat.Peer
 			chatID := msg.Chat.ID
 			limit := m.historyLimit
-			return m, func() tea.Msg {
+			historyCmd := func() tea.Msg {
 				msgs, err := client.GetHistory(ctx, peer, 0, limit)
 				if err != nil {
 					return chatLoadErrMsg{chatID: chatID, text: "load history failed: " + err.Error()}
 				}
 				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
 			}
+			return m, tea.Batch(draftFlush, historyCmd)
 		}
-		return m, nil
+		return m, draftFlush
 
 	case ChatHistoryMsg:
 		if m.st != nil {

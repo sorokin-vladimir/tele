@@ -294,6 +294,31 @@ func (c *GotdClient) EditMessage(ctx context.Context, peer store.Peer, msgID int
 	})
 }
 
+// SaveDraft persists (or clears, when text is empty) the message draft for a
+// peer via messages.saveDraft (#62). Telegram broadcasts the change to the
+// account's other clients as updateDraftMessage.
+func (c *GotdClient) SaveDraft(ctx context.Context, peer store.Peer, text string) error {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+	c.traceLog.Debug("SaveDraft", zap.Int64("peer_id", peer.ID), zap.Int("text_len", len(text)))
+	return WithRetry(ctx, func() error {
+		_, err := api.MessagesSaveDraft(ctx, buildSaveDraftRequest(peerToInput(peer), text))
+		if err != nil {
+			c.log.Error("MessagesSaveDraft failed", zap.Error(err))
+		}
+		return err
+	})
+}
+
+func buildSaveDraftRequest(inputPeer tg.InputPeerClass, text string) *tg.MessagesSaveDraftRequest {
+	return &tg.MessagesSaveDraftRequest{
+		Peer:    inputPeer,
+		Message: text,
+	}
+}
+
 func (c *GotdClient) SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error {
 	api, err := c.acquireAPI()
 	if err != nil {

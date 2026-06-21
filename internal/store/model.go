@@ -122,6 +122,10 @@ type Chat struct {
 	// IsArchived reports whether the chat lives in the built-in Archive
 	// folder (folder_id 1).
 	IsArchived bool
+	// Draft is the unsent message draft synced with Telegram (#62). It is
+	// loaded from the dialog list and kept current via updateDraftMessage; it
+	// is not persisted to disk (the server is the source of truth on restart).
+	Draft string
 }
 
 type FolderFilter struct {
@@ -211,6 +215,9 @@ const (
 	// EventEditMessage reports that a message was edited on another client.
 	// The updated message is carried in Event.Message.
 	EventEditMessage
+	// EventDraftMessage reports that a chat's draft changed server-side (e.g.
+	// edited on another device, or cleared on send). The text is in Event.Draft.
+	EventDraftMessage
 )
 
 type TypingAction int
@@ -265,4 +272,6 @@ type Event struct {
 	Online       bool
 	TypingAction TypingAction
 	Muted        bool
+	// Draft carries the new draft text for EventDraftMessage.
+	Draft string
 }

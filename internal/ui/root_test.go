@@ -39,6 +39,12 @@ type mockTGClient struct {
 	sendMediaErr         error
 	uploadErr            error
 	lastSendMediaParams  internaltg.SendMediaParams
+	savedDrafts          []savedDraft
+}
+
+type savedDraft struct {
+	peerID int64
+	text   string
 }
 
 func (m *mockTGClient) GetDialogs(_ context.Context) ([]store.Chat, error) { return nil, nil }
@@ -133,6 +139,10 @@ func (m *mockTGClient) SendReaction(_ context.Context, _ store.Peer, _ int, _ st
 func (m *mockTGClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAction) error {
 	return nil
 }
+func (m *mockTGClient) SaveDraft(_ context.Context, peer store.Peer, text string) error {
+	m.savedDrafts = append(m.savedDrafts, savedDraft{peerID: peer.ID, text: text})
+	return nil
+}
 func (m *mockTGClient) Updates() <-chan store.Event { return make(chan store.Event) }
 
 var _ internaltg.Client = (*mockTGClient)(nil)
@@ -199,6 +209,49 @@ func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {
 	newMsg := store.Message{ID: 101, ChatID: 1, Photo: &store.PhotoRef{ID: 9}}
 	_, cmd := m.Update(store.Event{Kind: store.EventNewMessage, Message: newMsg})
 	require.NotNil(t, cmd) // download command batched
+}
+
+func TestRoot_Draft_FlushedToServerOnChatSwitch(t *testing.T) {
+	mc := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mc) // chat 1 open
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+
+	// Type a draft into chat 1's composer, then switch to chat 2.
+	m = m.SetComposerValueForTest("hello Alice")
+	_, cmd := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	require.NotNil(t, cmd)
+	drainMsgs(cmd()) // executes the batched SaveDraft side effect
+
+	var found bool
+	for _, d := range mc.savedDrafts {
+		if d.peerID == 1 && d.text == "hello Alice" {
+			found = true
+		}
+	}
+	assert.True(t, found, "switching chats must persist the outgoing draft; got %+v", mc.savedDrafts)
+}
+
+func TestRoot_Draft_EmptyComposerNoServerSave(t *testing.T) {
+	mc := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mc) // chat 1 open, composer empty
+	st.SetChat(store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}})
+
+	// Switch away without typing — no draft change, so no network save.
+	_, cmd := m.Update(screens.OpenChatMsg{Chat: store.Chat{ID: 2, Title: "Bob", Peer: store.Peer{ID: 2, Type: store.PeerUser}}})
+	if cmd != nil {
+		drainMsgs(cmd())
+	}
+	assert.Empty(t, mc.savedDrafts, "no draft change must not hit messages.saveDraft")
+}
+
+func TestRoot_EventDraftMessage_UpdatesStore(t *testing.T) {
+	mc := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mc)
+
+	m.Update(store.Event{Kind: store.EventDraftMessage, ChatID: 1, Draft: "remote draft"})
+	got, ok := st.GetChat(1)
+	require.True(t, ok)
+	assert.Equal(t, "remote draft", got.Draft)
 }
 
 func TestPendingDownloadCmds_GIFThumb_FiresDownload(t *testing.T) {

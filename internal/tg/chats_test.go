@@ -111,6 +111,40 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 	assert.Equal(t, 5, chats[0].UnreadCount)
 }
 
+func TestParseDialogs_ExtractsDraft(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
+	dialog := &tg.Dialog{
+		Peer:       &tg.PeerUser{UserID: 7},
+		TopMessage: 1,
+	}
+	dialog.SetDraft(&tg.DraftMessage{Message: "half-written"})
+	msg := &tg.Message{ID: 1, Date: int(time.Now().Unix())}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{msg},
+		Users:    []tg.UserClass{user},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, "half-written", chats[0].Draft)
+}
+
+func TestParseDialogs_EmptyDraft(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
+	dialog := &tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 1}
+	dialog.SetDraft(&tg.DraftMessageEmpty{})
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{&tg.Message{ID: 1, Date: 1}},
+		Users:    []tg.UserClass{user},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, "", chats[0].Draft)
+}
+
 func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
 	c := &GotdClient{peers: make(map[int64]store.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}

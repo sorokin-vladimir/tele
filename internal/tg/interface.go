@@ -58,6 +58,9 @@ type Client interface {
 	EditMessage(ctx context.Context, peer store.Peer, msgID int, text string) error
 	SendReaction(ctx context.Context, peer store.Peer, msgID int, emoji string) error
 	SetTyping(ctx context.Context, peer store.Peer, action store.TypingAction) error
+	// SaveDraft persists (text != "") or clears (text == "") the message draft
+	// for a peer, synced with Telegram's other clients (#62).
+	SaveDraft(ctx context.Context, peer store.Peer, text string) error
 	// Updates returns a channel of incoming Telegram events.
 	Updates() <-chan store.Event
 }

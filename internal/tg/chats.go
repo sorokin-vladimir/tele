@@ -302,6 +302,9 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 		chat.ReadInboxMaxID = dlg.ReadInboxMaxID
 		chat.ReadOutboxMaxID = dlg.ReadOutboxMaxID
 		chat.LastMessage = &store.Message{Date: m.lastMsgAt}
+		if d, ok := dlg.GetDraft(); ok {
+			chat.Draft = draftText(d)
+		}
 		c.cachePeer(chat.Peer)
 		out = append(out, chat)
 	}
@@ -315,6 +318,15 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 	})
 
 	return out
+}
+
+// draftText extracts the plain draft text from a DraftMessageClass. A
+// DraftMessageEmpty (or any non-text draft) yields "".
+func draftText(d tg.DraftMessageClass) string {
+	if dm, ok := d.(*tg.DraftMessage); ok {
+		return dm.Message
+	}
+	return ""
 }
 
 func peerIDFromPeer(peer tg.PeerClass) int64 {

@@ -159,12 +159,15 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Esc in normal mode: close active chat and return to chatlist.
 	if action == keys.ActionNormal && m.focus == FocusChat {
+		// Persist the draft of the chat being closed before tearing it down (#62).
+		draftFlush := m.flushCurrentDraftCmd()
 		m.chat.ClearPendingAction()
 		m.chat.SetChat(nil)
 		m.chat.SetMessages(nil)
 		m.currentChatID = 0
 		m.chatList.SetActiveByID(0)
-		return m.focusPane(FocusChatList)
+		result, cmd := m.focusPane(FocusChatList)
+		return result, tea.Batch(draftFlush, cmd)
 	}
 
 	if action == keys.ActionOpenInViewer && m.focus == FocusChat {

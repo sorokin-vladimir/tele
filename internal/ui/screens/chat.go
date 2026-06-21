@@ -132,6 +132,21 @@ func (m *ChatModel) SetChat(chat *store.Chat) {
 	}
 }
 
+// SeedDraft pre-loads a server-known draft for a chat into the session cache,
+// but only when the session has no draft of its own for that peer — a newer
+// local edit (already typed and flushed on switch-away) must never be clobbered
+// by a stale server value (#62). Empty text is ignored. The seeded value is
+// applied to the composer the next time the chat is opened via SetChat.
+func (m *ChatModel) SeedDraft(peerID int64, text string) {
+	if peerID == 0 || text == "" {
+		return
+	}
+	if _, exists := m.drafts[peerID]; exists {
+		return
+	}
+	m.drafts[peerID] = text
+}
+
 // saveDraft stores unsent composer text for a chat, keyed by peer ID. Empty
 // text removes the entry so the map does not accumulate stale keys. id==0
 // (no chat) is never persisted.

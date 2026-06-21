@@ -33,6 +33,9 @@ type Store interface {
 	UpdateChatOutboxReadMaxID(chatID int64, maxID int)
 	UpdateChatOnline(userID int64, online bool) bool
 	SetChatMuted(chatID int64, muted bool)
+	// SetChatDraft updates the synced message draft for a chat (#62). The draft
+	// is held in memory only; it is reloaded from the server on restart.
+	SetChatDraft(chatID int64, text string)
 	SetChatUnreadMark(chatID int64, mark bool)
 	SetChatArchived(chatID int64, archived bool)
 	FolderFilters() []FolderFilter

@@ -13,6 +13,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Per-chat composer drafts synced with Telegram: each chat now keeps its own
+  unsent message, so switching chats no longer loses what you typed. Drafts are
+  saved to Telegram via `messages.saveDraft` when you leave or close a chat, so
+  they survive restarts and appear in other clients (desktop, mobile); incoming
+  draft changes from other devices are reflected live when you are not typing.
+  Drafts load from the dialog list on startup and update via `updateDraftMessage`
+  (#62)
 - Download received files: selecting a generic file (document) bubble and
   pressing `s` — or choosing "Download" in the context menu — streams the file
   to the OS Downloads folder under its original name, resolving name collisions

@@ -100,6 +100,10 @@ func (m *mockClient) SetTyping(_ context.Context, _ store.Peer, _ store.TypingAc
 	return nil
 }
 
+func (m *mockClient) SaveDraft(_ context.Context, _ store.Peer, _ string) error {
+	return nil
+}
+
 func (m *mockClient) Updates() <-chan store.Event {
 	return m.events
 }

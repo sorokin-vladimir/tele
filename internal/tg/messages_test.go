@@ -108,6 +108,13 @@ func TestPeerToInput_AllTypes(t *testing.T) {
 	}
 }
 
+func TestBuildSaveDraftRequest(t *testing.T) {
+	peer := &tg.InputPeerUser{UserID: 7, AccessHash: 3}
+	req := buildSaveDraftRequest(peer, "draft text")
+	assert.Equal(t, peer, req.Peer)
+	assert.Equal(t, "draft text", req.Message)
+}
+
 func TestConvertEntities_AllSupportedTypes(t *testing.T) {
 	entities := []tg.MessageEntityClass{
 		&tg.MessageEntityBold{Offset: 0, Length: 5},

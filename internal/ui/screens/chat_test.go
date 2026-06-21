@@ -569,6 +569,31 @@ func TestChatModel_Draft_SurvivesChatClose(t *testing.T) {
 	assert.Equal(t, "unsent text", m.ComposerValue())
 }
 
+func TestChatModel_SeedDraft_PopulatesEmptyChat(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 5, Peer: store.Peer{ID: 5, Type: store.PeerUser}}
+
+	// Server-known draft seeded before opening the chat (e.g. from the dialog list).
+	m.SeedDraft(5, "from server")
+	m.SetChat(chat)
+	assert.Equal(t, "from server", m.ComposerValue())
+}
+
+func TestChatModel_SeedDraft_DoesNotClobberLocalDraft(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chatA := &store.Chat{ID: 1, Peer: store.Peer{ID: 1, Type: store.PeerUser}}
+	chatB := &store.Chat{ID: 2, Peer: store.Peer{ID: 2, Type: store.PeerUser}}
+
+	m.SetChat(chatA)
+	m.SetComposerValue("local edit")
+	m.SetChat(chatB) // flushes "local edit" into the session map for chat 1
+
+	// A stale server seed must not overwrite the newer local draft.
+	m.SeedDraft(1, "stale server")
+	m.SetChat(chatA)
+	assert.Equal(t, "local edit", m.ComposerValue())
+}
+
 func TestChatModel_Draft_RefreshSameChatKeepsComposer(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &store.Chat{ID: 3, Peer: store.Peer{ID: 3, Type: store.PeerUser}}

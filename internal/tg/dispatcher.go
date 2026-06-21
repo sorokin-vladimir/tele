@@ -252,6 +252,25 @@ func setupDispatcher(
 		return nil
 	})
 
+	// Draft changed on another device (or cleared server-side on send). Like
+	// NotifySettings, updateDraftMessage is a generic (non-pts) update, so it is
+	// safe to handle via the dispatcher without the outbox raw-hook workaround (#62).
+	dispatcher.OnDraftMessage(func(ctx context.Context, e tg.Entities, upd *tg.UpdateDraftMessage) error {
+		chatID := peerIDFromPeer(upd.Peer)
+		if chatID == 0 {
+			return nil
+		}
+		select {
+		case mustDeliver <- store.Event{
+			Kind:   store.EventDraftMessage,
+			ChatID: chatID,
+			Draft:  draftText(upd.Draft),
+		}:
+		case <-ctx.Done():
+		}
+		return nil
+	})
+
 	// OnReadHistoryOutbox / OnReadChannelOutbox are NOT registered here.
 	// They are intercepted before pts-tracking in outboxHook (see client.go),
 	// because pts gaps cause updates.Manager to silently drop these events.

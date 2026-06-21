@@ -94,6 +94,20 @@ func (s *SQLiteStore) SetChatArchived(chatID int64, archived bool) {
 	s.setChatField(chatID, func(c *Chat) { c.IsArchived = archived })
 }
 
+// SetChatDraft updates the synced draft for a chat in memory only (#62). Drafts
+// are not a persisted column — they are reloaded from the dialog list on each
+// startup — so this deliberately skips persistChat. No-op for unknown chats.
+func (s *SQLiteStore) SetChatDraft(chatID int64, text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.chats[chatID]
+	if !ok {
+		return
+	}
+	c.Draft = text
+	s.chats[chatID] = c
+}
+
 // setChatField applies mutate to a chat under the lock and write-through
 // persists it. No-op when the chat is unknown. These flags do not affect
 // display order, so the sorted view is not invalidated.

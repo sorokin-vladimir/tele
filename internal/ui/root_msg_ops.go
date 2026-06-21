@@ -117,6 +117,50 @@ func (m RootModel) handleEditMsgFailed(msg editMsgFailedMsg) (RootModel, tea.Cmd
 	return m, func() tea.Msg { return StatusErrMsg{Text: "edit failed", Sev: components.SeverityWarning} }
 }
 
+// SetComposerValueForTest sets the open chat's composer text (tests only).
+func (m RootModel) SetComposerValueForTest(s string) RootModel {
+	m.chat.SetComposerValue(s)
+	return m
+}
+
+// flushCurrentDraftCmd persists the open chat's composer text as a Telegram
+// draft when it differs from the server-known value (#62). It updates the store
+// (so a re-open shows the same text) and returns a Cmd performing the RPC, or
+// nil when there is nothing to do. Edit mode is skipped: the composer then holds
+// a message being edited, not a draft, and entering edit already discarded any
+// prior draft.
+func (m RootModel) flushCurrentDraftCmd() tea.Cmd {
+	if m.st == nil || m.currentChatID == 0 || m.chat.EditMsgID() != 0 {
+		return nil
+	}
+	chat, ok := m.st.GetChat(m.currentChatID)
+	if !ok {
+		return nil
+	}
+	text := m.chat.ComposerValue()
+	if text == chat.Draft {
+		return nil // unchanged — avoid a redundant messages.saveDraft round-trip
+	}
+	m.st.SetChatDraft(m.currentChatID, text)
+	return m.saveDraftCmd(chat.Peer, text)
+}
+
+// saveDraftCmd returns a managed Cmd that saves (or clears, when text == "")
+// the draft for a peer via the Telegram client. nil client → nil Cmd.
+func (m RootModel) saveDraftCmd(peer store.Peer, text string) tea.Cmd {
+	if m.tgClient == nil {
+		return nil
+	}
+	appCtx := m.ctx
+	client := m.tgClient
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(appCtx, 5*time.Second)
+		defer cancel()
+		_ = client.SaveDraft(ctx, peer, text)
+		return nil
+	}
+}
+
 func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea.Cmd) {
 	if m.tgClient == nil {
 		return m, nil

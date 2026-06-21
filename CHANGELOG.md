@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-21
+
 ### Added
 
 - Per-chat composer drafts synced with Telegram: each chat now keeps its own

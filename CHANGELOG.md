@@ -21,6 +21,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - React directly from the chat pane: pressing `t` on the focused message opens
   the reaction picker (previously reactions were only reachable through the
   context menu), consistent with `r`/`e` for reply/edit
+- Forward with a comment: in the forward chat picker, `Enter` still forwards
+  instantly, while `Tab` opens a comment line for the highlighted chat — the
+  typed comment is sent as a separate message just before the forwarded message
+  (#1)
 
 ### Changed
 

@@ -22,6 +22,13 @@ var (
 const searchOverlayWidth = 50
 const searchMaxResults = 8
 
+type forwardPhase int
+
+const (
+	forwardSelect forwardPhase = iota
+	forwardComment
+)
+
 type SearchModel struct {
 	query   string
 	all     []store.Chat
@@ -33,6 +40,9 @@ type SearchModel struct {
 	// forwardMsgID > 0 puts the picker in forward mode: confirming a chat emits
 	// ForwardToChatRequest{ToPeer, MsgID} and rows show the unread count.
 	forwardMsgID int
+	phase        forwardPhase // forward mode only: select (default) | comment
+	comment      string
+	target       store.Chat // chat chosen when entering the comment phase
 }
 
 func NewSearchModel(chats []store.Chat, width, height int, km keys.KeyMap) *SearchModel {
@@ -59,6 +69,18 @@ func (m *SearchModel) hint() string {
 	confirm := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionConfirm)
 	down := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionDown)
 	up := m.keyMap.KeyFor(keys.ContextSearch, keys.ActionUp)
+
+	if m.forwardMsgID != 0 && m.phase == forwardComment {
+		parts := []string{}
+		if confirm != "" {
+			parts = append(parts, confirm+" -> send")
+		}
+		if cancel != "" {
+			parts = append(parts, cancel+" -> back")
+		}
+		return strings.Join(parts, " | ")
+	}
+
 	downSym := arrowSym(down)
 	upSym := arrowSym(up)
 	parts := []string{}
@@ -66,7 +88,14 @@ func (m *SearchModel) hint() string {
 		parts = append(parts, upSym+"/"+downSym+" -> move")
 	}
 	if confirm != "" {
-		parts = append(parts, confirm+" -> open")
+		verb := "open"
+		if m.forwardMsgID != 0 {
+			verb = "forward"
+		}
+		parts = append(parts, confirm+" -> "+verb)
+	}
+	if m.forwardMsgID != 0 {
+		parts = append(parts, "tab -> comment")
 	}
 	if cancel != "" {
 		parts = append(parts, cancel+" -> close")
@@ -90,6 +119,9 @@ func (m *SearchModel) Query() string         { return m.query }
 func (m *SearchModel) Results() []store.Chat { return m.results }
 
 func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
+	if m.forwardMsgID != 0 && m.phase == forwardComment {
+		return m.updateComment(msg)
+	}
 	if paste, ok := msg.(tea.PasteMsg); ok {
 		m.query += paste.Content
 		m.filter()
@@ -100,6 +132,13 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		return m, nil
 	}
 	switch km.Code {
+	case tea.KeyTab:
+		if m.forwardMsgID != 0 && len(m.results) > 0 {
+			m.target = m.results[m.list.Cursor()]
+			m.comment = ""
+			m.phase = forwardComment
+		}
+		return m, nil
 	case tea.KeyEsc:
 		return m, func() tea.Msg { return CloseSearchMsg{} }
 	case tea.KeyEnter:
@@ -142,6 +181,43 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 	}
 }
 
+// updateComment handles the forward-mode comment phase: typed text (any layout,
+// via km.Text) builds the comment, Enter emits the forward request with it, and
+// Esc returns to the select phase.
+func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
+	if paste, ok := msg.(tea.PasteMsg); ok {
+		m.comment += paste.Content
+		return m, nil
+	}
+	km, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
+	switch km.Code {
+	case tea.KeyEsc:
+		m.phase = forwardSelect
+		return m, nil
+	case tea.KeyEnter:
+		comment := m.comment
+		peer := m.target.Peer
+		msgID := m.forwardMsgID
+		return m, func() tea.Msg {
+			return ForwardToChatRequest{ToPeer: peer, MsgID: msgID, Comment: comment}
+		}
+	case tea.KeyBackspace:
+		if len(m.comment) > 0 {
+			r := []rune(m.comment)
+			m.comment = string(r[:len(r)-1])
+		}
+		return m, nil
+	default:
+		if km.Text != "" {
+			m.comment += km.Text
+		}
+		return m, nil
+	}
+}
+
 func (m *SearchModel) filter() {
 	q := strings.ToLower(m.query)
 	filtered := make([]store.Chat, 0, len(m.all))
@@ -166,6 +242,15 @@ func (m *SearchModel) View() string {
 	}
 
 	inner := w - 2
+
+	if m.forwardMsgID != 0 && m.phase == forwardComment {
+		title := "Comment to " + m.target.Title
+		promptLine := searchPrompt.Render("> ") + m.comment + "█"
+		lines := []string{title, strings.Repeat("─", inner), promptLine}
+		content := strings.Join(lines, "\n")
+		h := len(lines) + 2
+		return components.RenderBox(content, "", "", hint, lipgloss.RoundedBorder(), nil, w, h)
+	}
 
 	queryLine := searchPrompt.Render("> ") + m.query + "█"
 	divider := strings.Repeat("─", inner)

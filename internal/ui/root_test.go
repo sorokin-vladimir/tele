@@ -44,6 +44,8 @@ type mockTGClient struct {
 	lastForwardFrom      store.Peer
 	lastForwardTo        store.Peer
 	lastForwardIDs       []int
+	lastSendText         string
+	sendCount            int
 }
 
 type savedDraft struct {
@@ -67,9 +69,11 @@ func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int
 	}
 	return store.Message{}, nil
 }
-func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, _ string, replyToMsgID int) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text string, replyToMsgID int) (int, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
+	m.lastSendText = text
+	m.sendCount++
 	if m.sendErr != nil {
 		return 0, m.sendErr
 	}
@@ -1260,6 +1264,34 @@ func TestRoot_ForwardToChat_CallsClient(t *testing.T) {
 	assert.Equal(t, target, mock.lastForwardTo)
 	assert.Equal(t, []int{5}, mock.lastForwardIDs)
 	assert.Equal(t, int64(1), mock.lastForwardFrom.ID, "source peer is the open chat")
+}
+
+func TestRoot_ForwardWithComment_SendsCommentThenForwards(t *testing.T) {
+	mock := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mock)
+	target := store.Peer{ID: 999, Type: store.PeerUser, AccessHash: 7}
+
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5, Comment: "look at this"})
+	require.NotNil(t, cmd)
+	_ = cmd() // run the managed Cmd
+
+	assert.Equal(t, 1, mock.sendCount, "comment must be sent")
+	assert.Equal(t, "look at this", mock.lastSendText)
+	assert.Equal(t, target, mock.lastForwardTo)
+	assert.Equal(t, []int{5}, mock.lastForwardIDs)
+}
+
+func TestRoot_ForwardWithoutComment_DoesNotSend(t *testing.T) {
+	mock := &mockTGClient{}
+	m, _ := newRootWithOpenChat(t, mock)
+	target := store.Peer{ID: 999, Type: store.PeerUser}
+
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
+	require.NotNil(t, cmd)
+	_ = cmd()
+
+	assert.Equal(t, 0, mock.sendCount, "no comment means no extra message")
+	assert.Equal(t, []int{5}, mock.lastForwardIDs)
 }
 
 func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {

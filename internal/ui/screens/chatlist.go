@@ -18,8 +18,9 @@ type OpenChatMsg struct{ Chat store.Chat }
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user
 // confirms a target chat. The source peer is resolved by the root model.
 type ForwardToChatRequest struct {
-	ToPeer store.Peer
-	MsgID  int
+	ToPeer  store.Peer
+	MsgID   int
+	Comment string // optional; sent as a separate message before the forward
 }
 
 var (

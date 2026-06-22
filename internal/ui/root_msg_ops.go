@@ -434,7 +434,13 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 	from := chat.Peer
 	to := msg.ToPeer
 	ids := []int{msg.MsgID}
+	comment := msg.Comment
 	return m, func() tea.Msg {
+		if comment != "" {
+			if _, err := client.SendMessage(ctx, to, comment, 0); err != nil {
+				return forwardDoneMsg{toTitle: toTitle, failed: true}
+			}
+		}
 		err := client.ForwardMessages(ctx, from, to, ids)
 		switch {
 		case err == nil:

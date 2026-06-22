@@ -97,6 +97,52 @@ func TestSearch_CursorBelowWindow_StaysVisible(t *testing.T) {
 	assert.Contains(t, view, "Chat12", "selected row must stay within the rendered window")
 }
 
+func TestForwardPicker_Tab_EntersCommentPhase_EnterSendsComment(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, nil)
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // enter comment phase for Alice
+	// type a comment, including a Cyrillic rune
+	m, _ = m.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
+	m, _ = m.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
+	m, _ = m.Update(tea.KeyPressMsg{Text: "п"})
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.ForwardToChatRequest)
+	require.True(t, ok)
+	assert.Equal(t, 55, req.MsgID)
+	assert.Equal(t, int64(1), req.ToPeer.ID) // Alice
+	assert.Equal(t, "hiп", req.Comment)
+}
+
+func TestForwardPicker_CommentBackspaceAndEscBack(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, nil)
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m, _ = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	// esc returns to select; a subsequent Enter forwards with empty comment
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.ForwardToChatRequest)
+	require.True(t, ok)
+	assert.Equal(t, "", req.Comment)
+}
+
+func TestSearch_Tab_IgnoredInSearchMode(t *testing.T) {
+	m := screens.NewSearchModel(makeForwardChats(), 80, 24, nil)
+	// Tab in plain search mode must not switch phases; Enter still opens a chat.
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	_, ok := cmd().(screens.OpenChatMsg)
+	assert.True(t, ok)
+}
+
+func TestForwardPicker_HintShowsTabComment(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	assert.Contains(t, m.View(), "comment")
+}
+
 func TestSearch_EnterEmitsOpenChatMsg(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})

@@ -242,9 +242,15 @@ func (m RootModel) handleSentMediaRefreshed(msg sentMediaRefreshedMsg) (RootMode
 }
 
 func (m RootModel) handleCancelUpload() (RootModel, tea.Cmd) {
-	// A staged-but-not-yet-sent attachment is dropped first.
+	// The cancel key (x) removes one composer extra at a time, in priority order:
+	// a staged attachment first, then an active reply/edit, then an in-flight
+	// upload. See item C.
 	if m.pendingAttachment != nil {
 		m.clearPendingAttachment()
+		return m, nil
+	}
+	if m.chat != nil && (m.chat.ReplyToMsgID() != 0 || m.chat.EditMsgID() != 0) {
+		m.chat.ClearPendingAction()
 		return m, nil
 	}
 	if m.chat == nil || m.st == nil {

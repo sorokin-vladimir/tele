@@ -26,6 +26,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 - Keybinding: `f` now forwards the focused message; staging a file attachment
   moved to `u` (the status-bar hint reads "upload")
+- Composer `esc`/`x` behavior unified: `esc` now only unfocuses the composer,
+  keeping any active reply, edit, or staged attachment (so you can scroll and
+  refocus without losing it). Removing the extra is the explicit job of the
+  cancel key `x`, which now clears a reply or edit too (previously it only
+  dropped a staged attachment / pending upload). Pressing `esc` again from the
+  unfocused composer still closes the chat
 
 ### Fixed
 

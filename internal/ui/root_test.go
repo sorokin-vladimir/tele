@@ -1174,6 +1174,52 @@ func TestRoot_Space_NoMenuWhenNoMessages(t *testing.T) {
 	assert.False(t, m.ContextMenuOpen(), "menu should not open when no message is selected")
 }
 
+func TestRoot_EscKeepsReply_XClearsIt(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "hi", Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// reply -> enters insert mode with the reply set
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = newM.(ui.RootModel)
+	require.Equal(t, 10, m.Chat().ReplyToMsgID())
+
+	// esc -> back to normal mode, reply kept (only unfocus)
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = newM.(ui.RootModel)
+	require.Equal(t, 10, m.Chat().ReplyToMsgID(), "esc must keep the reply")
+
+	// x -> explicitly clears the reply
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = newM.(ui.RootModel)
+	assert.Equal(t, 0, m.Chat().ReplyToMsgID(), "x must clear the active reply")
+}
+
+func TestRoot_EscKeepsEdit_XClearsIt(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock)
+	st.AppendMessage(store.Message{ID: 11, ChatID: 1, Text: "mine", IsOut: true, Date: time.Now()})
+	newM, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = newM.(ui.RootModel)
+
+	// edit -> enters insert mode with the edit set
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	m = newM.(ui.RootModel)
+	require.Equal(t, 11, m.Chat().EditMsgID())
+
+	// esc -> back to normal mode, edit kept
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = newM.(ui.RootModel)
+	require.Equal(t, 11, m.Chat().EditMsgID(), "esc must keep the edit")
+
+	// x -> explicitly clears the edit
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = newM.(ui.RootModel)
+	assert.Equal(t, 0, m.Chat().EditMsgID(), "x must clear the active edit")
+}
+
 func TestRoot_ReactKey_OpensReactionPicker(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)

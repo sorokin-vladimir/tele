@@ -348,8 +348,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 	case keys.ActionMsg:
 		if m.composerFocused {
 			if msg.Action == keys.ActionNormal {
-				m.clearPendingAction()
-				m.syncMsgListHeight()
+				// esc only unfocuses the composer; any reply/edit (and staged
+				// attachment) is kept. Removing the extra is the explicit job of
+				// the cancel key (x). See item C.
 				m.composerFocused = false
 				m.composer.Blur()
 				m.msgList.SetShowIndicator(true)

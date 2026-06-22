@@ -217,16 +217,16 @@ func TestChat_ClearPendingAction_ZerosState(t *testing.T) {
 	assert.Equal(t, 0, m.ReplyToMsgID())
 }
 
-func TestChat_ActionNormal_ClearsReplyState(t *testing.T) {
+func TestChat_ActionNormal_UnfocusesButKeepsReplyState(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	// enter composer
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
 	m.SetReply(10, "▌ Alice\n▌ hello")
-	// press Esc
+	// press Esc: only unfocuses; the reply is kept (cleared explicitly via x)
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
 	m = newPane.(*screens.ChatModel)
-	assert.Equal(t, 0, m.ReplyToMsgID())
+	assert.Equal(t, 10, m.ReplyToMsgID(), "esc keeps the reply")
 	assert.False(t, m.ComposerFocused())
 }
 
@@ -253,14 +253,14 @@ func TestChat_SetEdit_SetsState(t *testing.T) {
 	assert.Equal(t, 7, m.EditMsgID())
 }
 
-func TestChat_ActionNormal_ClearsEditState(t *testing.T) {
+func TestChat_ActionNormal_UnfocusesButKeepsEditState(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
 	m.SetEdit(7, "▌ Edit Message\n▌ hello")
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
 	m = newPane.(*screens.ChatModel)
-	assert.Equal(t, 0, m.EditMsgID())
+	assert.Equal(t, 7, m.EditMsgID(), "esc keeps the edit")
 	assert.False(t, m.ComposerFocused())
 }
 

@@ -227,8 +227,20 @@ func (m *ChatModel) MessageListHeight() int { return m.msgList.ViewHeight() }
 // ScrollInfo reports the message list's scroll position for the pane scrollbar.
 func (m *ChatModel) ScrollInfo() components.ScrollInfo { return m.msgList.ScrollInfo() }
 func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.ScrollToMessage(id) }
-func (m *ChatModel) ReplyToMsgID() int                 { return m.replyToMsgID }
-func (m *ChatModel) EditMsgID() int                    { return m.editMsgID }
+
+// HighlightMessage flashes the given message id in the list (jump-to highlight).
+func (m *ChatModel) HighlightMessage(id int) { m.msgList.HighlightMessage(id) }
+
+// StepHighlight advances the jump-to highlight fade; true while still active.
+func (m *ChatModel) StepHighlight() bool { return m.msgList.StepHighlight() }
+
+// HighlightedMsgID returns the currently highlighted message id (0 when none).
+func (m *ChatModel) HighlightedMsgID() int { return m.msgList.HighlightedMsgID() }
+
+// HighlightStep returns the current jump-to highlight fade step (0 when none).
+func (m *ChatModel) HighlightStep() int { return m.msgList.HighlightStep() }
+func (m *ChatModel) ReplyToMsgID() int  { return m.replyToMsgID }
+func (m *ChatModel) EditMsgID() int     { return m.editMsgID }
 
 // SetTypingLabel sets the active typing label and resets the animation frame.
 func (m *ChatModel) SetTypingLabel(base string) {

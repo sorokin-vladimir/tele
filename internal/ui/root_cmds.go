@@ -61,6 +61,18 @@ func typingDotsTickCmd() tea.Cmd {
 	})
 }
 
+func msgHighlightFadeCmd(serial int) tea.Cmd {
+	return tea.Tick(components.HighlightFadeInterval, func(time.Time) tea.Msg {
+		return msgHighlightFadeMsg{serial: serial}
+	})
+}
+
+func chatHighlightFadeCmd(serial int) tea.Cmd {
+	return tea.Tick(components.HighlightFadeInterval, func(time.Time) tea.Msg {
+		return chatHighlightFadeMsg{serial: serial}
+	})
+}
+
 func voiceTickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return voiceTickMsg{} })
 }

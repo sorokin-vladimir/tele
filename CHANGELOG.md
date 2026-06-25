@@ -25,6 +25,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   instantly, while `Tab` opens a comment line for the highlighted chat — the
   typed comment is sent as a separate message just before the forwarded message
   (#1)
+- Highlight cues that fade out over ~3 seconds: jumping to a message via "Jump to
+  original" briefly tints the target bubble's border in an accent color, and a
+  new incoming message that bumps a non-open chat to the top of the list briefly
+  tints that row's title. The accent is amber on dark themes and a more saturated
+  orange on light themes (#39)
 
 ### Changed
 

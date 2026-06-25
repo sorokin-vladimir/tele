@@ -15,6 +15,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.hasDarkBackground = msg.IsDark()
 		m.logo.SetDarkBackground(m.hasDarkBackground)
 		m.chat.SetDarkBackground(m.hasDarkBackground)
+		m.chatList.SetDarkBackground(m.hasDarkBackground)
 		return m, bgColorPollCmd()
 
 	case tea.WindowSizeMsg:
@@ -93,6 +94,28 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.contextMenu = nil
 		if !m.chat.ScrollToMessage(msg.MsgID) {
 			m.statusBar.SetStatus("Not in buffer")
+			return m, nil
+		}
+		m.chat.HighlightMessage(msg.MsgID)
+		m.msgHighlightSerial++
+		return m, msgHighlightFadeCmd(m.msgHighlightSerial)
+
+	case msgHighlightFadeMsg:
+		// Ignore ticks from a superseded highlight.
+		if msg.serial != m.msgHighlightSerial {
+			return m, nil
+		}
+		if m.chat.StepHighlight() {
+			return m, msgHighlightFadeCmd(m.msgHighlightSerial)
+		}
+		return m, nil
+
+	case chatHighlightFadeMsg:
+		if msg.serial != m.chatHighlightSerial {
+			return m, nil
+		}
+		if m.chatList.StepChatHighlight() {
+			return m, chatHighlightFadeCmd(m.chatHighlightSerial)
 		}
 		return m, nil
 

@@ -44,6 +44,11 @@ type MessageList struct {
 	// CursorUp/CursorDown. 0 means unset; selection then falls back to the
 	// newest visible message. It is the target for per-message actions.
 	cursorMsgID int
+
+	// highlightedMsgID is the message currently flashed by a "Jump to original"
+	// highlight; highlightStep counts down HighlightFadeSteps → 0 (0 = none).
+	highlightedMsgID int
+	highlightStep    int
 }
 
 // SetVoicePlayback marks a voice message (by document id) as currently playing,

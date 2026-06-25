@@ -29,6 +29,9 @@ var (
 	activeChatStyle   = lipgloss.NewStyle().Bold(true)
 	onlineDotStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	// chatHighlightBase is the tone the chat-row title highlight fades toward
+	// (approximates default light-grey text on a dark background).
+	chatHighlightBase = lipgloss.Color("250")
 )
 
 func formatUnread(count int) string {
@@ -64,13 +67,20 @@ func rowIndicators(c store.Chat) string {
 }
 
 type ChatListModel struct {
-	chats     []store.Chat
-	cursor    int
-	activeIdx int
-	width     int
-	height    int
-	focused   bool
-	spinner   components.Spinner
+	chats             []store.Chat
+	cursor            int
+	activeIdx         int
+	width             int
+	height            int
+	focused           bool
+	hasDarkBackground bool
+	spinner           components.Spinner
+
+	// highlightChatID is the chat currently flashed because a new incoming
+	// message bumped it to the top; highlightStep counts down to 0 (none).
+	// Tracked by id so the highlight survives SetChats reorders.
+	highlightChatID int64
+	highlightStep   int
 }
 
 func NewChatListModel() *ChatListModel {
@@ -108,6 +118,52 @@ func (m *ChatListModel) SetChats(chats []store.Chat) {
 		}
 	}
 }
+
+// HighlightChat starts a fade highlight on the chat-list row for the given id.
+func (m *ChatListModel) HighlightChat(id int64) {
+	m.highlightChatID = id
+	m.highlightStep = components.HighlightInitialStep
+}
+
+// StepChatHighlight advances the chat-row highlight fade by one step. Returns
+// true while still active; clears the highlight and returns false at 0. No-op
+// (false) when no highlight is active.
+func (m *ChatListModel) StepChatHighlight() bool {
+	if m.highlightStep <= 0 {
+		return false
+	}
+	m.highlightStep--
+	if m.highlightStep <= 0 {
+		m.highlightChatID = 0
+		return false
+	}
+	return true
+}
+
+// HighlightedChatID returns the currently highlighted chat id (0 when none).
+func (m *ChatListModel) HighlightedChatID() int64 { return m.highlightChatID }
+
+// HighlightStep returns the current chat-row fade step (0 when none).
+func (m *ChatListModel) HighlightStep() int { return m.highlightStep }
+
+// styleTitle applies the fade-accent foreground to a row's (already truncated)
+// title while that row is the active highlight target. The focused-cursor row
+// keeps its selection background instead, so it is left unstyled here.
+func (m *ChatListModel) styleTitle(i int, truncated string) string {
+	if m.highlightStep <= 0 || m.chats[i].ID != m.highlightChatID {
+		return truncated
+	}
+	if i == m.cursor && m.focused {
+		return truncated
+	}
+	fg := components.FadeAccentColor(components.HighlightAccentFor(m.hasDarkBackground), chatHighlightBase, m.highlightStep, components.HighlightFadeSteps)
+	return lipgloss.NewStyle().Foreground(fg).Render(truncated)
+}
+
+// SetDarkBackground records whether the terminal background is dark, so the
+// row highlight picks the accent tone suited to the theme.
+func (m *ChatListModel) SetDarkBackground(isDark bool) { m.hasDarkBackground = isDark }
+
 func (m *ChatListModel) Cursor() int         { return m.cursor }
 func (m *ChatListModel) ActiveIdx() int      { return m.activeIdx }
 func (m *ChatListModel) Chats() []store.Chat { return m.chats }
@@ -290,8 +346,9 @@ func (m *ChatListModel) View() string {
 
 		var content string
 		if badge == "" {
-			content = runewidth.Truncate(title, inner, "…")
-			lw := lipgloss.Width(content)
+			trunc := runewidth.Truncate(title, inner, "…")
+			lw := lipgloss.Width(trunc)
+			content = m.styleTitle(i, trunc)
 			if lw < inner {
 				content += strings.Repeat(" ", inner-lw)
 			}
@@ -307,7 +364,7 @@ func (m *ChatListModel) View() string {
 			if pad < 0 {
 				pad = 0
 			}
-			content = truncTitle + strings.Repeat(" ", pad) + badge
+			content = m.styleTitle(i, truncTitle) + strings.Repeat(" ", pad) + badge
 		}
 
 		line := prefix + content

@@ -1,7 +1,6 @@
 package components
 
 import (
-	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -60,12 +59,7 @@ func (ml *MessageList) measureBubble(msg store.Message) bubbleMetrics {
 		maxContentW = 4
 	}
 
-	var borderFg color.Color
-	if msg.IsOut {
-		borderFg = lipgloss.Color("25")
-	} else {
-		borderFg = lipgloss.Color("238")
-	}
+	borderFg := ml.bubbleBorderFg(msg)
 	b := lipgloss.RoundedBorder()
 	bs := lipgloss.NewStyle().Foreground(borderFg)
 

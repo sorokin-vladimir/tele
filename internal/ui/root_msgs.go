@@ -101,6 +101,14 @@ type FolderFiltersMsg struct {
 
 type clearTypingMsg struct{ serial int }
 
+// msgHighlightFadeMsg advances the jump-to message-bubble highlight fade by one
+// step. serial guards against stale ticks from a superseded highlight.
+type msgHighlightFadeMsg struct{ serial int }
+
+// chatHighlightFadeMsg advances the chat-list row highlight fade by one step.
+// serial guards against stale ticks from a superseded highlight.
+type chatHighlightFadeMsg struct{ serial int }
+
 // StatusErrMsg surfaces a transient, severity-tagged error in the status bar.
 type StatusErrMsg struct {
 	Text string

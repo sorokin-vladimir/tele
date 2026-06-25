@@ -94,14 +94,19 @@ type RootModel struct {
 	activeFilter      *store.FolderFilter
 	logo              components.LogoLoader
 	typingSerial      int
-	tmpDir            string
-	voicePlayer       *audio.Player
-	filePicker        *screens.FilePickerModel
-	videoPlayer       *videoPlayer
-	pendingAttachment *pendingAttachment
-	lastPickerDir     string
-	uploadCancels     map[int]context.CancelFunc
-	uploadProgress    map[int]chan uploadProgressMsg
+	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
+	// newer highlight or a stale tick is ignored.
+	msgHighlightSerial int
+	// chatHighlightSerial guards the chat-list row highlight fade loop.
+	chatHighlightSerial int
+	tmpDir              string
+	voicePlayer         *audio.Player
+	filePicker          *screens.FilePickerModel
+	videoPlayer         *videoPlayer
+	pendingAttachment   *pendingAttachment
+	lastPickerDir       string
+	uploadCancels       map[int]context.CancelFunc
+	uploadProgress      map[int]chan uploadProgressMsg
 }
 
 // Image-cache capacities (entry counts). Thumbnails churn fast and are small;
@@ -361,6 +366,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.SpinnerTickMsg,
 		components.TypingDotsTickMsg,
 		clearTypingMsg,
+		msgHighlightFadeMsg,
+		chatHighlightFadeMsg,
 		screens.AuthRequestMsg,
 		screens.ConnectedMsg,
 		screens.AuthErrorMsg,

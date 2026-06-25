@@ -21,7 +21,8 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		// overwritten by authoritative GetDialogs server state, so it must not be
 		// shadowed by a sticky list badge.
 		unreadChanged := false
-		if msg.Message.ChatID != m.currentChatID && !msg.Message.IsOut {
+		incomingOther := msg.Message.ChatID != m.currentChatID && !msg.Message.IsOut
+		if incomingOther {
 			if chat, ok := m.st.GetChat(msg.Message.ChatID); ok && msg.Message.ID > chat.ReadInboxMaxID {
 				m.st.IncrementChatUnread(msg.Message.ChatID)
 				unreadChanged = true
@@ -33,10 +34,19 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		if m.folderBar != nil && unreadChanged {
 			m.syncFolderBar()
 		}
+		// Flash the row of a non-open chat that just bumped to the top so the eye
+		// can follow the reorder (issue #39, second section).
+		var highlightCmd tea.Cmd
+		if incomingOther {
+			m.chatList.HighlightChat(msg.Message.ChatID)
+			m.chatHighlightSerial++
+			highlightCmd = chatHighlightFadeCmd(m.chatHighlightSerial)
+		}
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
 			return m, tea.Batch(m.markReadCmd(), m.pendingDownloadCmds([]store.Message{msg.Message}))
 		}
+		return m, highlightCmd
 	case store.EventReadInbox:
 		if m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID) {
 			if chat, ok := m.st.GetChat(msg.ChatID); ok {

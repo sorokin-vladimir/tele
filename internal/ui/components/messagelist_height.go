@@ -141,9 +141,32 @@ func (ml *MessageList) msgHeight(msg store.Message) int {
 	return h + 2 // +2 border lines (top+bottom)
 }
 
+// itemHeight returns the rendered line count for item i, memoized in heightCache.
+// The expensive path (msgHeight → full word-wrap) runs only on a cache miss;
+// invalidateHeights clears the cache whenever an input to the height changes.
 func (ml *MessageList) itemHeight(i int) int {
+	if h, ok := ml.heightCache[i]; ok {
+		return h
+	}
+	h := ml.computeItemHeight(i)
+	if ml.heightCache == nil {
+		ml.heightCache = make(map[int]int, len(ml.items))
+	}
+	ml.heightCache[i] = h
+	return h
+}
+
+func (ml *MessageList) computeItemHeight(i int) int {
+	ml.heightComputes++
 	if ml.items[i].kind == itemDateSeparator || ml.items[i].kind == itemUnreadSeparator {
 		return 3
 	}
 	return ml.msgHeight(ml.items[i].msg)
+}
+
+// invalidateHeights drops every memoized height. Cheap and called only on
+// non-per-frame mutations (items rebuilt, resize, image load, group/media-cap
+// changes), so steady-state frames keep hitting a warm cache.
+func (ml *MessageList) invalidateHeights() {
+	clear(ml.heightCache)
 }

@@ -62,6 +62,7 @@ func (ml *MessageList) buildItems(msgs []store.Message) []listItem {
 
 func (ml *MessageList) SetMessages(msgs []store.Message) {
 	ml.items = ml.buildItems(msgs)
+	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	ml.setCursorNewest()
 }
@@ -80,6 +81,7 @@ func (ml *MessageList) SetMessagesKeepScroll(msgs []store.Message) {
 
 	vs, lo := ml.viewStart, ml.lineOffset
 	ml.items = ml.buildItems(msgs)
+	ml.invalidateHeights()
 	if wasAtBottom {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 		return
@@ -118,6 +120,7 @@ func (ml *MessageList) RemoveMessage(id int) {
 	}
 
 	ml.items = ml.buildItems(msgs)
+	ml.invalidateHeights()
 
 	if len(ml.items) == 0 {
 		ml.viewStart = 0
@@ -175,6 +178,7 @@ func (ml *MessageList) PrependMessages(older []store.Message) {
 	}
 	oldLen := len(ml.items)
 	ml.items = ml.buildItems(append(fresh, current...))
+	ml.invalidateHeights()
 	ml.viewStart += len(ml.items) - oldLen
 }
 

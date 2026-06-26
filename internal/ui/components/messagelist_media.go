@@ -116,6 +116,9 @@ func (ml *MessageList) SetMaxMediaPx(px int) {
 	if px != ml.maxMediaPx && ml.renderer != nil {
 		ml.renderer.Reset()
 	}
+	if px != ml.maxMediaPx {
+		ml.invalidateHeights() // image footprint cap changed → heights change
+	}
 	ml.maxMediaPx = px
 }
 
@@ -134,6 +137,7 @@ func (ml *MessageList) SetImage(photoID int64, img image.Image) {
 	if ml.imageCache != nil {
 		ml.imageCache.Add(photoID, img)
 	}
+	ml.invalidateHeights() // image now available → its reserved footprint changes
 	if wasAtBottom {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	}
@@ -146,6 +150,7 @@ func (ml *MessageList) SetKnownImages(cache *imagecache.Cache) {
 	botIdx, botOff := ml.positionAtBottom()
 	wasAtBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 	ml.imageCache = cache
+	ml.invalidateHeights() // newly known images change reserved footprints
 	if wasAtBottom {
 		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	}

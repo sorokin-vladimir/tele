@@ -49,7 +49,24 @@ type MessageList struct {
 	// highlight; highlightStep counts down HighlightFadeSteps → 0 (0 = none).
 	highlightedMsgID int
 	highlightStep    int
+
+	// heightCache memoizes itemHeight by item index. Measuring a message's
+	// rendered height runs a full word-wrap (RenderEntities + lipgloss), and
+	// ScrollInfo/positionAtBottom/View recompute every item's height several
+	// times per frame at the tick cadence — the dominant idle/per-chat CPU cost
+	// (issue #146). The cache is keyed by index and fully invalidated whenever
+	// anything that affects heights changes (items rebuilt, resize, image load,
+	// group flag, media cap), so a stale entry is never read.
+	heightCache map[int]int
+	// heightComputes counts cache misses (full height computations); test-only
+	// instrumentation exposed via HeightComputesForTest.
+	heightComputes int
 }
+
+// HeightComputesForTest reports the cumulative number of full message-height
+// computations (height-cache misses). Tests use deltas across calls to assert
+// memoization and invalidation behavior.
+func (ml *MessageList) HeightComputesForTest() int { return ml.heightComputes }
 
 // SetVoicePlayback marks a voice message (by document id) as currently playing,
 // driving the animated waveform playhead and live position. Pass docID 0 to clear.
@@ -99,6 +116,11 @@ func (ml *MessageList) SetSize(width, height int) {
 	if width != ml.viewWidth && ml.renderer != nil {
 		ml.renderer.Reset()
 	}
+	// Heights depend on both dimensions: width drives word-wrap, height caps the
+	// inline-image footprint (mediaBox → photoBox). Invalidate on any change.
+	if width != ml.viewWidth || height != ml.viewHeight {
+		ml.invalidateHeights()
+	}
 	ml.viewWidth = width
 	ml.viewHeight = height
 }
@@ -118,7 +140,7 @@ func (ml *MessageList) LineOffset() int { return ml.lineOffset }
 func (ml *MessageList) ViewHeight() int { return ml.viewHeight }
 
 func (ml *MessageList) AtTop() bool                   { return ml.viewStart == 0 && ml.lineOffset == 0 }
-func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v }
+func (ml *MessageList) SetIsGroup(v bool)             { ml.isGroup = v; ml.invalidateHeights() }
 func (ml *MessageList) SetOutboxReadMaxID(id int)     { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)      { ml.inboxReadMaxID = id }
 func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = isDark }
@@ -126,6 +148,11 @@ func (ml *MessageList) SetDarkBackground(isDark bool) { ml.hasDarkBackground = i
 // SetImageMode tells the list which inline-image backend is active. Static
 // stickers only render in Kitty mode (transparency); other modes keep the
 // emoji placeholder.
-func (ml *MessageList) SetImageMode(mode media.Mode) { ml.imageMode = mode }
+func (ml *MessageList) SetImageMode(mode media.Mode) {
+	if mode != ml.imageMode {
+		ml.invalidateHeights() // toggles static-sticker inline image → height changes
+	}
+	ml.imageMode = mode
+}
 
 func (ml *MessageList) SetShowIndicator(v bool) { ml.showIndicator = v }

@@ -1579,3 +1579,56 @@ func TestMessageList_SelectedMessageDocument_NotAFile(t *testing.T) {
 	_, ok := ml.SelectedMessageDocument()
 	assert.False(t, ok)
 }
+
+func heightTestList() *components.MessageList {
+	ml := components.NewMessageList(5, 40)
+	msgs := make([]store.Message, 0, 10)
+	for i := 1; i <= 10; i++ {
+		msgs = append(msgs, store.Message{ID: i, Text: "hello world", Date: time.Now()})
+	}
+	ml.SetMessages(msgs)
+	return ml
+}
+
+func TestMessageList_ItemHeights_MemoizedAcrossCalls(t *testing.T) {
+	ml := heightTestList()
+
+	base := ml.HeightComputesForTest()
+	ml.ScrollInfo()
+	d1 := ml.HeightComputesForTest() - base
+	assert.Greater(t, d1, 0, "first ScrollInfo must compute item heights")
+
+	mid := ml.HeightComputesForTest()
+	ml.ScrollInfo()
+	d2 := ml.HeightComputesForTest() - mid
+	assert.Equal(t, 0, d2, "second ScrollInfo must hit the height cache, recomputing nothing")
+}
+
+func TestMessageList_ItemHeights_InvalidatedOnResize(t *testing.T) {
+	ml := heightTestList()
+	ml.ScrollInfo() // populate cache
+
+	base := ml.HeightComputesForTest()
+	ml.SetSize(60, 5) // width change must invalidate
+	ml.ScrollInfo()
+	assert.Greater(t, ml.HeightComputesForTest()-base, 0, "resize must invalidate the height cache")
+}
+
+func TestMessageList_ItemHeights_InvalidatedOnEdit(t *testing.T) {
+	ml := heightTestList()
+	before := ml.ScrollInfo().Total
+
+	// Edit message 5 to span many wrapped lines; total height must grow, proving
+	// the cache was invalidated rather than serving the stale single-line height.
+	edited := make([]store.Message, 0, 10)
+	for i := 1; i <= 10; i++ {
+		m := store.Message{ID: i, Text: "hello world", Date: time.Now()}
+		if i == 5 {
+			m.Text = strings.Repeat("word ", 200)
+		}
+		edited = append(edited, m)
+	}
+	ml.SetMessagesKeepScroll(edited)
+
+	assert.Greater(t, ml.ScrollInfo().Total, before, "edited longer message must increase total height")
+}

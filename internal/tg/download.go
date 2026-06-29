@@ -50,6 +50,29 @@ func (c *GotdClient) DownloadPhoto(ctx context.Context, ref store.PhotoRef) (ima
 	return img, nil
 }
 
+// DownloadPhotoToFile streams the raw photo bytes (the size named by
+// ref.ThumbSize) directly into dst without decoding, so a photo can be saved to
+// disk at full quality. Mirrors DownloadDocumentToFile.
+func (c *GotdClient) DownloadPhotoToFile(ctx context.Context, ref store.PhotoRef, dst io.Writer) error {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+
+	loc := &gotdtg.InputPhotoFileLocation{
+		ID:            ref.ID,
+		AccessHash:    ref.AccessHash,
+		FileReference: ref.FileReference,
+		ThumbSize:     ref.ThumbSize,
+	}
+
+	d := downloader.NewDownloader()
+	if _, err := d.Download(api, loc).Stream(ctx, dst); err != nil {
+		return fmt.Errorf("download photo %d: %w", ref.ID, err)
+	}
+	return nil
+}
+
 // DownloadDocument fetches the full document file as raw bytes.
 func (c *GotdClient) DownloadDocument(ctx context.Context, ref store.DocumentRef) ([]byte, error) {
 	api, err := c.acquireAPI()

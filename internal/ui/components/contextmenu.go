@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	lipcompat "charm.land/lipgloss/v2/compat"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
@@ -43,13 +44,12 @@ type EditMsgRequest struct {
 	MsgID int
 }
 
-// OpenInViewerRequest is emitted when the user selects "Open in viewer" for a photo message.
-type OpenInViewerRequest struct {
-	PhotoID int64
-}
+// OpenInViewerRequest is emitted when the user selects "Open in app" for a
+// media message (the in-app modal).
+type OpenInViewerRequest struct{}
 
 // OpenExternalRequest is emitted when the user selects "Open externally" for a
-// video message.
+// photo or video message.
 type OpenExternalRequest struct{}
 
 // PlayVoiceRequest is emitted when the user selects "Play" for a voice message.
@@ -95,26 +95,25 @@ type ContextMenu struct {
 	msgID        int
 	isOut        bool
 	replyToMsgID int
-	photoID      int64
-	hasVideo     bool
-	hasVoice     bool
-	hasFile      bool
+	mediaKind    store.MediaKind
+	hasMedia     bool
 	keyMap       keys.KeyMap
 }
 
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, photoID int64, hasVideo, hasVoice, hasFile bool, km keys.KeyMap) *ContextMenu {
+// NewContextMenu builds the chat message context menu. mediaKind is the kind of
+// the selected message's media and hasMedia reports whether the message carries
+// any media (when false, mediaKind is ignored and no media actions are shown).
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind store.MediaKind, hasMedia bool, km keys.KeyMap) *ContextMenu {
 	cm := &ContextMenu{
 		msgID:        msgID,
 		isOut:        isOut,
 		replyToMsgID: replyToMsgID,
-		photoID:      photoID,
-		hasVideo:     hasVideo,
-		hasVoice:     hasVoice,
-		hasFile:      hasFile,
+		mediaKind:    mediaKind,
+		hasMedia:     hasMedia,
 		keyMap:       km,
 		list:         NewListView(true),
 	}
-	cm.setItems(mainItems(isOut, replyToMsgID != 0, photoID != 0, hasVideo, hasVoice, hasFile))
+	cm.setItems(mainItems(isOut, replyToMsgID != 0, mediaKind, hasMedia))
 	return cm
 }
 
@@ -130,7 +129,7 @@ func (cm *ContextMenu) setItems(items []menuItem) {
 
 func (cm *ContextMenu) Cursor() int { return cm.list.Cursor() }
 
-func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool, hasVoice bool, hasFile bool) []menuItem {
+func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia bool) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -143,19 +142,42 @@ func mainItems(isOut bool, isReply bool, hasPhoto bool, hasVideo bool, hasVoice 
 	if isOut {
 		items = append(items, menuItem{label: "Edit", action: keys.ActionEdit})
 	}
-	switch {
-	case hasPhoto:
-		items = append(items, menuItem{label: "Open in viewer", action: keys.ActionOpenInViewer})
-	case hasVideo:
-		items = append(items, menuItem{label: "Play in app", action: keys.ActionOpenInViewer})
-		items = append(items, menuItem{label: "Open externally", action: keys.ActionOpenExternal})
-	case hasVoice:
-		items = append(items, menuItem{label: "Play", action: keys.ActionPlayVoice})
-	case hasFile:
-		items = append(items, menuItem{label: "Download", action: keys.ActionDownloadFile})
+	if hasMedia {
+		items = append(items, mediaItems(mediaKind)...)
 	}
 	items = append(items, menuItem{label: "Delete", action: keys.ActionDelete})
 	return items
+}
+
+// mediaItems returns the media actions for a message of the given kind:
+// download is offered for everything downloadable; external open for photo and
+// video; the in-app modal for video; in-app playback for voice. Stickers and
+// non-file media (location, etc.) get no media actions.
+func mediaItems(kind store.MediaKind) []menuItem {
+	switch kind {
+	case store.MediaPhoto:
+		return []menuItem{
+			{label: "Open externally", action: keys.ActionOpenExternal},
+			{label: "Download", action: keys.ActionDownloadFile},
+		}
+	case store.MediaVideo, store.MediaVideoNote:
+		return []menuItem{
+			{label: "Open in app", action: keys.ActionOpenInViewer},
+			{label: "Open externally", action: keys.ActionOpenExternal},
+			{label: "Download", action: keys.ActionDownloadFile},
+		}
+	case store.MediaVoice:
+		return []menuItem{
+			{label: "Play", action: keys.ActionPlayVoice},
+			{label: "Download", action: keys.ActionDownloadFile},
+		}
+	case store.MediaAudio, store.MediaGIF, store.MediaFile:
+		return []menuItem{
+			{label: "Download", action: keys.ActionDownloadFile},
+		}
+	default:
+		return nil
+	}
 }
 
 func deleteSubItems() []menuItem {
@@ -196,7 +218,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.setItems(mainItems(cm.isOut, cm.replyToMsgID != 0, cm.photoID != 0, cm.hasVideo, cm.hasVoice, cm.hasFile))
+			cm.setItems(mainItems(cm.isOut, cm.replyToMsgID != 0, cm.mediaKind, cm.hasMedia))
 			return cm, nil
 		}
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
@@ -248,8 +270,7 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 		msgID := cm.msgID
 		return nil, func() tea.Msg { return DeleteMsgRequest{MsgID: msgID, Revoke: true} }
 	case keys.ActionOpenInViewer:
-		photoID := cm.photoID
-		return nil, func() tea.Msg { return OpenInViewerRequest{PhotoID: photoID} }
+		return nil, func() tea.Msg { return OpenInViewerRequest{} }
 	case keys.ActionOpenExternal:
 		return nil, func() tea.Msg { return OpenExternalRequest{} }
 	case keys.ActionDownloadFile:

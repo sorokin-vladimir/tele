@@ -360,6 +360,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		kittyTransmittedMsg,
 		components.OpenInViewerRequest,
 		components.OpenExternalRequest,
+		components.DownloadFileRequest,
 		components.PlayVoiceRequest,
 		voicePlayReadyMsg,
 		voiceTickMsg:

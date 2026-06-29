@@ -1557,27 +1557,64 @@ func TestMessageList_ScrollInfo_TopAndBottom(t *testing.T) {
 	assert.Equal(t, bottom.Total, top.Total, "total unchanged by scrolling")
 }
 
-func TestMessageList_SelectedMessageDocument_File(t *testing.T) {
+func TestMessageList_SelectedMessagePhoto(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages([]store.Message{{
 		ID: 1, ChatID: 1, Date: time.Now(),
-		Media:    &store.MediaRef{Kind: store.MediaFile},
-		Document: &store.DocumentRef{ID: 5, FileName: "report.pdf"},
+		Media: &store.MediaRef{Kind: store.MediaPhoto},
+		Photo: &store.PhotoRef{ID: 77, FullThumbSize: "y"},
 	}})
 	ml.View()
 
-	ref, ok := ml.SelectedMessageDocument()
+	ref, ok := ml.SelectedMessagePhoto()
 	require.True(t, ok)
-	assert.Equal(t, "report.pdf", ref.FileName)
+	assert.Equal(t, int64(77), ref.ID)
 }
 
-func TestMessageList_SelectedMessageDocument_NotAFile(t *testing.T) {
+func TestMessageList_SelectedMessagePhoto_NotAPhoto(t *testing.T) {
 	ml := components.NewMessageList(3, 40)
 	ml.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
 	ml.View()
 
-	_, ok := ml.SelectedMessageDocument()
+	_, ok := ml.SelectedMessagePhoto()
 	assert.False(t, ok)
+}
+
+// SelectedMessageDownloadDoc returns the document of any downloadable
+// document-backed media (video, note, voice, audio, gif, file), but NOT
+// stickers and NOT photos.
+func TestMessageList_SelectedMessageDownloadDoc(t *testing.T) {
+	doc := &store.DocumentRef{ID: 5}
+	cases := []struct {
+		name     string
+		msg      store.Message
+		wantOK   bool
+		wantKind store.MediaKind
+	}{
+		{"video", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVideo}, Document: doc}, true, store.MediaVideo},
+		{"video note", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVideoNote}, Document: doc}, true, store.MediaVideoNote},
+		{"voice", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaVoice}, Document: doc}, true, store.MediaVoice},
+		{"audio", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaAudio}, Document: doc}, true, store.MediaAudio},
+		{"gif", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaGIF}, Document: doc}, true, store.MediaGIF},
+		{"file", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaFile}, Document: doc}, true, store.MediaFile},
+		{"sticker excluded", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaSticker}, Document: doc}, false, 0},
+		{"photo excluded", store.Message{ID: 1, Date: time.Now(), Media: &store.MediaRef{Kind: store.MediaPhoto}, Photo: &store.PhotoRef{ID: 9}}, false, 0},
+		{"text excluded", store.Message{ID: 1, Date: time.Now(), Text: "hi"}, false, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ml := components.NewMessageList(3, 40)
+			ml.SetMessages([]store.Message{c.msg})
+			ml.View()
+
+			ref, kind, ok := ml.SelectedMessageDownloadDoc()
+			assert.Equal(t, c.wantOK, ok)
+			if c.wantOK {
+				assert.Equal(t, int64(5), ref.ID)
+				assert.Equal(t, c.wantKind, kind)
+			}
+		})
+	}
 }
 
 func heightTestList() *components.MessageList {

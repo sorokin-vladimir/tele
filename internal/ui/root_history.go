@@ -194,18 +194,8 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case components.OpenInViewerRequest:
-		if msg.PhotoID != 0 {
-			img, ok := m.fullImageCache.Get(msg.PhotoID)
-			if !ok {
-				img, _ = m.imageCache.Get(msg.PhotoID)
-			}
-			if img != nil {
-				go openInViewer(img, m.tmpDir)
-			}
-			return m, nil
-		}
-		// No photo on the request → a video message. Route exactly like the vim
-		// open key: in-app modal when Kitty + ffmpeg, else the external player.
+		// In-app modal. Photo modals are deferred, so a photo request is a no-op;
+		// videos open in the modal (external-player fallback without Kitty+ffmpeg).
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
 				dur, sender := m.selectedVideoInfo()
@@ -216,16 +206,16 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case components.OpenExternalRequest:
+		if photoID := m.chat.SelectedMessagePhotoID(); photoID != 0 {
+			return m.openPhotoExternal(photoID)
+		}
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
 		}
 		return m, nil
 
 	case components.DownloadFileRequest:
-		if ref, ok := m.chat.SelectedMessageDocument(); ok {
-			return m.startFileDownload(ref, m.chat.SelectedMessageID())
-		}
-		return m, nil
+		return m.handleDownloadSelected()
 
 	case components.PlayVoiceRequest:
 		return m.handlePlayVoice()

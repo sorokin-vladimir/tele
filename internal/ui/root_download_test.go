@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
@@ -13,6 +15,100 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// downloadCompletionText runs a command (possibly batched) and returns the
+// fileDownloadDoneMsg text it produces, if any.
+func downloadCompletionText(cmd tea.Cmd) (string, bool) {
+	if cmd == nil {
+		return "", false
+	}
+	for _, msg := range drainMsgs(cmd()) {
+		if text, _, ok := ui.FileDownloadDoneTextForTest(msg); ok {
+			return text, true
+		}
+	}
+	return "", false
+}
+
+func TestDownloadKey_OnPhoto_SavesFullQualityJpg(t *testing.T) {
+	dir := t.TempDir()
+	defer ui.SetDownloadsDirForTest(dir)()
+
+	mc := &mockTGClient{
+		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+			_, err := io.WriteString(dst, "jpeg")
+			return err
+		},
+	}
+	m, st := newRootOnChat(t, mc)
+
+	photo := store.Message{ID: 10, ChatID: 1, Date: time.Now(),
+		Media: &store.MediaRef{Kind: store.MediaPhoto},
+		Photo: &store.PhotoRef{ID: 321, FullThumbSize: "y"}}
+	st.AppendMessage(photo)
+	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = nm.(ui.RootModel)
+	m.View() // lay out the message list so the photo becomes the selection
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	text, ok := downloadCompletionText(cmd)
+	require.True(t, ok, "pressing s on a photo must start a download")
+	assert.Contains(t, text, filepath.Join(dir, "photo_321.jpg"))
+}
+
+func TestDownloadKey_OnVideo_SavesSynthesizedName(t *testing.T) {
+	dir := t.TempDir()
+	defer ui.SetDownloadsDirForTest(dir)()
+
+	mc := &mockTGClient{
+		downloadDocFileFunc: func(dst io.Writer) error {
+			_, err := io.WriteString(dst, "mp4")
+			return err
+		},
+	}
+	m, st := newRootOnChat(t, mc)
+
+	video := store.Message{ID: 11, ChatID: 1, Date: time.Now(),
+		Media:    &store.MediaRef{Kind: store.MediaVideo},
+		Document: &store.DocumentRef{ID: 654, MimeType: "video/mp4"}}
+	st.AppendMessage(video)
+	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = nm.(ui.RootModel)
+	m.View()
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	text, ok := downloadCompletionText(cmd)
+	require.True(t, ok, "pressing s on a video must start a download")
+	assert.Contains(t, text, filepath.Join(dir, "video_654.mp4"))
+}
+
+// The context-menu Download request must be routed (it was previously dropped in
+// the root update switch).
+func TestDownloadFileRequest_RoutedForPhoto(t *testing.T) {
+	dir := t.TempDir()
+	defer ui.SetDownloadsDirForTest(dir)()
+
+	mc := &mockTGClient{
+		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+			_, err := io.WriteString(dst, "jpeg")
+			return err
+		},
+	}
+	m, st := newRootOnChat(t, mc)
+
+	photo := store.Message{ID: 12, ChatID: 1, Date: time.Now(),
+		Media: &store.MediaRef{Kind: store.MediaPhoto},
+		Photo: &store.PhotoRef{ID: 999}}
+	st.AppendMessage(photo)
+	nm, _ := m.Update(ui.ChatHistoryMsg{ChatID: 1, Messages: st.Messages(1)})
+	m = nm.(ui.RootModel)
+	m.View()
+
+	_, cmd := m.Update(components.DownloadFileRequest{})
+	text, ok := downloadCompletionText(cmd)
+	require.True(t, ok, "DownloadFileRequest must be routed to a download")
+	assert.Contains(t, text, filepath.Join(dir, "photo_999.jpg"))
+}
 
 // openDocumentCmd must stream the document straight to a temp file (never
 // buffering it) and hand that path to the OS launcher.
@@ -147,6 +243,66 @@ func TestDownloadFileCmd_CollisionGetsSuffix(t *testing.T) {
 	text, _, ok := ui.FileDownloadDoneTextForTest(msg)
 	require.True(t, ok)
 	assert.Contains(t, text, "report (1).pdf")
+}
+
+func TestDownloadPhotoFileCmd_SavesJpg(t *testing.T) {
+	dir := t.TempDir()
+	const body = "\xff\xd8\xff raw jpeg bytes"
+	client := &mockTGClient{
+		downloadPhotoFileFunc: func(_ store.PhotoRef, dst io.Writer) error {
+			_, err := io.WriteString(dst, body)
+			return err
+		},
+	}
+
+	ref := store.PhotoRef{ID: 42}
+	msg := ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+
+	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
+	require.True(t, ok, "completion must be a fileDownloadDoneMsg")
+	assert.Equal(t, components.SeverityInfo, sev)
+	assert.Contains(t, text, filepath.Join(dir, "photo_42.jpg"))
+
+	data, err := os.ReadFile(filepath.Join(dir, "photo_42.jpg"))
+	require.NoError(t, err)
+	assert.Equal(t, body, string(data))
+}
+
+// The saved photo must be the full-quality size: the command requests
+// ref.FullThumbSize, not the small inline ThumbSize.
+func TestDownloadPhotoFileCmd_UsesFullQuality(t *testing.T) {
+	dir := t.TempDir()
+	var gotRef store.PhotoRef
+	client := &mockTGClient{
+		downloadPhotoFileFunc: func(ref store.PhotoRef, dst io.Writer) error {
+			gotRef = ref
+			_, err := io.WriteString(dst, "x")
+			return err
+		},
+	}
+
+	ref := store.PhotoRef{ID: 42, ThumbSize: "m", FullThumbSize: "y"}
+	_ = ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+
+	assert.Equal(t, "y", gotRef.ThumbSize, "must download the full-quality size")
+}
+
+func TestDownloadPhotoFileCmd_FailureLeavesNoFile(t *testing.T) {
+	dir := t.TempDir()
+	client := &mockTGClient{
+		downloadPhotoFileFunc: func(_ store.PhotoRef, _ io.Writer) error { return assert.AnError },
+	}
+	ref := store.PhotoRef{ID: 42}
+	msg := ui.DownloadPhotoFileCmdForTest(client, store.Peer{ID: 1}, 99, ref, dir)()
+
+	text, sev, ok := ui.FileDownloadDoneTextForTest(msg)
+	require.True(t, ok)
+	assert.Equal(t, components.SeverityWarning, sev)
+	assert.NotEmpty(t, text)
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "partial download must be removed")
 }
 
 func TestDownloadFileCmd_FailureLeavesNoFile(t *testing.T) {

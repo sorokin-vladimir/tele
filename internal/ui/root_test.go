@@ -25,27 +25,28 @@ import (
 )
 
 type mockTGClient struct {
-	history              []store.Message
-	historyErr           error
-	sendFunc             func() int
-	sendErr              error
-	reactionErr          error
-	lastReplyToMsgID     int
-	downloadPhotoFunc    func() (image.Image, error)
-	downloadDocImageFunc func() (image.Image, error)
-	downloadDocFileFunc  func(dst io.Writer) error
-	refreshFunc          func(msgID int) (store.Message, error)
-	lastSendCtx          context.Context
-	sendMediaErr         error
-	uploadErr            error
-	lastSendMediaParams  internaltg.SendMediaParams
-	savedDrafts          []savedDraft
-	forwardErr           error
-	lastForwardFrom      store.Peer
-	lastForwardTo        store.Peer
-	lastForwardIDs       []int
-	lastSendText         string
-	sendCount            int
+	history               []store.Message
+	historyErr            error
+	sendFunc              func() int
+	sendErr               error
+	reactionErr           error
+	lastReplyToMsgID      int
+	downloadPhotoFunc     func() (image.Image, error)
+	downloadPhotoFileFunc func(ref store.PhotoRef, dst io.Writer) error
+	downloadDocImageFunc  func() (image.Image, error)
+	downloadDocFileFunc   func(dst io.Writer) error
+	refreshFunc           func(msgID int) (store.Message, error)
+	lastSendCtx           context.Context
+	sendMediaErr          error
+	uploadErr             error
+	lastSendMediaParams   internaltg.SendMediaParams
+	savedDrafts           []savedDraft
+	forwardErr            error
+	lastForwardFrom       store.Peer
+	lastForwardTo         store.Peer
+	lastForwardIDs        []int
+	lastSendText          string
+	sendCount             int
 }
 
 type savedDraft struct {
@@ -115,6 +116,12 @@ func (m *mockTGClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image
 		return m.downloadPhotoFunc()
 	}
 	return nil, nil
+}
+func (m *mockTGClient) DownloadPhotoToFile(_ context.Context, ref store.PhotoRef, dst io.Writer) error {
+	if m.downloadPhotoFileFunc != nil {
+		return m.downloadPhotoFileFunc(ref, dst)
+	}
+	return nil
 }
 func (m *mockTGClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
 	return nil, nil
@@ -1658,7 +1665,7 @@ func TestRoot_EventDeleteMessages_NonChannel_TargetsOwningChat(t *testing.T) {
 	require.Len(t, st.Messages(2), 1) // unrelated chat untouched
 }
 
-func TestRoot_ContextMenu_PhotoMessage_ShowsOpenInViewer(t *testing.T) {
+func TestRoot_ContextMenu_PhotoMessage_ShowsExternalAndDownload(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -1676,10 +1683,12 @@ func TestRoot_ContextMenu_PhotoMessage_ShowsOpenInViewer(t *testing.T) {
 	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
 	m = newM.(ui.RootModel)
 	require.True(t, m.ContextMenuOpen())
-	assert.Contains(t, m.View().Content, "Open in viewer")
+	content := m.View().Content
+	assert.Contains(t, content, "Open externally")
+	assert.Contains(t, content, "Download")
 }
 
-func TestRoot_ContextMenu_NonPhotoMessage_HidesOpenInViewer(t *testing.T) {
+func TestRoot_ContextMenu_NonMediaMessage_HidesMediaActions(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -1691,7 +1700,9 @@ func TestRoot_ContextMenu_NonPhotoMessage_HidesOpenInViewer(t *testing.T) {
 	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
 	m = newM.(ui.RootModel)
 	require.True(t, m.ContextMenuOpen())
-	assert.NotContains(t, m.View().Content, "Open in viewer")
+	content := m.View().Content
+	assert.NotContains(t, content, "Open externally")
+	assert.NotContains(t, content, "Download")
 }
 
 func TestRoot_EventUserPresence_UpdatesChatOnline(t *testing.T) {

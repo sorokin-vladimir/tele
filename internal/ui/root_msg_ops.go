@@ -363,8 +363,8 @@ func (m RootModel) handleDocumentOpenDone(msg documentOpenDoneMsg) (RootModel, t
 // auto-clear timer.
 func (m RootModel) handleFileDownloadDone(msg fileDownloadDoneMsg) (RootModel, tea.Cmd) {
 	m.statusBar.ClearDownload(msg.serial)
-	if msg.doc != nil && m.st != nil {
-		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, nil, msg.doc)
+	if (msg.doc != nil || msg.photo != nil) && m.st != nil {
+		m.st.UpdateMessageMedia(msg.chatID, msg.msgID, msg.photo, msg.doc)
 	}
 	serial := m.statusBar.SetError(msg.text, msg.sev)
 	d := durationFor(msg.sev)

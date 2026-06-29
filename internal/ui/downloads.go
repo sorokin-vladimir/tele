@@ -101,3 +101,18 @@ func itoa(n int) string {
 	}
 	return string(b[i:])
 }
+
+// itoa64 formats a non-negative int64 (e.g. a media ID) without strconv.
+func itoa64(n int64) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
+}

@@ -68,6 +68,10 @@ func (m *mockClient) DownloadPhoto(_ context.Context, _ store.PhotoRef) (image.I
 	return nil, nil
 }
 
+func (m *mockClient) DownloadPhotoToFile(_ context.Context, _ store.PhotoRef, _ io.Writer) error {
+	return nil
+}
+
 func (m *mockClient) DownloadDocument(_ context.Context, _ store.DocumentRef) ([]byte, error) {
 	return nil, nil
 }

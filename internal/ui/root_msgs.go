@@ -142,6 +142,7 @@ type fileDownloadDoneMsg struct {
 	chatID int64
 	msgID  int
 	doc    *store.DocumentRef
+	photo  *store.PhotoRef
 }
 
 // chatLoadErrMsg reports a failed chat-open history load.

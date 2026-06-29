@@ -62,14 +62,46 @@ func (ml *MessageList) SelectedMessageGIF() (store.DocumentRef, bool) {
 	return store.DocumentRef{}, false
 }
 
-// SelectedMessageDocument returns the document ref of the selected message when
-// it is a generic file (not photo/video/voice/gif), for saving to disk.
-func (ml *MessageList) SelectedMessageDocument() (store.DocumentRef, bool) {
-	if msg := ml.computeSelectedMsg(); msg != nil && msg.Media != nil &&
-		msg.Media.Kind == store.MediaFile && msg.Document != nil {
-		return *msg.Document, true
+// SelectedMessagePhoto returns the full PhotoRef of the selected message when it
+// is a photo, for saving to disk at full quality.
+func (ml *MessageList) SelectedMessagePhoto() (store.PhotoRef, bool) {
+	if msg := ml.computeSelectedMsg(); msg != nil && msg.Photo != nil {
+		return *msg.Photo, true
 	}
-	return store.DocumentRef{}, false
+	return store.PhotoRef{}, false
+}
+
+// SelectedMessageMediaKind returns the media kind of the selected message and
+// whether it carries any media. Photos report MediaPhoto (detected via the
+// photo ref, independent of the Media field); document-backed media report
+// their Media.Kind. Messages with no downloadable/openable media report false.
+func (ml *MessageList) SelectedMessageMediaKind() (store.MediaKind, bool) {
+	msg := ml.computeSelectedMsg()
+	if msg == nil {
+		return 0, false
+	}
+	if msg.Photo != nil {
+		return store.MediaPhoto, true
+	}
+	if msg.Media != nil && msg.Document != nil {
+		return msg.Media.Kind, true
+	}
+	return 0, false
+}
+
+// SelectedMessageDownloadDoc returns the document ref and media kind of the
+// selected message when it is any downloadable document-backed media (video,
+// round note, voice, audio, GIF, generic file). Stickers are excluded (saving
+// them to disk is not offered); photos are handled by SelectedMessagePhoto.
+func (ml *MessageList) SelectedMessageDownloadDoc() (store.DocumentRef, store.MediaKind, bool) {
+	msg := ml.computeSelectedMsg()
+	if msg == nil || msg.Media == nil || msg.Document == nil {
+		return store.DocumentRef{}, 0, false
+	}
+	if msg.Media.Kind == store.MediaSticker {
+		return store.DocumentRef{}, 0, false
+	}
+	return *msg.Document, msg.Media.Kind, true
 }
 
 func (ml *MessageList) computeSelectedMsgID() int {

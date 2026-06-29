@@ -221,8 +221,16 @@ func (m *ChatModel) SelectedMessageGIF() (store.DocumentRef, bool) {
 	return m.msgList.SelectedMessageGIF()
 }
 
-func (m *ChatModel) SelectedMessageDocument() (store.DocumentRef, bool) {
-	return m.msgList.SelectedMessageDocument()
+func (m *ChatModel) SelectedMessagePhoto() (store.PhotoRef, bool) {
+	return m.msgList.SelectedMessagePhoto()
+}
+
+func (m *ChatModel) SelectedMessageMediaKind() (store.MediaKind, bool) {
+	return m.msgList.SelectedMessageMediaKind()
+}
+
+func (m *ChatModel) SelectedMessageDownloadDoc() (store.DocumentRef, store.MediaKind, bool) {
+	return m.msgList.SelectedMessageDownloadDoc()
 }
 
 // SelectedBubbleRect returns the selected message bubble's rectangle from the

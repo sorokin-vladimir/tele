@@ -41,6 +41,10 @@ type Client interface {
 	// SetArchived moves a peer into (archived) or out of the Archive folder.
 	SetArchived(ctx context.Context, peer store.Peer, archived bool) error
 	DownloadPhoto(ctx context.Context, ref store.PhotoRef) (image.Image, error)
+	// DownloadPhotoToFile streams the raw photo bytes (the size named by
+	// ref.ThumbSize) directly into dst, without decoding. Used to save a photo
+	// to disk at full quality without a lossy re-encode.
+	DownloadPhotoToFile(ctx context.Context, ref store.PhotoRef, dst io.Writer) error
 	// DownloadDocument fetches the full document file as raw bytes. Suitable
 	// only for small documents (e.g. voice messages); large files should use
 	// DownloadDocumentToFile to avoid buffering in memory.

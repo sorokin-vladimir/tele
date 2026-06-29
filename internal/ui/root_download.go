@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/gabriel-vasile/mimetype"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -103,6 +104,37 @@ func (m RootModel) currentPeer() store.Peer {
 	return store.Peer{}
 }
 
+// handleDownloadSelected saves the selected message's media to the Downloads
+// folder. It covers any downloadable document-backed media (video, round note,
+// voice, audio, GIF, generic file) and photos. No-op when nothing downloadable
+// is selected.
+func (m RootModel) handleDownloadSelected() (RootModel, tea.Cmd) {
+	if m.chat == nil {
+		return m, nil
+	}
+	msgID := m.chat.SelectedMessageID()
+	if ref, kind, ok := m.chat.SelectedMessageDownloadDoc(); ok {
+		return m.startFileDownload(ref, kind, msgID)
+	}
+	if ref, ok := m.chat.SelectedMessagePhoto(); ok {
+		return m.startPhotoDownload(ref, msgID)
+	}
+	return m, nil
+}
+
+// openPhotoExternal opens the selected photo in the OS default image viewer
+// using the cached (full-quality when available) image. No-op if not cached.
+func (m RootModel) openPhotoExternal(photoID int64) (RootModel, tea.Cmd) {
+	img, ok := m.fullImageCache.Get(photoID)
+	if !ok {
+		img, _ = m.imageCache.Get(photoID)
+	}
+	if img != nil {
+		go openInViewer(img, m.tmpDir)
+	}
+	return m, nil
+}
+
 // startDocumentOpen sets the status-bar download indicator with label and
 // dispatches the external-player download; the completion message clears the
 // matching indicator (and surfaces any error).
@@ -130,13 +162,75 @@ func (m RootModel) selectedDownloadLabel() string {
 
 // startFileDownload sets the status-bar download indicator and dispatches a
 // streaming download of a generic file to the Downloads folder.
-func (m RootModel) startFileDownload(ref store.DocumentRef, msgID int) (RootModel, tea.Cmd) {
-	label := "downloading file…"
-	if ref.FileName != "" {
-		label = "downloading " + ref.FileName + "…"
-	}
-	serial := m.statusBar.StartDownload(label)
+func (m RootModel) startFileDownload(ref store.DocumentRef, kind store.MediaKind, msgID int) (RootModel, tea.Cmd) {
+	name := downloadFileName(ref, kind)
+	ref.FileName = name
+	serial := m.statusBar.StartDownload("downloading " + name + "…")
 	return m, downloadFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, downloadsDir(), serial)
+}
+
+// startPhotoDownload sets the status-bar download indicator and dispatches a
+// streaming download of a photo (full quality) to the Downloads folder.
+func (m RootModel) startPhotoDownload(ref store.PhotoRef, msgID int) (RootModel, tea.Cmd) {
+	serial := m.statusBar.StartDownload("downloading photo…")
+	return m, downloadPhotoFileCmd(m.ctx, m.tgClient, m.currentPeer(), msgID, ref, downloadsDir(), serial)
+}
+
+// downloadPhotoFileCmd streams a photo's full-quality bytes to destDir as
+// photo_<id>.jpg (collision-resolved) and reports the saved path (or an error).
+// Mirrors downloadFileCmd's stream-to-disk + FILE_REFERENCE_EXPIRED retry.
+func downloadPhotoFileCmd(ctx context.Context, client internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef, destDir string, serial int) tea.Cmd {
+	fullRef := ref
+	fullRef.ThumbSize = ref.FullThumbSize
+	return func() tea.Msg {
+		fail := func(text string) tea.Msg {
+			return fileDownloadDoneMsg{serial: serial, text: text, sev: components.SeverityWarning}
+		}
+		f, err := createUniqueDownloadFile(destDir, "photo_"+itoa64(ref.ID)+".jpg")
+		if err != nil {
+			return fail("download failed: " + err.Error())
+		}
+		name := f.Name()
+
+		_, refreshed, derr := downloadWithRefresh(ctx, client, peer, msgID, fullRef,
+			func(r store.PhotoRef) (struct{}, error) {
+				if _, serr := f.Seek(0, io.SeekStart); serr != nil {
+					return struct{}{}, serr
+				}
+				if terr := f.Truncate(0); terr != nil {
+					return struct{}{}, terr
+				}
+				return struct{}{}, client.DownloadPhotoToFile(ctx, r, f)
+			},
+			func(m store.Message) (store.PhotoRef, bool) {
+				if m.Photo == nil {
+					return store.PhotoRef{}, false
+				}
+				r := *m.Photo
+				r.ThumbSize = r.FullThumbSize
+				return r, true
+			},
+		)
+		if derr != nil {
+			_ = f.Close()
+			_ = os.Remove(name)
+			return fail("download failed: " + derr.Error())
+		}
+		if cerr := f.Close(); cerr != nil {
+			_ = os.Remove(name)
+			return fail("download failed: " + cerr.Error())
+		}
+		done := fileDownloadDoneMsg{serial: serial, text: "Saved to " + name, sev: components.SeverityInfo, chatID: peer.ID, msgID: msgID}
+		if refreshed != nil {
+			done.photo = refreshed.Photo
+		}
+		return done
+	}
+}
+
+// DownloadPhotoFileCmdForTest exposes downloadPhotoFileCmd for tests (serial 0).
+func DownloadPhotoFileCmdForTest(c internaltg.Client, peer store.Peer, msgID int, ref store.PhotoRef, destDir string) tea.Cmd {
+	return downloadPhotoFileCmd(context.Background(), c, peer, msgID, ref, destDir, 0)
 }
 
 // downloadFileCmd streams a document to destDir under its original name
@@ -272,6 +366,14 @@ func FileDownloadDoneMsgForTest(serial int, text string, sev components.Severity
 	return fileDownloadDoneMsg{serial: serial, text: text, sev: sev}
 }
 
+// SetDownloadsDirForTest overrides the Downloads directory resolver and returns
+// a restore func, so download tests never touch the real Downloads folder.
+func SetDownloadsDirForTest(dir string) func() {
+	prev := downloadsDir
+	downloadsDir = func() string { return dir }
+	return func() { downloadsDir = prev }
+}
+
 // SetOpenPathForTest swaps the OS file launcher and returns a restore func.
 func SetOpenPathForTest(fn func(string)) func() {
 	prev := openPath
@@ -286,6 +388,36 @@ func pickDocumentRef(m store.Message) (store.DocumentRef, bool) {
 		return store.DocumentRef{}, false
 	}
 	return *m.Document, true
+}
+
+// downloadFileName returns the on-disk name for a downloaded document: the
+// original FileName when present, otherwise a synthesized "<prefix>_<id><ext>"
+// where the prefix reflects the media kind and the extension is derived from the
+// MIME type. Telegram photos/voice/round notes often carry no file name.
+func downloadFileName(ref store.DocumentRef, kind store.MediaKind) string {
+	if ref.FileName != "" {
+		return ref.FileName
+	}
+	prefix := "file"
+	switch kind {
+	case store.MediaVideo:
+		prefix = "video"
+	case store.MediaVideoNote:
+		prefix = "video_note"
+	case store.MediaVoice:
+		prefix = "voice"
+	case store.MediaAudio:
+		prefix = "audio"
+	case store.MediaGIF:
+		prefix = "gif"
+	}
+	// Derive the extension from the MIME type via the mimetype library rather
+	// than a hand-rolled table; unknown types yield no extension.
+	ext := ""
+	if mt := mimetype.Lookup(ref.MimeType); mt != nil {
+		ext = mt.Extension()
+	}
+	return prefix + "_" + itoa64(ref.ID) + ext
 }
 
 // extFromMime maps common video MIME types to a file extension so the OS picks

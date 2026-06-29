@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20260416155717-489999b90468
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/ebitengine/oto/v3 v3.4.0
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/gen2brain/beeep v0.11.2
 	github.com/gotd/td v0.148.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7

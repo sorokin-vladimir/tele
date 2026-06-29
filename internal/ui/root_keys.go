@@ -170,18 +170,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return result, tea.Batch(draftFlush, cmd)
 	}
 
+	// ActionOpenInViewer (o) opens an in-app modal. Photo modals are not built
+	// yet (deferred), so a photo is a no-op here; videos open in the modal (with
+	// the external-player fallback when Kitty+ffmpeg are unavailable).
 	if action == keys.ActionOpenInViewer && m.focus == FocusChat {
-		photoID := m.chat.SelectedMessagePhotoID()
-		if photoID != 0 {
-			img, ok := m.fullImageCache.Get(photoID)
-			if !ok {
-				img, _ = m.imageCache.Get(photoID)
-			}
-			if img != nil {
-				go openInViewer(img, m.tmpDir)
-			}
-			return m, nil
-		}
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
 				dur, sender := m.selectedVideoInfo()
@@ -192,7 +184,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// ActionOpenExternal (O) opens media in the OS default app: photos in the
+	// image viewer, videos in the external player.
 	if action == keys.ActionOpenExternal && m.focus == FocusChat {
+		if photoID := m.chat.SelectedMessagePhotoID(); photoID != 0 {
+			return m.openPhotoExternal(photoID)
+		}
 		if ref, ok := m.chat.SelectedMessageVideo(); ok {
 			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
 		}
@@ -200,10 +197,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if action == keys.ActionDownloadFile && m.focus == FocusChat {
-		if ref, ok := m.chat.SelectedMessageDocument(); ok {
-			return m.startFileDownload(ref, m.chat.SelectedMessageID())
-		}
-		return m, nil
+		return m.handleDownloadSelected()
 	}
 
 	if action == keys.ActionPlayVoice && m.focus == FocusChat {
@@ -216,11 +210,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			isOut := m.chat.SelectedMessageIsOut()
 			if msgID != 0 {
 				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
-				photoID := m.chat.SelectedMessagePhotoID()
-				_, hasVideo := m.chat.SelectedMessageVideo()
-				_, hasVoice := m.chat.SelectedMessageVoice()
-				_, hasFile := m.chat.SelectedMessageDocument()
-				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, photoID, hasVideo, hasVoice, hasFile, m.keyMap)
+				mediaKind, hasMedia := m.chat.SelectedMessageMediaKind()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, mediaKind, hasMedia, m.keyMap)
 			}
 		}
 		return m, nil

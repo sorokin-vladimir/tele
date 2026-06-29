@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/gen2brain/beeep"
 	"go.uber.org/zap"
 
@@ -235,6 +236,12 @@ func (a *App) Run() error {
 
 	_, err = prog.Run()
 	cancel()
+
+	// Disable OS color-scheme reports (DEC mode 2031) enabled at startup, so the
+	// terminal stops emitting report sequences to the shell after tele exits
+	// (issue #148). The program has restored the normal screen by now, so write
+	// the reset directly.
+	_, _ = fmt.Fprint(os.Stdout, ansi.ResetModeLightDark)
 
 	// Wait for tg client goroutine
 	tgClientErr := <-tgErr

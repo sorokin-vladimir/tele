@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -43,10 +44,12 @@ func requestBGColorCmd() tea.Cmd {
 	return func() tea.Msg { return tea.RequestBackgroundColor() }
 }
 
-func bgColorPollCmd() tea.Cmd {
-	return tea.Tick(2*time.Second, func(time.Time) tea.Msg {
-		return tea.RequestBackgroundColor()
-	})
+// enableColorSchemeReportsCmd turns on DEC private mode 2031 so a supporting
+// terminal sends an unsolicited report whenever the OS light/dark color scheme
+// changes (issue #148). Replaces the 2s background-color poll; terminals that
+// do not support it ignore the sequence and rely on the focus-regain re-read.
+func enableColorSchemeReportsCmd() tea.Cmd {
+	return tea.Raw(ansi.SetModeLightDark)
 }
 
 func spinnerTickCmd() tea.Cmd {

@@ -2,21 +2,51 @@ package ui
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2/compat"
+	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
+// setDarkBackground records the terminal/OS theme and propagates it to the
+// components whose colors depend on a dark vs light background.
+func (m *RootModel) setDarkBackground(isDark bool) {
+	m.hasDarkBackground = isDark
+	m.logo.SetDarkBackground(isDark)
+	m.chat.SetDarkBackground(isDark)
+	m.chatList.SetDarkBackground(isDark)
+	// compat.AdaptiveColor (context menu / hint / reaction-picker backgrounds)
+	// resolves against this package-level flag, which is otherwise detected once
+	// at init and never updated. Keep it in sync so those explicit light/dark
+	// colors follow a runtime theme change (issue #148).
+	compat.HasDarkBackground = isDark
+}
+
 // updateUIMsg handles messages that update layout, navigation, overlays, and animations.
 func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
-		m.hasDarkBackground = msg.IsDark()
-		m.logo.SetDarkBackground(m.hasDarkBackground)
-		m.chat.SetDarkBackground(m.hasDarkBackground)
-		m.chatList.SetDarkBackground(m.hasDarkBackground)
-		return m, bgColorPollCmd()
+		m.setDarkBackground(msg.IsDark())
+		return m, nil
+
+	// Unsolicited OS color-scheme reports (DEC mode 2031) arrive as raw
+	// ultraviolet events; flip the theme directly with no further command.
+	case uv.DarkColorSchemeEvent:
+		m.setDarkBackground(true)
+		return m, nil
+	case uv.LightColorSchemeEvent:
+		m.setDarkBackground(false)
+		return m, nil
+
+	// Fallback for terminals without mode 2031: re-read the background color
+	// when the window regains focus, so a theme change made while away is
+	// reflected (issue #148).
+	case tea.FocusMsg:
+		return m, requestBGColorCmd()
+	case tea.BlurMsg:
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

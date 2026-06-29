@@ -130,6 +130,10 @@ func (m RootModel) View() tea.View {
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
+	// Focus reporting drives the fallback re-read of the terminal background
+	// color on focus regain, for terminals without OS color-scheme reporting
+	// (issue #148). Terminals that do not support it simply never send the event.
+	v.ReportFocus = true
 	return v
 }
 

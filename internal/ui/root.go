@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/audio"
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -231,9 +232,10 @@ func (m RootModel) Init() tea.Cmd {
 	m.statusBar.SetVerbose(m.verbose)
 	m.statusBar.SetActivePane("chatlist")
 	// The logo loop is started by ensureAnimationTicks on the first event (the
-	// login splash is visible at startup), so Init only kicks off the bg-color
-	// probe here.
-	return requestBGColorCmd()
+	// login splash is visible at startup). Init probes the background color once
+	// and enables OS color-scheme reports (mode 2031) for event-driven theme
+	// updates (issue #148).
+	return tea.Batch(requestBGColorCmd(), enableColorSchemeReportsCmd())
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -379,6 +381,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.CloseReactionPickerMsg,
 		components.LogoTickMsg,
 		components.SpinnerTickMsg,
+		tea.FocusMsg,
+		tea.BlurMsg,
+		uv.DarkColorSchemeEvent,
+		uv.LightColorSchemeEvent,
 		components.TypingDotsTickMsg,
 		clearTypingMsg,
 		msgHighlightFadeMsg,

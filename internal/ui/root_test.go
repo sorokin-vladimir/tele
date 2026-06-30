@@ -2045,8 +2045,7 @@ func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 	st := store.NewMemory()
 	m := ui.NewRootModel(mock, st, 20, false).WithScreen(ui.ScreenMain)
 
-	next, cmd := m.Update(screens.SearchUsersRequest{Query: "zo", Serial: 1})
-	m = next.(ui.RootModel)
+	_, cmd := m.Update(screens.SearchUsersRequest{Query: "zo", Serial: 1})
 	require.NotNil(t, cmd, "SearchUsersRequest should produce a command")
 	var res screens.SearchUsersResult
 	var found bool

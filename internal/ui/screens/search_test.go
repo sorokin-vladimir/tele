@@ -87,13 +87,13 @@ func typeRunes(m *screens.SearchModel, s string) (*screens.SearchModel, tea.Cmd)
 
 func TestSearch_TypingPastMinLengthEmitsDebounce(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
-	m, cmd := typeRunes(m, "ab")
+	_, cmd := typeRunes(m, "ab")
 	require.NotNil(t, cmd, "expected a debounce command after reaching min length")
 }
 
 func TestSearch_TypingBelowMinLengthNoDebounce(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
-	m, cmd := typeRunes(m, "a")
+	_, cmd := typeRunes(m, "a")
 	assert.Nil(t, cmd, "expected no command below min length")
 }
 
@@ -192,7 +192,7 @@ func TestSearch_ClearingQueryClearsGlobal(t *testing.T) {
 
 func TestSearch_ForwardModeNeverSearchesGlobally(t *testing.T) {
 	m := screens.NewForwardPicker(makeForwardChats(), 555, 80, 24, nil)
-	m, cmd := typeRunes(m, "ab")
+	_, cmd := typeRunes(m, "ab")
 	assert.Nil(t, cmd, "forward mode must not emit a debounce command")
 }
 

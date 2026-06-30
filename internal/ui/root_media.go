@@ -44,17 +44,24 @@ func writeTempMediaFile(data []byte, tmpDir, ext string) (string, error) {
 	return name, nil
 }
 
+// openPathCommand builds the OS-specific command that hands a file to the
+// default application for the given GOOS.
+func openPathCommand(goos, name string) *exec.Cmd {
+	switch goos {
+	case "darwin":
+		return exec.Command("open", name)
+	case "windows":
+		// Empty title arg keeps `start` from treating a quoted path as a title.
+		return exec.Command("cmd", "/c", "start", "", name)
+	default:
+		return exec.Command("xdg-open", name)
+	}
+}
+
 // openPath hands a file to the OS default application. It is a variable so
 // tests can stub out the external launch.
 var openPath = func(name string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", name)
-	default:
-		cmd = exec.Command("xdg-open", name)
-	}
-	_ = cmd.Start()
+	_ = openPathCommand(runtime.GOOS, name).Start()
 }
 
 func openInViewer(img image.Image, tmpDir string) {

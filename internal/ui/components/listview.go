@@ -109,6 +109,22 @@ func (l *ListView) move(dir int) {
 	}
 }
 
+// windowOffset returns the index of the first visible row for a window of
+// maxRows: the cursor is centered and the window is clamped at the list ends.
+func (l *ListView) windowOffset(maxRows int) int {
+	if l.count <= maxRows || maxRows <= 0 {
+		return 0
+	}
+	offset := l.cursor - maxRows/2
+	if max := l.count - maxRows; offset > max {
+		offset = max
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return offset
+}
+
 // Render returns the rows of the visible window (length <= maxRows). When
 // count > maxRows the window centers the cursor, clamped at the list ends.
 // rowFn renders item i; selected is true when i == cursor.
@@ -116,19 +132,34 @@ func (l *ListView) Render(maxRows int, rowFn func(i int, selected bool) string) 
 	if l.count == 0 || maxRows <= 0 {
 		return nil
 	}
-	offset := 0
-	if l.count > maxRows {
-		offset = l.cursor - maxRows/2
-		if max := l.count - maxRows; offset > max {
-			offset = max
-		}
-		if offset < 0 {
-			offset = 0
-		}
-	}
+	offset := l.windowOffset(maxRows)
 	rows := make([]string, 0, maxRows)
 	for i := offset; i < l.count && i < offset+maxRows; i++ {
 		rows = append(rows, rowFn(i, i == l.cursor))
 	}
 	return rows
+}
+
+// visibleRows returns how many rows a window of maxRows actually shows.
+func (l *ListView) visibleRows(maxRows int) int {
+	if maxRows <= 0 {
+		return 0
+	}
+	if l.count < maxRows {
+		return l.count
+	}
+	return maxRows
+}
+
+// ScrollInfo describes the current scroll window for a maxRows viewport, in the
+// units RenderBox's scrollbar expects.
+func (l *ListView) ScrollInfo(maxRows int) ScrollInfo {
+	return ScrollInfo{Total: l.count, Visible: l.visibleRows(maxRows), Offset: l.windowOffset(maxRows)}
+}
+
+// Scrollbar builds a *Scrollbar to hand to RenderBox: a track of the visible
+// rows starting at trackTop (the box-content row index of the first list row).
+// The thumb is hidden automatically when the content fits.
+func (l *ListView) Scrollbar(maxRows, trackTop int) *Scrollbar {
+	return &Scrollbar{Info: l.ScrollInfo(maxRows), TrackTop: trackTop, TrackLen: l.visibleRows(maxRows)}
 }

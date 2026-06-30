@@ -117,7 +117,7 @@ func TestSearch_DebounceStaleSerialNoOp(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
 	m, cmd := typeRunes(m, "zz")
 	require.NotNil(t, cmd)
-	staleTick := cmd() // debounce tick for serial S1
+	staleTick := cmd()       // debounce tick for serial S1
 	m, _ = typeRunes(m, "z") // advances serial to S2, query "zzz"
 	m, cmd = m.Update(staleTick)
 	assert.False(t, m.GlobalLoading(), "stale debounce must not set loading")
@@ -249,6 +249,34 @@ func TestSearch_LongListIsWindowed(t *testing.T) {
 	count := strings.Count(view, "Chat")
 	assert.LessOrEqual(t, count, 8, "list must be windowed, got %d rows", count)
 	assert.NotContains(t, view, "Chat49", "rows beyond the window must not render")
+}
+
+func TestSearch_CtrlNavigationRussianLayout(t *testing.T) {
+	var chats []store.Chat
+	for i := 0; i < 20; i++ {
+		chats = append(chats, store.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
+	}
+	m := screens.NewSearchModel(chats, 80, 24, nil)
+	assert.Equal(t, 0, m.Cursor())
+	// ctrl+о: Cyrillic 'о' sits on the physical J key (ЙЦУКЕН) → move down.
+	m, _ = m.Update(tea.KeyPressMsg{Code: 'о', Mod: tea.ModCtrl})
+	assert.Equal(t, 1, m.Cursor())
+	// ctrl+л: Cyrillic 'л' on the physical K key → move up.
+	m, _ = m.Update(tea.KeyPressMsg{Code: 'л', Mod: tea.ModCtrl})
+	assert.Equal(t, 0, m.Cursor())
+}
+
+func TestSearch_ScrollbarThumbWhenOverflowing(t *testing.T) {
+	var chats []store.Chat
+	for i := 0; i < 50; i++ {
+		chats = append(chats, store.Chat{ID: int64(i), Title: fmt.Sprintf("Chat%02d", i)})
+	}
+	// "█" also renders as the query-input cursor, so compare counts: the
+	// overflowing list adds a scrollbar thumb on top of that single cursor block.
+	small := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
+	big := screens.NewSearchModel(chats, 80, 24, nil)
+	assert.Greater(t, strings.Count(big.View(), "█"), strings.Count(small.View(), "█"),
+		"overflowing list must render extra thumb blocks on the border")
 }
 
 func TestSearch_ViewShowsNewContactsHeaderWhenResults(t *testing.T) {

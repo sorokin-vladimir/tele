@@ -326,7 +326,9 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		m.list.MoveUp()
 		return m, nil
 	default:
-		switch km.String() {
+		// NormalizeKey remaps non-Latin layouts (e.g. Russian ctrl+о → ctrl+j) so
+		// list navigation works regardless of keyboard layout.
+		switch keys.NormalizeKey(km.String()) {
 		case "ctrl+j":
 			m.list.MoveDown()
 		case "ctrl+k":
@@ -442,5 +444,8 @@ func (m *SearchModel) View() string {
 
 	content := strings.Join(lines, "\n")
 	h := len(lines) + 2
-	return components.RenderBox(content, "", "", hint, lipgloss.RoundedBorder(), nil, w, h)
+	// List rows begin after the query line and divider, so the scrollbar track
+	// starts at content row 2.
+	sb := m.list.Scrollbar(searchMaxResults, 2)
+	return components.RenderBox(content, "", "", hint, lipgloss.RoundedBorder(), nil, w, h, sb)
 }

@@ -30,6 +30,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   new incoming message that bumps a non-open chat to the top of the list briefly
   tints that row's title. The accent is amber on dark themes and a more saturated
   orange on light themes (#39)
+- Extended markdown rendering in messages: the chat view now styles
+  strikethrough, underline, and hidden-URL links (underlined, wrapped in an
+  OSC 8 terminal hyperlink), and colors auto-detected entities — links, emails,
+  phone numbers, and bank cards in one hue; mentions, hashtags, cashtags, and bot
+  commands in another — with theme-adaptive colors readable on dark and light
+  backgrounds. Overlapping and nested styles now compose correctly (#27)
 
 ### Changed
 
@@ -46,6 +52,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   cancel key `x`, which now clears a reply or edit too (previously it only
   dropped a staged attachment / pending upload). Pressing `esc` again from the
   unfocused composer still closes the chat
+- Message heights are now cached instead of being recomputed every frame, so the
+  chat list no longer re-wraps every message on each render — cutting idle CPU on
+  long or media-heavy chats (#146)
+- Light/dark theme is now detected via an event-driven handler instead of a
+  periodic ticker, removing a constant background poll (#148)
 
 ### Fixed
 
@@ -57,6 +68,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   selected row visible when the cursor moves past the visible window, instead of
   letting the highlight run off-view. Cursor and scroll behavior is now shared by
   all list modals
+- Idle CPU: stopped unconditional repaints driven by the always-on logo and
+  spinner ticks when nothing is animating (#147)
+- Windows: opening a file now launches the OS default viewer correctly (#145)
+- Media downloads now work for all media file types; previously some types could
+  not be downloaded (#144)
+- The chat list keeps its scroll position after history loads, and image sizes
+  now render correctly
 
 ## [1.6.0] - 2026-06-21
 

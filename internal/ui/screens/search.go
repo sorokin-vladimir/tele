@@ -411,7 +411,7 @@ func (m *SearchModel) View() string {
 		lines := []string{title, strings.Repeat("─", inner), promptLine}
 		content := strings.Join(lines, "\n")
 		h := len(lines) + 2
-		return components.RenderBox(content, "", "", hint, lipgloss.RoundedBorder(), nil, w, h)
+		return components.RenderBox(content, "", "", hint, "", lipgloss.RoundedBorder(), nil, w, h)
 	}
 
 	queryLine := searchPrompt.Render("> ") + m.query + "█"
@@ -447,5 +447,5 @@ func (m *SearchModel) View() string {
 	// List rows begin after the query line and divider, so the scrollbar track
 	// starts at content row 2.
 	sb := m.list.Scrollbar(searchMaxResults, 2)
-	return components.RenderBox(content, "", "", hint, lipgloss.RoundedBorder(), nil, w, h, sb)
+	return components.RenderBox(content, "", "", hint, "", lipgloss.RoundedBorder(), nil, w, h, sb)
 }

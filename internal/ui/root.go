@@ -130,13 +130,15 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	sb.SetKeyMap(km)
 	cl := screens.NewChatListModel()
 	cl.SetFocused(true)
+	chat := screens.NewChatModel(80, 24)
+	chat.SetKeyMap(km)
 	return RootModel{
 		ctx:               context.Background(),
 		screen:            ScreenLogin,
 		focus:             FocusChatList,
 		hasDarkBackground: true,
 		chatList:          cl,
-		chat:              screens.NewChatModel(80, 24),
+		chat:              chat,
 		folderBar:         screens.NewFoldersModel(),
 		statusBar:         sb,
 		vimState:          keys.NewVimState(),
@@ -200,6 +202,7 @@ func (m RootModel) WithKeyMap(km keys.KeyMap) RootModel {
 	m.keyMap = km
 	m.matcher = keys.NewMatcher(km)
 	m.statusBar.SetKeyMap(km)
+	m.chat.SetKeyMap(km)
 	return m
 }
 

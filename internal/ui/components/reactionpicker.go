@@ -134,7 +134,7 @@ func (p *ReactionPicker) View() string {
 
 	outerW := innerW + 2
 	outerH := pickerRows + 2
-	box := RenderBox(strings.Join(rows, "\n"), "React", "", hint, b, nil, outerW, outerH)
+	box := RenderBox(strings.Join(rows, "\n"), "React", "", hint, "", b, nil, outerW, outerH)
 
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {

@@ -2,7 +2,9 @@ package components
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -12,10 +14,16 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-const maxComposerLines = 5
+const (
+	maxComposerLines = 5
+	counterShowAt    = 200 // show remaining-char counter when remaining <= this
+	counterWarnAt    = 20  // counter turns amber when remaining <= this
+	sendGlyph        = "➤"
+)
 
 type Composer struct {
 	ta                textarea.Model
+	width             int
 	replyPreview      string
 	focused           bool
 	hasDarkBackground bool
@@ -30,7 +38,7 @@ type Composer struct {
 func NewComposer(width int) *Composer {
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
-	ta.Prompt = "> "
+	ta.Prompt = " " // one-space inset; replaces the legacy "> " prompt
 	ta.MaxHeight = maxComposerLines
 	ta.DynamicHeight = true
 	// Modifier+Enter combos (shift+enter, alt+enter) require a terminal that supports an extended
@@ -46,10 +54,11 @@ func NewComposer(width int) *Composer {
 	ta.KeyMap.Paste = key.NewBinding() // handled at root level via readClipboardCmd → tea.PasteMsg
 	ta.CharLimit = 4096
 	ta.SetWidth(width - 2)
-	return &Composer{ta: ta}
+	return &Composer{ta: ta, width: width}
 }
 
 func (c *Composer) SetWidth(w int) {
+	c.width = w
 	c.ta.SetWidth(w - 2)
 }
 
@@ -72,6 +81,13 @@ func (c *Composer) Value() string { return c.ta.Value() }
 func (c *Composer) SetValue(v string) {
 	c.ta.SetValue(v)
 }
+
+// SetPlaceholder sets the dim placeholder text shown while the composer is empty.
+// The caller (chat screen) owns the wording; the composer only renders it.
+func (c *Composer) SetPlaceholder(s string) { c.ta.Placeholder = s }
+
+// Placeholder returns the current placeholder text (test accessor).
+func (c *Composer) Placeholder() string { return c.ta.Placeholder }
 
 func (c *Composer) Reset() {
 	c.ta.Reset()
@@ -137,20 +153,9 @@ func humanSize(n int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-// VisualHeight returns the total number of terminal rows that View() occupies:
-// textarea lines + 2 border rows + preview lines (0 if no preview).
-func (c *Composer) VisualHeight() int {
-	h := c.ta.Height() + 2
-	if c.replyPreview != "" {
-		h += strings.Count(c.replyPreview, "\n") + 2
-	}
-	if c.attachOn {
-		h++
-	}
-	return h
-}
-
-func (c *Composer) View() string {
+// buildContent assembles the composer's inner content: optional attachment chip,
+// optional reply/edit preview (plus a blank spacer line), then the textarea.
+func (c *Composer) buildContent() string {
 	var parts []string
 	if line := c.attachmentLine(); line != "" {
 		parts = append(parts, line)
@@ -159,20 +164,51 @@ func (c *Composer) View() string {
 		parts = append(parts, c.replyPreview, "")
 	}
 	parts = append(parts, c.ta.View())
-	content := strings.Join(parts, "\n")
+	return strings.Join(parts, "\n")
+}
 
-	// Do not set an explicit Width here: the textarea already pads every line
-	// to its full inner width, producing a perfect content rectangle. Letting
-	// lipgloss re-wrap that content via .Width() causes off-by-one overflow and
-	// spurious soft-wraps at the wrap boundary (styled trailing spaces land on
-	// the width edge), so we let the border size itself to the content instead.
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder())
+// VisualHeight returns the total number of terminal rows that View() occupies:
+// content lines + 2 border rows.
+func (c *Composer) VisualHeight() int {
+	return strings.Count(c.buildContent(), "\n") + 1 + 2
+}
+
+func (c *Composer) View() string {
+	content := c.buildContent()
+	h := strings.Count(content, "\n") + 1 + 2
+
+	var borderFg color.Color
 	if c.focused {
-		fg := lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("19"), lipgloss.Color("12"))
-		style = style.BorderForeground(fg)
+		// Green = INSERT (the composer is focused iff we are in insert mode),
+		// matching the status bar's insert accent.
+		borderFg = lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("28"), lipgloss.Color("40"))
 	}
-	return style.Render(content)
+
+	return RenderBox(content, "", "", "", c.sendAffordance(), lipgloss.RoundedBorder(), borderFg, c.width, h)
+}
+
+// sendAffordance renders the bottom-border send indicator: a dim glyph when the
+// composer is empty, a blue glyph (Telegram send-button association) once there
+// is text, plus a remaining-character counter when near the CharLimit.
+func (c *Composer) sendAffordance() string {
+	remaining := c.ta.CharLimit - utf8.RuneCountInString(c.ta.Value())
+	hasText := remaining < c.ta.CharLimit
+
+	glyphColor := lipgloss.Color("240") // dim: nothing to send
+	if hasText {
+		glyphColor = lipgloss.LightDark(c.hasDarkBackground)(lipgloss.Color("27"), lipgloss.Color("39")) // blue: ready
+	}
+	glyph := lipgloss.NewStyle().Foreground(glyphColor).Render(sendGlyph)
+
+	if remaining <= counterShowAt {
+		counterColor := lipgloss.Color("240")
+		if remaining <= counterWarnAt {
+			counterColor = lipgloss.Color("214") // amber
+		}
+		counter := lipgloss.NewStyle().Foreground(counterColor).Render(fmt.Sprintf("%d", remaining))
+		return counter + " " + glyph
+	}
+	return glyph
 }
 
 func (c *Composer) Init() tea.Cmd { return nil }

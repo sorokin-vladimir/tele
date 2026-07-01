@@ -495,15 +495,17 @@ func (m *RootModel) activateReply(msgID int) tea.Cmd {
 		return nil
 	}
 	preview := "▌ Reply to message"
+	senderName := ""
 	if m.st != nil {
 		for _, storeMsg := range m.st.Messages(m.currentChatID) {
 			if storeMsg.ID == msgID {
 				preview = components.BuildReplyPreview(storeMsg)
+				senderName = storeMsg.SenderName
 				break
 			}
 		}
 	}
-	m.chat.SetReply(msgID, preview)
+	m.chat.SetReply(msgID, preview, senderName)
 	m.vimState.Mode = keys.ModeInsert
 	m.statusBar.SetMode(keys.ModeInsert)
 	return m.chat.FocusComposer()

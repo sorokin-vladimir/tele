@@ -332,7 +332,7 @@ func (cm *ContextMenu) View() string {
 
 	outerW := innerW + 2
 	outerH := len(rows) + 2
-	box := RenderBox(strings.Join(rows, "\n"), "", "", hint, b, nil, outerW, outerH)
+	box := RenderBox(strings.Join(rows, "\n"), "", "", hint, "", b, nil, outerW, outerH)
 
 	// apply background to border rows (top, bottom) so the entire box shares the bg
 	lines := strings.Split(box, "\n")

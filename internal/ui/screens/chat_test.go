@@ -13,6 +13,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestChatComposerPlaceholder(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	km := keys.KeyMap{
+		keys.ContextChat: {"a": keys.ActionInsert},
+	}
+	m.SetKeyMap(km)
+
+	// Blurred + empty => action hint using the live binding.
+	if got := m.ComposerPlaceholder(); got != "Press a to write…" {
+		t.Fatalf("blurred placeholder = %q, want %q", got, "Press a to write…")
+	}
+
+	// Focused + empty => context text (default).
+	m.FocusComposer()
+	if got := m.ComposerPlaceholder(); got != "Message" {
+		t.Fatalf("focused default placeholder = %q, want %q", got, "Message")
+	}
+
+	// Reply context (focused).
+	m.SetReply(42, "▌ Alice", "Alice")
+	m.FocusComposer()
+	if got := m.ComposerPlaceholder(); got != "Reply to Alice…" {
+		t.Fatalf("reply placeholder = %q, want %q", got, "Reply to Alice…")
+	}
+
+	// Edit context takes precedence wording.
+	m.ClearPendingAction()
+	m.SetEdit(42, "▌ Edit Message")
+	m.FocusComposer()
+	if got := m.ComposerPlaceholder(); got != "Edit message…" {
+		t.Fatalf("edit placeholder = %q, want %q", got, "Edit message…")
+	}
+
+	// Attachment context (focused, no reply/edit).
+	m.ClearPendingAction()
+	m.SetAttachment("pic.jpg", 1000, store.MediaPhoto, store.MediaPhoto, true)
+	m.FocusComposer()
+	if got := m.ComposerPlaceholder(); got != "Add a caption…" {
+		t.Fatalf("attachment placeholder = %q, want %q", got, "Add a caption…")
+	}
+}
+
 func TestChatModel_LoadError_ShownWhenNotLoading(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	m.SetLoading(false)
@@ -206,13 +248,13 @@ func TestChat_SelectedMessageIsOut_NoMessages(t *testing.T) {
 
 func TestChat_SetReply_SetsState(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetReply(10, "▌ Alice\n▌ hello")
+	m.SetReply(10, "▌ Alice\n▌ hello", "Alice")
 	assert.Equal(t, 10, m.ReplyToMsgID())
 }
 
 func TestChat_ClearPendingAction_ZerosState(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
-	m.SetReply(10, "▌ Alice\n▌ hello")
+	m.SetReply(10, "▌ Alice\n▌ hello", "Alice")
 	m.ClearPendingAction()
 	assert.Equal(t, 0, m.ReplyToMsgID())
 }
@@ -222,7 +264,7 @@ func TestChat_ActionNormal_UnfocusesButKeepsReplyState(t *testing.T) {
 	// enter composer
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	m.SetReply(10, "▌ Alice\n▌ hello")
+	m.SetReply(10, "▌ Alice\n▌ hello", "Alice")
 	// press Esc: only unfocuses; the reply is kept (cleared explicitly via x)
 	newPane, _ = m.Update(keys.ActionMsg{Action: keys.ActionNormal})
 	m = newPane.(*screens.ChatModel)
@@ -236,7 +278,7 @@ func TestChat_SendMessage_CarriesReplyToMsgID(t *testing.T) {
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	m.SetReply(5, "▌ Bob\n▌ original")
+	m.SetReply(5, "▌ Bob\n▌ original", "Bob")
 	m.SetComposerValue("my reply")
 	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	_ = newPane
@@ -300,7 +342,7 @@ func TestChat_SendMessage_ClearsReplyStateAfterSend(t *testing.T) {
 	m.SetChat(chat)
 	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
 	m = newPane.(*screens.ChatModel)
-	m.SetReply(5, "▌ Bob\n▌ original")
+	m.SetReply(5, "▌ Bob\n▌ original", "Bob")
 	m.SetComposerValue("my reply")
 	newPane, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newPane.(*screens.ChatModel)

@@ -169,6 +169,83 @@ func TestComposer_WrapBoundary_NoOverflowNoPhantomRow(t *testing.T) {
 	}
 }
 
+func TestComposerFrameNoPromptAndBordered(t *testing.T) {
+	c := components.NewComposer(30)
+	v := c.View()
+	if !strings.Contains(v, "╭") || !strings.Contains(v, "╰") {
+		t.Fatalf("composer must render a rounded frame:\n%s", v)
+	}
+	if strings.Contains(v, "> ") {
+		t.Fatalf("legacy '> ' prompt must be gone:\n%s", v)
+	}
+}
+
+func TestComposerPlaceholder(t *testing.T) {
+	c := components.NewComposer(30)
+	c.SetPlaceholder("Message")
+	if c.Placeholder() != "Message" {
+		t.Fatalf("Placeholder() = %q, want %q", c.Placeholder(), "Message")
+	}
+	if v := stripANSI(c.View()); !strings.Contains(v, "Message") {
+		t.Fatalf("empty composer must show placeholder text:\n%s", v)
+	}
+	c.SetValue("hi")
+	if v := stripANSI(c.View()); strings.Contains(v, "Message") {
+		t.Fatalf("placeholder must be hidden once text is entered:\n%s", v)
+	}
+}
+
+func TestComposerFocusChangesBorder(t *testing.T) {
+	c := components.NewComposer(30)
+	blurred := c.View()
+	c.Focus()
+	focused := c.View()
+	if blurred == focused {
+		t.Fatalf("focused frame must differ from blurred (border color):\nblurred:\n%s\nfocused:\n%s", blurred, focused)
+	}
+}
+
+func TestComposerSendGlyphPresent(t *testing.T) {
+	c := components.NewComposer(30)
+	if v := c.View(); !strings.Contains(v, "➤") {
+		t.Fatalf("send glyph must be present when empty:\n%s", v)
+	}
+	c.SetValue("hello")
+	if v := c.View(); !strings.Contains(v, "➤") {
+		t.Fatalf("send glyph must be present with text:\n%s", v)
+	}
+}
+
+func TestComposerSendGlyphColorReflectsReadiness(t *testing.T) {
+	c := components.NewComposer(30)
+	empty := c.View()
+	c.SetValue("hello")
+	withText := c.View()
+	// Same glyph, different SGR styling (dim vs blue) => the rendered frames differ.
+	if empty == withText {
+		t.Fatalf("send glyph styling must change between empty and non-empty")
+	}
+}
+
+func TestComposerCounterNearLimit(t *testing.T) {
+	c := components.NewComposer(40)
+
+	c.SetValue("short")
+	if v := stripANSI(c.View()); strings.Contains(v, "4091") {
+		t.Fatalf("counter must be hidden far from the limit:\n%s", v)
+	}
+
+	c.SetValue(strings.Repeat("a", 4000)) // remaining 96, <= 200
+	if v := stripANSI(c.View()); !strings.Contains(v, "96") {
+		t.Fatalf("counter must appear near the limit (remaining 96):\n%s", v)
+	}
+
+	c.SetValue(strings.Repeat("a", 4090)) // remaining 6, <= 20 (amber)
+	if v := stripANSI(c.View()); !strings.Contains(v, "6") {
+		t.Fatalf("counter must show remaining near zero:\n%s", v)
+	}
+}
+
 func TestComposer_View_ReplyPreviewBlankSeparator(t *testing.T) {
 	c := components.NewComposer(60)
 	c.SetReplyPreview("↩ Reply: hello")

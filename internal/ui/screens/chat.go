@@ -65,6 +65,12 @@ type ChatModel struct {
 	// open, keyed by peer ID. The open chat's draft lives in the composer
 	// itself; it is flushed here on switch-away and restored on switch-to (#62).
 	drafts map[int64]string
+
+	// keyMap is the active key map, used to surface the live "write" binding in
+	// the composer placeholder. replyName is the reply target's sender name, used
+	// for the "Reply to <name>…" placeholder.
+	keyMap    keys.KeyMap
+	replyName string
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -285,6 +291,48 @@ func (m *ChatModel) SetDarkBackground(isDark bool) {
 	m.msgList.SetDarkBackground(isDark)
 }
 
+// SetKeyMap gives the chat model the active key map so the composer placeholder
+// can show the live "write" binding. Refreshes the placeholder immediately.
+func (m *ChatModel) SetKeyMap(km keys.KeyMap) {
+	m.keyMap = km
+	m.refreshPlaceholder()
+}
+
+// ComposerPlaceholder returns the composer's current placeholder text (test accessor).
+func (m *ChatModel) ComposerPlaceholder() string { return m.composer.Placeholder() }
+
+// refreshPlaceholder recomputes the composer placeholder from the current focus
+// and reply/edit/attachment state and pushes it to the composer.
+//
+//   - blurred + empty -> action hint "Press <write-key> to write…"
+//   - focused + empty -> context text: edit > reply > attachment > default
+func (m *ChatModel) refreshPlaceholder() {
+	var ph string
+	if m.composerFocused {
+		switch {
+		case m.editMsgID != 0:
+			ph = "Edit message…"
+		case m.replyToMsgID != 0:
+			if m.replyName != "" {
+				ph = "Reply to " + m.replyName + "…"
+			} else {
+				ph = "Reply…"
+			}
+		case m.composer.HasAttachment():
+			ph = "Add a caption…"
+		default:
+			ph = "Message"
+		}
+	} else {
+		if key := m.keyMap.KeyFor(keys.ContextChat, keys.ActionInsert); key != "" {
+			ph = "Press " + key + " to write…"
+		} else {
+			ph = "Message"
+		}
+	}
+	m.composer.SetPlaceholder(ph)
+}
+
 func (m *ChatModel) clearPendingAction() {
 	if m.editMsgID != 0 {
 		m.composer.Reset()
@@ -293,6 +341,8 @@ func (m *ChatModel) clearPendingAction() {
 	}
 	m.replyToMsgID = 0
 	m.editMsgID = 0
+	m.replyName = ""
+	m.refreshPlaceholder()
 }
 
 // ClearPendingAction clears any active reply (or future forward) state.
@@ -306,14 +356,17 @@ func (m *ChatModel) SetEdit(msgID int, preview string) {
 	m.clearPendingAction()
 	m.editMsgID = msgID
 	m.composer.SetReplyPreview(preview)
+	m.refreshPlaceholder()
 	m.syncMsgListHeight()
 }
 
 // SetReply activates reply mode. Clears any existing pending action first.
-func (m *ChatModel) SetReply(msgID int, preview string) {
+func (m *ChatModel) SetReply(msgID int, preview, senderName string) {
 	m.clearPendingAction()
 	m.replyToMsgID = msgID
+	m.replyName = senderName
 	m.composer.SetReplyPreview(preview)
+	m.refreshPlaceholder()
 	m.syncMsgListHeight()
 }
 
@@ -323,11 +376,13 @@ func (m *ChatModel) SetReply(msgID int, preview string) {
 // (image/video only).
 func (m *ChatModel) SetAttachment(name string, size int64, nativeKind, sendAs store.MediaKind, toggleable bool) {
 	m.composer.SetAttachment(name, size, nativeKind, sendAs, toggleable)
+	m.refreshPlaceholder()
 	m.syncMsgListHeight()
 }
 
 func (m *ChatModel) ClearAttachment() {
 	m.composer.ClearAttachment()
+	m.refreshPlaceholder()
 	m.syncMsgListHeight()
 }
 
@@ -337,6 +392,7 @@ func (m *ChatModel) HasAttachment() bool { return m.composer.HasAttachment() }
 // Returns a blink Cmd that must be returned from the parent Update.
 func (m *ChatModel) FocusComposer() tea.Cmd {
 	m.composerFocused = true
+	m.refreshPlaceholder()
 	m.msgList.SetShowIndicator(false)
 	return m.composer.Focus()
 }
@@ -383,6 +439,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				// attachment) is kept. Removing the extra is the explicit job of
 				// the cancel key (x). See item C.
 				m.composerFocused = false
+				m.refreshPlaceholder()
 				m.composer.Blur()
 				m.msgList.SetShowIndicator(true)
 				if !m.lastTypingAt.IsZero() && m.chat != nil {
@@ -443,6 +500,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			m.msgList.CursorDown()
 		case keys.ActionInsert:
 			m.composerFocused = true
+			m.refreshPlaceholder()
 			focusCmd := m.composer.Focus()
 			m.msgList.SetShowIndicator(false)
 			return m, focusCmd

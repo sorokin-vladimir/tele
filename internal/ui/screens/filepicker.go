@@ -237,7 +237,7 @@ func (m *FilePickerModel) View() string {
 	title := truncatePath(m.dir, inner)
 	// The list rows are the whole content, so the scrollbar track starts at row 0.
 	sb := m.list.Scrollbar(filePickerMaxRows, 0)
-	return components.RenderBox(content, title, "", hint, lipgloss.RoundedBorder(), nil, w, h, sb)
+	return components.RenderBox(content, title, "", hint, "", lipgloss.RoundedBorder(), nil, w, h, sb)
 }
 
 func truncatePath(p string, max int) string {

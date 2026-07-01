@@ -8,12 +8,15 @@ import (
 )
 
 // RenderBox renders a bordered box with an optional top title, top suffix (right of title),
-// and bottom hint. w and h are outer dimensions (including 1-char border on each side).
+// bottom hint (left of bottom border), and bottom suffix (right of bottom border).
+// w and h are outer dimensions (including 1-char border on each side).
 // topSuffix is a pre-styled string placed after the title in the top border, separated
 // by one border character and spaces on each side. Pass "" to omit.
 // bottomHint is rendered verbatim (callers pre-style it, e.g. via OverlayHint).
+// bottomSuffix is a pre-styled string right-anchored on the bottom border (symmetric to
+// topSuffix). Pass "" to omit; when it does not fit, the bottom border falls back to plain.
 // borderFg sets the border foreground color; nil means no color.
-func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Border, borderFg color.Color, w, h int, scrollbar ...*Scrollbar) string {
+func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b lipgloss.Border, borderFg color.Color, w, h int, scrollbar ...*Scrollbar) string {
 	innerW := w - 2
 	innerH := h - 2
 
@@ -57,7 +60,11 @@ func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Borde
 	}
 
 	var bot string
-	if bottomHint != "" {
+	switch {
+	case bottomHint == "" && bottomSuffix == "":
+		bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
+	case bottomSuffix == "":
+		// Hint only — unchanged existing behavior (left-aligned after one border char).
 		hintStr := " " + bottomHint + " "
 		hintW := lipgloss.Width(hintStr)
 		fillW := innerW - hintW
@@ -66,8 +73,20 @@ func RenderBox(content, topTitle, topSuffix, bottomHint string, b lipgloss.Borde
 		} else {
 			bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
 		}
-	} else {
-		bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
+	default:
+		// Suffix present (optionally with a left hint): suffix hugs the right corner.
+		leftStr := ""
+		if bottomHint != "" {
+			leftStr = " " + bottomHint + " "
+		}
+		rightStr := " " + bottomSuffix + " "
+		// One leading border char after the corner, then fill, then the labels.
+		fillW := innerW - 1 - lipgloss.Width(leftStr) - lipgloss.Width(rightStr)
+		if fillW >= 1 {
+			bot = cb(b.BottomLeft+b.Bottom) + leftStr + cb(strings.Repeat(b.Bottom, fillW)) + rightStr + cb(b.BottomRight)
+		} else {
+			bot = cb(b.BottomLeft + strings.Repeat(b.Bottom, innerW) + b.BottomRight)
+		}
 	}
 
 	lines := strings.Split(content, "\n")

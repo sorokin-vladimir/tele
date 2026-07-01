@@ -33,7 +33,7 @@ func (m RootModel) View() tea.View {
 			innerW := loginContentW + 2*loginPadH
 			innerH := loginContentH + 2*loginPadV
 			padded := lipgloss.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
-			loginBox := components.RenderBox(padded, "Telegram", "", "", b, nil, innerW+2, innerH+2)
+			loginBox := components.RenderBox(padded, "Telegram", "", "", "", b, nil, innerW+2, innerH+2)
 			combined := lipgloss.JoinVertical(lipgloss.Center, logoView, "\n", loginBox)
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined)
 		}
@@ -83,9 +83,9 @@ func (m RootModel) View() tea.View {
 			foldersSB := &components.Scrollbar{Info: m.folderBar.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
 			chatListSB := &components.Scrollbar{Info: m.chatList.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
 			chatSB := &components.Scrollbar{Info: m.chat.ScrollInfo(), TrackTop: 0, TrackLen: m.chat.MessageListHeight()}
-			foldersView := components.RenderBox(m.folderBar.View(), "[0] Folders", "", "", foldersBorder, foldersFg, sidebarW, innerH, foldersSB)
-			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", chatListBorder, chatListFg, chatlistW, innerH, chatListSB)
-			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", chatBorder, chatFg, chatW, innerH, chatSB)
+			foldersView := components.RenderBox(m.folderBar.View(), "[0] Folders", "", "", "", foldersBorder, foldersFg, sidebarW, innerH, foldersSB)
+			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatlistW, innerH, chatListSB)
+			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatW, innerH, chatSB)
 			main = lipgloss.JoinHorizontal(lipgloss.Top, foldersView, chatListView, chatView)
 			chatPanelLeft = sidebarW + chatlistW
 			chatBoxW = chatW
@@ -97,8 +97,8 @@ func (m RootModel) View() tea.View {
 			chatWidth := rightW - 2*borderSize + 2
 			chatListSB := &components.Scrollbar{Info: m.chatList.ScrollInfo(), TrackTop: 0, TrackLen: innerH}
 			chatSB := &components.Scrollbar{Info: m.chat.ScrollInfo(), TrackTop: 0, TrackLen: m.chat.MessageListHeight()}
-			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", chatListBorder, chatListFg, chatListWidth, innerH, chatListSB)
-			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", chatBorder, chatFg, chatWidth, innerH, chatSB)
+			chatListView := components.RenderBox(m.chatList.View(), chatListTitle, "", "", "", chatListBorder, chatListFg, chatListWidth, innerH, chatListSB)
+			chatView := components.RenderBox(m.chat.View(), chatTitle, chatDot, "", "", chatBorder, chatFg, chatWidth, innerH, chatSB)
 			main = lipgloss.JoinHorizontal(lipgloss.Top, chatListView, chatView)
 			chatPanelLeft = chatListWidth
 			chatBoxW = chatWidth

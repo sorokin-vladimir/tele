@@ -245,7 +245,7 @@ func (cm *ChatContextMenu) View() string {
 
 	outerW := innerW + 2
 	outerH := len(rows) + 2
-	box := RenderBox(strings.Join(rows, "\n"), "", "", hint, b, nil, outerW, outerH)
+	box := RenderBox(strings.Join(rows, "\n"), "", "", hint, "", b, nil, outerW, outerH)
 
 	lines := strings.Split(box, "\n")
 	for i, l := range lines {

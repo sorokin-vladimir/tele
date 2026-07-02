@@ -121,6 +121,7 @@ YAML-based config with sensible defaults.
 
 ```sh
 brew tap sorokin-vladimir/tap
+brew trust sorokin-vladimir/tap
 brew install tele
 ```
 
@@ -133,6 +134,7 @@ install:
 
 ```sh
 brew tap sorokin-vladimir/tap
+brew trust sorokin-vladimir/tap
 brew install tele-beta
 brew upgrade tele-beta   # pull newer betas as they are cut
 ```
@@ -205,24 +207,24 @@ Then prompts for:
 
 ## Keybindings
 
-| Key                 | Action                                          |
-| ------------------- | ----------------------------------------------- |
-| `j` / `k`           | Navigate chats or scroll messages               |
-| `ctrl+j` / `ctrl+k` | Select next / previous message                  |
-| `i`                 | Compose message                                 |
-| `r`                 | Reply                                           |
-| `e` / `d`           | Edit / delete message                           |
-| `t`                 | React                                           |
-| `f`                 | Forward message                                 |
-| `u`                 | Attach a file to send                           |
+| Key                 | Action                                            |
+| ------------------- | ------------------------------------------------- |
+| `j` / `k`           | Navigate chats or scroll messages                 |
+| `ctrl+j` / `ctrl+k` | Select next / previous message                    |
+| `i`                 | Compose message                                   |
+| `r`                 | Reply                                             |
+| `e` / `d`           | Edit / delete message                             |
+| `t`                 | React                                             |
+| `f`                 | Forward message                                   |
+| `u`                 | Attach a file to send                             |
 | `o`                 | Open / view media (photo in viewer, video inline) |
-| `O`                 | Open video in the external player               |
-| `p`                 | Play voice message in-app                       |
-| `s`                 | Download the selected file                      |
-| `/`                 | Search chats                                     |
-| `space`             | Message context menu                            |
-| `0` / `1` / `2`     | Focus panes                                     |
-| `q`                 | Quit                                            |
+| `O`                 | Open video in the external player                 |
+| `p`                 | Play voice message in-app                         |
+| `s`                 | Download the selected file                        |
+| `/`                 | Search chats                                      |
+| `space`             | Message context menu                              |
+| `0` / `1` / `2`     | Focus panes                                       |
+| `q`                 | Quit                                              |
 
 Full reference: [docs/keybindings.md](docs/keybindings.md)
 
@@ -295,11 +297,11 @@ list of action names and what each one does.
 Planned work lives on the public [**project board**](https://github.com/users/sorokin-vladimir/projects/2),
 grouped into release [milestones](https://github.com/sorokin-vladimir/tele/milestones).
 
-| Release   | Focus                                                                                                       |
-| --------- | ----------------------------------------------------------------------------------------------------------- |
+| Release   | Focus                                                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.7.0`  | Input & navigation polish — extended markdown, word-wise composer motions, mouse support, native Linux packages, search-to-create chats |
-| `v1.8.0`  | Notifications & messaging UX — toast banners, in-app alerts for inactive chats, `@mentions`, own-message alert suppression |
-| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search                                  |
+| `v1.8.0`  | Notifications & messaging UX — toast banners, in-app alerts for inactive chats, `@mentions`, own-message alert suppression              |
+| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search                                                              |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.

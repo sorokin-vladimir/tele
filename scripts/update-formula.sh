@@ -35,8 +35,11 @@ deprecated_since="2026-06-19"
 # sha256 for a release artifact, looked up by file name in checksums.txt.
 sha() {
   local name=$1 line
-  line=$(grep -E "  ${name}\$" "$checksums") \
-    || { echo "checksum for $name not found in $checksums" >&2; exit 1; }
+  line=$(grep -E "  ${name}\$" "$checksums") ||
+    {
+      echo "checksum for $name not found in $checksums" >&2
+      exit 1
+    }
   echo "${line%% *}"
 }
 
@@ -55,15 +58,19 @@ publish() {
     "$workdir"
 
   mkdir -p "$workdir/Formula"
-  printf '%s' "$formula" > "$workdir/Formula/${fname}"
+  printf '%s' "$formula" >"$workdir/Formula/${fname}"
 
   git -C "$workdir" config user.name "github-actions[bot]"
   git -C "$workdir" config user.email "github-actions[bot]@users.noreply.github.com"
 
-  if git -C "$workdir" diff --quiet; then
+  # Stage first, then compare the index against HEAD. `git diff --quiet` alone
+  # only sees tracked files, so a brand-new formula (e.g. tele-beta.rb on its
+  # first publish) would look unchanged and never get pushed. Staging makes both
+  # new and modified files show up in `git diff --cached`.
+  git -C "$workdir" add "Formula/${fname}"
+  if git -C "$workdir" diff --cached --quiet; then
     echo "${repo}: ${fname} already up to date for ${tag}"
   else
-    git -C "$workdir" add "Formula/${fname}"
     git -C "$workdir" commit -m "Brew formula update for ${fname} (${tag})"
     git -C "$workdir" push
     echo "${repo}: pushed ${fname} for ${tag}"
@@ -72,27 +79,27 @@ publish() {
 }
 
 case "$(release_tag_kind "$tag")" in
-  beta)
-    # Beta prerelease: canonical tap only, as a separate tele-beta package.
-    publish homebrew-tap \
-      "$(render_beta_formula "$owner" "$version" "$base" \
-         "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64")" \
-      tele-beta.rb
-    ;;
-  stable)
-    # Stable: canonical tap + deprecated legacy tap, both as `tele`.
-    deprecate="  deprecate! date: \"${deprecated_since}\", because: \"this tap is deprecated; migrate to sorokin-vladimir/tap\""
-    publish homebrew-tap \
-      "$(render_stable_formula "$owner" "$version" "$base" \
-         "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64" "")" \
-      tele.rb
-    publish homebrew-tele \
-      "$(render_stable_formula "$owner" "$version" "$base" \
-         "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64" "$deprecate")" \
-      tele.rb
-    ;;
-  *)
-    echo "error: unexpected release tag $tag (want vX.Y.Z or vX.Y.Z-beta.N)" >&2
-    exit 1
-    ;;
+beta)
+  # Beta prerelease: canonical tap only, as a separate tele-beta package.
+  publish homebrew-tap \
+    "$(render_beta_formula "$owner" "$version" "$base" \
+      "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64")" \
+    tele-beta.rb
+  ;;
+stable)
+  # Stable: canonical tap + deprecated legacy tap, both as `tele`.
+  deprecate="  deprecate! date: \"${deprecated_since}\", because: \"this tap is deprecated; migrate to sorokin-vladimir/tap\""
+  publish homebrew-tap \
+    "$(render_stable_formula "$owner" "$version" "$base" \
+      "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64" "")" \
+    tele.rb
+  publish homebrew-tele \
+    "$(render_stable_formula "$owner" "$version" "$base" \
+      "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64" "$deprecate")" \
+    tele.rb
+  ;;
+*)
+  echo "error: unexpected release tag $tag (want vX.Y.Z or vX.Y.Z-beta.N)" >&2
+  exit 1
+  ;;
 esac

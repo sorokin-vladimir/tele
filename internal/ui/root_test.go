@@ -1672,7 +1672,7 @@ func TestRoot_EventDeleteMessages_NonChannel_TargetsOwningChat(t *testing.T) {
 	require.Len(t, st.Messages(2), 1) // unrelated chat untouched
 }
 
-func TestRoot_ContextMenu_PhotoMessage_ShowsExternalAndDownload(t *testing.T) {
+func TestRoot_ContextMenu_PhotoMessage_ShowsAllThreeActions(t *testing.T) {
 	mock := &mockTGClient{}
 	m, st := newRootWithOpenChat(t, mock)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -1691,6 +1691,7 @@ func TestRoot_ContextMenu_PhotoMessage_ShowsExternalAndDownload(t *testing.T) {
 	m = newM.(ui.RootModel)
 	require.True(t, m.ContextMenuOpen())
 	content := m.View().Content
+	assert.Contains(t, content, "Open in app")
 	assert.Contains(t, content, "Open externally")
 	assert.Contains(t, content, "Download")
 }

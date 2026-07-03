@@ -108,7 +108,9 @@ func TestHandlePhotoModalKey_QCloses(t *testing.T) {
 func TestHandlePhotoModalKey_ExternalKeepsOpen(t *testing.T) {
 	m := newSizedModel(t)
 	m.imageMode = media.ModeBlocks
-	m.fullImageCache.Add(1, solidImage(10, 10))
+	// No image is cached on purpose: openPhotoExternal then skips the goroutine
+	// that would launch the real OS viewer, keeping the test hermetic. We only
+	// assert the modal stays open on O.
 	m.photoViewer = &photoViewer{photoID: 1}
 	m2, _ := m.handlePhotoModalKey("O")
 	assert.NotNil(t, m2.photoViewer, "O opens externally but keeps the modal open")

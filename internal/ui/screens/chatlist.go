@@ -254,6 +254,48 @@ func (m *ChatListModel) CursorViewportRow() int {
 	return m.cursor - start
 }
 
+// SetCursor moves the selection cursor to i, clamped to the valid range. It is
+// a no-op when the list is empty.
+func (m *ChatListModel) SetCursor(i int) {
+	if len(m.chats) == 0 {
+		return
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i >= len(m.chats) {
+		i = len(m.chats) - 1
+	}
+	m.cursor = i
+}
+
+// ChatIndexAtViewportRow maps a content row (0-based, within the visible
+// viewport) to a chat index, mirroring the scroll math in View: each chat
+// occupies exactly one row and the viewport starts at
+// start = max(0, cursor-visible+1). ok is false when the row is empty
+// (past the last visible chat or negative).
+func (m *ChatListModel) ChatIndexAtViewportRow(row int) (int, bool) {
+	if row < 0 || len(m.chats) == 0 {
+		return 0, false
+	}
+	visible := m.height
+	if visible <= 0 {
+		visible = len(m.chats)
+	}
+	if row >= visible {
+		return 0, false
+	}
+	start := 0
+	if m.cursor >= visible {
+		start = m.cursor - visible + 1
+	}
+	idx := start + row
+	if idx >= len(m.chats) {
+		return 0, false
+	}
+	return idx, true
+}
+
 func (m *ChatListModel) Init() tea.Cmd { return nil }
 
 func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {

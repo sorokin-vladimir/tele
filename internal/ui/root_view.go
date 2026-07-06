@@ -133,6 +133,9 @@ func (m RootModel) View() tea.View {
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
+	// Enable mouse reporting (clicks + wheel). CellMotion delivers button and
+	// wheel events; motion events while dragging are ignored.
+	v.MouseMode = tea.MouseModeCellMotion
 	// Focus reporting drives the fallback re-read of the terminal background
 	// color on focus regain, for terminals without OS color-scheme reporting
 	// (issue #148). Terminals that do not support it simply never send the event.

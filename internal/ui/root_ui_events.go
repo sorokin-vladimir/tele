@@ -6,7 +6,6 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
-	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -53,19 +52,15 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.height = msg.Height
 		m.logo.SetWidth(msg.Width)
 		m.statusBar.SetWidth(msg.Width)
-		paneH := msg.Height - 1
-		innerH := paneH - 2*borderSize
-		if m.folderBar != nil && m.folderBar.HasFolders() {
-			const sidebarW = 18
-			_, chatlistW, chatW := layout.SplitThree(msg.Width, sidebarW, 0.30)
-			m.folderBar.SetSize(sidebarW-2*borderSize, innerH)
-			m.chatList.SetSize(chatlistW-2*borderSize, innerH)
-			m.chat.SetSize(chatW-2*borderSize, innerH)
-		} else {
-			leftW, rightW := layout.SplitHorizontal(msg.Width, msg.Height, 0.30)
-			m.chatList.SetSize(leftW-2*borderSize, innerH)
-			m.chat.SetSize(rightW-2*borderSize, innerH)
+		lay := computeLayout(msg.Width, msg.Height, m.chat.ComposerHeight(),
+			m.folderBar != nil && m.folderBar.HasFolders())
+		if lay.hasFolders {
+			m.folderBar.SetSize(lay.folders.Width, lay.folders.Height)
 		}
+		m.chatList.SetSize(lay.chatList.Width, lay.chatList.Height)
+		// The chat pane owns both the message list and the composer, so it is
+		// sized to the full pane content height (messages + composer).
+		m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
 		return m, m.retransmitOnColsChange()
 
 	case retransmitTickMsg:
@@ -82,13 +77,13 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		if m.folderBar != nil {
 			m.folderBar.SetFolders(msg.Filters)
 			if m.width > 0 && m.height > 0 {
-				const sidebarW = 18
-				paneH := m.height - 1
-				innerH := paneH - 2*borderSize
-				_, chatlistW, chatW := layout.SplitThree(m.width, sidebarW, 0.30)
-				m.folderBar.SetSize(sidebarW-2*borderSize, innerH)
-				m.chatList.SetSize(chatlistW-2*borderSize, innerH)
-				m.chat.SetSize(chatW-2*borderSize, innerH)
+				lay := computeLayout(m.width, m.height, m.chat.ComposerHeight(),
+					m.folderBar.HasFolders())
+				if lay.hasFolders {
+					m.folderBar.SetSize(lay.folders.Width, lay.folders.Height)
+				}
+				m.chatList.SetSize(lay.chatList.Width, lay.chatList.Height)
+				m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
 			}
 			m.syncFolderBar()
 		}

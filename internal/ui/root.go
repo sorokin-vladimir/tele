@@ -406,6 +406,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.ToggleArchiveRequest,
 		tea.PasteMsg:
 		return m.updateUIMsg(msg)
+	// mouse input
+	case tea.MouseClickMsg, tea.MouseWheelMsg:
+		return m.handleMouse(msg)
 	// key input
 	case tea.KeyPressMsg:
 		if m.screen == ScreenLogin {

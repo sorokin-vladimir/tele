@@ -13,6 +13,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Basic mouse support on the main screen: click a chat in the list to select and
+  open it, click a pane to move focus into it, click inside the composer to start
+  typing (and anywhere outside it to stop), and scroll the chat list or message
+  view with the mouse wheel over whichever pane the cursor is on. Enabling mouse
+  reporting means the terminal's own click-drag text selection is superseded
+  while the app runs; overlay menus are not yet clickable (#84)
 - Photos now open in an in-app modal viewer with `o` (and the chat context menu),
   matching videos. The modal shows the full-quality image (downloaded on demand),
   the sender on the top border, and the message date and time on the bottom-right.

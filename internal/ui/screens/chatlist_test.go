@@ -377,3 +377,44 @@ func TestChatListModel_ScrollInfo(t *testing.T) {
 	info = m.ScrollInfo()
 	assert.Equal(t, 15, info.Offset, "cursor at bottom => start = 20-5")
 }
+
+func TestChatIndexAtViewportRow_NoScroll(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(20, 10)
+	chats := make([]store.Chat, 5)
+	for i := range chats {
+		chats[i] = store.Chat{ID: int64(i + 1), Peer: store.Peer{ID: int64(i + 1), Type: store.PeerUser}}
+	}
+	m.SetChats(chats)
+
+	idx, ok := m.ChatIndexAtViewportRow(0)
+	require.True(t, ok)
+	assert.Equal(t, 0, idx)
+
+	idx, ok = m.ChatIndexAtViewportRow(3)
+	require.True(t, ok)
+	assert.Equal(t, 3, idx)
+
+	// Row past the last chat -> not ok.
+	_, ok = m.ChatIndexAtViewportRow(5)
+	assert.False(t, ok)
+}
+
+func TestChatIndexAtViewportRow_Scrolled(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(20, 3) // viewport height 3
+	chats := make([]store.Chat, 10)
+	for i := range chats {
+		chats[i] = store.Chat{ID: int64(i + 1), Peer: store.Peer{ID: int64(i + 1), Type: store.PeerUser}}
+	}
+	m.SetChats(chats)
+	m.SetCursor(9) // scrolled to bottom: start = 9-3+1 = 7
+
+	idx, ok := m.ChatIndexAtViewportRow(0)
+	require.True(t, ok)
+	assert.Equal(t, 7, idx) // top visible row is chat index 7
+
+	idx, ok = m.ChatIndexAtViewportRow(2)
+	require.True(t, ok)
+	assert.Equal(t, 9, idx)
+}

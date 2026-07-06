@@ -13,6 +13,9 @@
 [![Go](https://img.shields.io/badge/go-1.26+-blue)](https://go.dev)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sorokin-vladimir/tele)](https://github.com/sorokin-vladimir/tele/releases)
+[![Downloads](https://img.shields.io/github/downloads/sorokin-vladimir/tele/total?color=blue)](https://github.com/sorokin-vladimir/tele/releases)
+[![Stars](https://img.shields.io/github/stars/sorokin-vladimir/tele?style=flat)](https://github.com/sorokin-vladimir/tele/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/sorokin-vladimir/tele)](https://github.com/sorokin-vladimir/tele/commits/main)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)](#installation)
 
 <p align="center">
@@ -78,6 +81,10 @@ Vim-inspired navigation (`j/k`, `gg/G`, insert mode, etc.), plus a movable
 per-message cursor (`ctrl+j/k`) that steps bubble-by-bubble, stays centered as
 the chat scrolls, and is the target for the context menu and per-message actions.
 
+Optional mouse support on the main screen: click a chat to open it, click a pane
+to focus it, click into the composer to start typing, and scroll the chat list or
+message view with the wheel.
+
 ### 💬 Full Telegram support
 
 Private chats, groups, channels, replies, reactions, edits, forwarding, and
@@ -85,7 +92,7 @@ per-chat drafts synced with Telegram (saved on the server, shared across devices
 
 ### 🎞 Rich media in the terminal
 
-- **Photos** — rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open in an external viewer.
+- **Photos** — rendered inline in high quality via the Kitty graphics protocol, with an ANSI block-art fallback; press `o` to open the full-quality image in an in-app modal viewer (sender and timestamp on the border), or `O` to open it in an external viewer.
 - **Voice messages** — amplitude waveform with duration, and **in-app playback** (`p`) with an animated playhead. Fully cgo-free on every platform: Opus/Ogg is decoded in pure Go, and audio goes out via `oto` (macOS/Windows) or the PulseAudio/PipeWire protocol (Linux). On Linux this needs a running PulseAudio or PipeWire server (the desktop default).
 - **Video & round video (кружки)** — inline thumbnail preview with a `▶` / duration overlay (round notes shown as a circle); press `o` to play in the system player.
 - **GIFs** — inline static thumbnail with a `GIF` badge; the selected GIF loops silently in place (Kitty graphics mode). Requires `ffmpeg` — see below.
@@ -297,11 +304,13 @@ list of action names and what each one does.
 Planned work lives on the public [**project board**](https://github.com/users/sorokin-vladimir/projects/2),
 grouped into release [milestones](https://github.com/sorokin-vladimir/tele/milestones).
 
-| Release   | Focus                                                                                                                                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `v1.7.0`  | Input & navigation polish — extended markdown, word-wise composer motions, mouse support, native Linux packages, search-to-create chats |
-| `v1.8.0`  | Notifications & messaging UX — toast banners, in-app alerts for inactive chats, `@mentions`, own-message alert suppression              |
-| `Backlog` | Power-user polish — themes, vim motions, command palette, full-text search                                                              |
+| Release              | Focus                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v1.8.0` *(in work)* | Notifications & messaging UX — toast banners, in-app alerts for inactive chats, `@mentions`, unread mention/reaction indicators, own-message alert suppression, native Linux packages (deb/rpm/AUR) |
+| `v1.8.1`             | Composer polish & fixes — trim leading/trailing whitespace, multi-line past the height cap, attachment-chip and forward-comment width clamps      |
+| `v1.9.0`             | Media internals & sending — send multiple files as an album (grouped media), `?` keyboard-shortcuts help modal, renderer cache cleanup (LRU)      |
+| `v1.10.0`            | Offline history & search — persist messages in SQLite for instant chat open, full-text search over history, command palette, pinned messages     |
+| `Backlog`            | Power-user polish — color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards          |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.

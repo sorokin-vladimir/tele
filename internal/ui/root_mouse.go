@@ -53,7 +53,7 @@ func (m RootModel) mouseBlocked() bool {
 	}
 	return m.searchModel != nil || m.filePicker != nil || m.contextMenu != nil ||
 		m.chatMenu != nil || m.reactionPicker != nil || m.photoViewer != nil ||
-		m.videoPlayer != nil
+		m.videoPlayer != nil || m.openPicker != nil
 }
 
 // handleMouse dispatches wheel and left-click events to the pane under the cursor.

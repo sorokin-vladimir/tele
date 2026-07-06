@@ -30,8 +30,10 @@ func TestHintLayout_LetterInWord_MidWord(t *testing.T) {
 }
 
 func TestHintLayout_LetterInWord_CaseInsensitive(t *testing.T) {
+	// A lowercase key matches the capital letter but is shown in the key's case,
+	// so the highlighted letter reads as the actual keystroke.
 	text, spans := hintLayout("n", "Nice")
-	assert.Equal(t, "Nice", text)
+	assert.Equal(t, "nice", text)
 	assert.Equal(t, []span{{0, 1}}, spans)
 }
 
@@ -39,6 +41,14 @@ func TestHintLayout_LetterNotInWord_PrefixForm(t *testing.T) {
 	// "attach" has no "f".
 	text, spans := hintLayout("f", "attach")
 	assert.Equal(t, "f attach", text)
+	assert.Equal(t, []span{{0, 1}}, spans)
+}
+
+func TestHintLayout_UppercaseKey_HighlightsCapitalInPlace(t *testing.T) {
+	// A Shift key matches the word's capital letter and is highlighted in place;
+	// the capital already conveys that Shift is required.
+	text, spans := hintLayout("O", "Open photo externally")
+	assert.Equal(t, "Open photo externally", text)
 	assert.Equal(t, []span{{0, 1}}, spans)
 }
 

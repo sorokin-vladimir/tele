@@ -3,7 +3,6 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -194,20 +193,10 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m.handleFullPhotoReady(msg)
 
 	case components.OpenInViewerRequest:
-		// In-app modal. Videos open in the video modal (external-player fallback
-		// without Kitty+ffmpeg); photos open in the photo modal.
-		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
-				dur, sender := m.selectedVideoInfo()
-				return m.openVideoModal(ref, m.chat.SelectedMessageID(), dur, sender)
-			}
-			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
-		}
-		if ref, ok := m.chat.SelectedMessagePhoto(); ok {
-			sender, date := m.selectedPhotoInfo()
-			return m.openPhotoModal(ref, m.chat.SelectedMessageID(), sender, date)
-		}
-		return m, nil
+		// The menu "Open" item mirrors the o key: open the sole target directly or
+		// present the picker when a message has several (media plus links).
+		model, cmd := m.handleOpen()
+		return model.(RootModel), cmd
 
 	case components.OpenExternalRequest:
 		if photoID := m.chat.SelectedMessagePhotoID(); photoID != 0 {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -1690,10 +1691,10 @@ func TestRoot_ContextMenu_PhotoMessage_ShowsAllThreeActions(t *testing.T) {
 	newM, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
 	m = newM.(ui.RootModel)
 	require.True(t, m.ContextMenuOpen())
-	content := m.View().Content
-	assert.Contains(t, content, "Open in app")
-	assert.Contains(t, content, "Open externally")
-	assert.Contains(t, content, "Download")
+	content := xansi.Strip(m.View().Content)
+	assert.Contains(t, content, "open photo")
+	assert.Contains(t, content, "Open photo externally")
+	assert.Contains(t, content, "save photo (download)")
 }
 
 func TestRoot_ContextMenu_NonMediaMessage_HidesMediaActions(t *testing.T) {

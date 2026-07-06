@@ -3,7 +3,6 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -14,6 +13,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.reactionPicker != nil {
 		newPicker, cmd := m.reactionPicker.Update(msg)
 		m.reactionPicker = newPicker
+		return m, cmd
+	}
+	if m.openPicker != nil {
+		newPicker, cmd := m.openPicker.Update(msg)
+		m.openPicker = newPicker
 		return m, cmd
 	}
 	// While context menu is open, route all keys to it.
@@ -175,22 +179,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return result, tea.Batch(draftFlush, cmd)
 	}
 
-	// ActionOpenInViewer (o) opens an in-app modal: photos in the photo modal,
-	// videos in the video modal (with the external-player fallback when
-	// Kitty+ffmpeg are unavailable).
+	// ActionOpenInViewer (o) opens the message's content. A message can hold
+	// several openable targets (media plus links): one opens directly, several
+	// present a picker. Media opens in the in-app modal (external-player fallback
+	// when Kitty+ffmpeg are unavailable); links open in the default browser.
 	if action == keys.ActionOpenInViewer && m.focus == FocusChat {
-		if ref, ok := m.chat.SelectedMessageVideo(); ok {
-			if useInAppVideoPlayer(m.imageMode, vmedia.HasFFmpeg()) {
-				dur, sender := m.selectedVideoInfo()
-				return m.openVideoModal(ref, m.chat.SelectedMessageID(), dur, sender)
-			}
-			return m.startDocumentOpen(ref, m.chat.SelectedMessageID(), m.selectedDownloadLabel())
-		}
-		if ref, ok := m.chat.SelectedMessagePhoto(); ok {
-			sender, date := m.selectedPhotoInfo()
-			return m.openPhotoModal(ref, m.chat.SelectedMessageID(), sender, date)
-		}
-		return m, nil
+		return m.handleOpen()
 	}
 
 	// ActionOpenExternal (O) opens media in the OS default app: photos in the
@@ -230,7 +224,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				replyToMsgID := m.chat.SelectedMessageReplyToMsgID()
 				mediaKind, hasMedia := m.chat.SelectedMessageMediaKind()
 				_, hasText := m.chat.SelectedMessageText()
-				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, mediaKind, hasMedia, hasText, m.keyMap)
+				openTargets := m.chat.SelectedMessageOpenTargets()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, mediaKind, hasMedia, hasText, openTargets, m.keyMap)
 			}
 		}
 		return m, nil

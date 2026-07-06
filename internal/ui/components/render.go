@@ -104,7 +104,13 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		if end > n {
 			end = n
 		}
-		spans = append(spans, span{start, end, e.Type, e.URL})
+		// Resolve the hyperlink target: text_url carries a hidden URL; plain
+		// url/email link to their own visible text (scheme-normalized).
+		linkTarget := e.URL
+		if e.Type == "url" || e.Type == "email" {
+			linkTarget = normalizeLinkTarget(e.Type, string(runes[start:end]))
+		}
+		spans = append(spans, span{start, end, e.Type, linkTarget})
 		boundarySet[start] = struct{}{}
 		boundarySet[end] = struct{}{}
 	}
@@ -132,7 +138,7 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 			if s.start <= lo && hi <= s.end {
 				style = applyEntityStyle(style, s.typ)
 				styled = true
-				if s.typ == "text_url" {
+				if s.url != "" && (s.typ == "text_url" || s.typ == "url" || s.typ == "email") {
 					linkURL = s.url
 					linkID = idx + 1
 				}
@@ -148,6 +154,22 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		b.WriteString(segment)
 	}
 	return b.String()
+}
+
+// normalizeLinkTarget turns the visible text of a plain url/email entity into an
+// openable target: emails become mailto: links, and scheme-less URLs get an
+// https:// prefix. Text already carrying a scheme is left untouched.
+func normalizeLinkTarget(typ, text string) string {
+	switch typ {
+	case "email":
+		return "mailto:" + text
+	case "url":
+		if strings.Contains(text, "://") {
+			return text
+		}
+		return "https://" + text
+	}
+	return text
 }
 
 // osc8 wraps s in an OSC 8 hyperlink to url. Terminals without OSC 8 support

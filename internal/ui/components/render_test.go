@@ -144,6 +144,31 @@ func TestRenderEntities_TextURL_EmitsOSC8WithURL(t *testing.T) {
 	assert.Contains(t, result, "\x1b]8;;\x1b\\")
 }
 
+func TestRenderEntities_PlainURLWithScheme_EmitsOSC8(t *testing.T) {
+	text := "see https://example.com now"
+	entities := []store.MessageEntity{{Type: "url", Offset: 4, Length: 19}}
+	result := components.RenderEntities(text, entities)
+	assert.Contains(t, result, "8;id=1;https://example.com\x1b\\", "plain url must be wrapped in OSC 8")
+	assert.Contains(t, stripANSI(result), "https://example.com", "visible text unchanged")
+}
+
+func TestRenderEntities_SchemelessURL_LinkedAsHTTPS(t *testing.T) {
+	text := "visit example.com today"
+	entities := []store.MessageEntity{{Type: "url", Offset: 6, Length: 11}}
+	result := components.RenderEntities(text, entities)
+	assert.Contains(t, result, "8;id=1;https://example.com\x1b\\",
+		"a scheme-less url must be linked as https://")
+	assert.Contains(t, stripANSI(result), "example.com", "visible text stays as typed (no scheme added)")
+}
+
+func TestRenderEntities_Email_LinkedViaMailto(t *testing.T) {
+	text := "mail me a@b.com ok"
+	entities := []store.MessageEntity{{Type: "email", Offset: 8, Length: 7}}
+	result := components.RenderEntities(text, entities)
+	assert.Contains(t, result, "8;id=1;mailto:a@b.com\x1b\\",
+		"an email entity must be linked via mailto:")
+}
+
 // Validation gate: OSC 8 escapes must be zero-width so word-wrap and the
 // height cache (wrappedLineCount, which calls RenderEntities) stay correct.
 func TestRenderEntities_OSC8_ZeroWidth(t *testing.T) {

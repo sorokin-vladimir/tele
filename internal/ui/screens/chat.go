@@ -216,6 +216,9 @@ func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID
 func (m *ChatModel) SelectedMessageText() (string, bool) {
 	return m.msgList.SelectedMessageText()
 }
+func (m *ChatModel) SelectedMessageOpenTargets() []components.OpenTarget {
+	return m.msgList.SelectedMessageOpenTargets()
+}
 func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
 func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.SelectedMessageReplyToMsgID() }
 func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }

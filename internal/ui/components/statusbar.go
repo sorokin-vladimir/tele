@@ -282,7 +282,12 @@ func hintLayout(key, desc string) (string, []span) {
 		r, _ := utf8.DecodeRuneInString(key)
 		if unicode.IsLetter(r) {
 			if i := wordRuneIndex(desc, r); i >= 0 {
-				return desc, []span{{i, i + 1}}
+				// Show the highlighted letter in the key's exact case so it reads as
+				// the actual keystroke: "Reply" with key r renders "reply", while
+				// "Open photo externally" with the Shift key O keeps its capital O.
+				rs := []rune(desc)
+				rs[i] = r
+				return string(rs), []span{{i, i + 1}}
 			}
 		}
 	}

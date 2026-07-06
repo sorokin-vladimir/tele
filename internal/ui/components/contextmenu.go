@@ -102,6 +102,7 @@ type ContextMenu struct {
 	mediaKind    store.MediaKind
 	hasMedia     bool
 	hasText      bool
+	openTargets  []OpenTarget
 	keyMap       keys.KeyMap
 }
 
@@ -109,7 +110,9 @@ type ContextMenu struct {
 // the selected message's media and hasMedia reports whether the message carries
 // any media (when false, mediaKind is ignored and no media actions are shown).
 // hasText reports whether the message has copyable text (drives the Copy entry).
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind store.MediaKind, hasMedia bool, hasText bool, km keys.KeyMap) *ContextMenu {
+// openTargets are the message's openable items (media plus links); they drive the
+// single unified "Open" entry.
+func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind store.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget, km keys.KeyMap) *ContextMenu {
 	cm := &ContextMenu{
 		msgID:        msgID,
 		isOut:        isOut,
@@ -117,10 +120,11 @@ func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind store.Med
 		mediaKind:    mediaKind,
 		hasMedia:     hasMedia,
 		hasText:      hasText,
+		openTargets:  openTargets,
 		keyMap:       km,
 		list:         NewListView(true),
 	}
-	cm.setItems(mainItems(isOut, replyToMsgID != 0, mediaKind, hasMedia, hasText))
+	cm.setItems(mainItems(isOut, replyToMsgID != 0, mediaKind, hasMedia, hasText, openTargets))
 	return cm
 }
 
@@ -136,7 +140,7 @@ func (cm *ContextMenu) setItems(items []menuItem) {
 
 func (cm *ContextMenu) Cursor() int { return cm.list.Cursor() }
 
-func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia bool, hasText bool) []menuItem {
+func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -147,7 +151,10 @@ func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia boo
 		menuItem{label: "Forward", action: keys.ActionForward},
 	)
 	if hasText {
-		items = append(items, menuItem{label: "Copy", action: keys.ActionCopyMessage})
+		items = append(items, menuItem{label: "Copy text", action: keys.ActionCopyMessage})
+	}
+	if len(openTargets) > 0 {
+		items = append(items, menuItem{label: openItemLabel(openTargets), action: keys.ActionOpenInViewer})
 	}
 	if isOut {
 		items = append(items, menuItem{label: "Edit", action: keys.ActionEdit})
@@ -159,33 +166,51 @@ func mainItems(isOut bool, isReply bool, mediaKind store.MediaKind, hasMedia boo
 	return items
 }
 
-// mediaItems returns the media actions for a message of the given kind:
-// download is offered for everything downloadable; external open for photo and
-// video; the in-app modal for photo and video; in-app playback for voice.
-// Stickers and non-file media (location, etc.) get no media actions.
+// openItemLabel names the unified Open entry: a single target is spelled out
+// (Open photo/video/link); several collapse to a plain "Open" that leads to the
+// picker.
+func openItemLabel(targets []OpenTarget) string {
+	if len(targets) != 1 {
+		return "Open"
+	}
+	switch targets[0].Kind {
+	case OpenTargetPhoto:
+		return "Open photo"
+	case OpenTargetVideo:
+		return "Open video"
+	case OpenTargetLink:
+		return "Open link"
+	}
+	return "Open"
+}
+
+// mediaItems returns the secondary media actions for a message of the given kind:
+// external open for photo and video, playback for voice, and download for every
+// downloadable kind. The primary in-app open is handled by the unified Open
+// entry. Stickers and non-file media (location, etc.) get no media actions.
 func mediaItems(kind store.MediaKind) []menuItem {
 	switch kind {
 	case store.MediaPhoto:
 		return []menuItem{
-			{label: "Open in app", action: keys.ActionOpenInViewer},
-			{label: "Open externally", action: keys.ActionOpenExternal},
-			{label: "Download", action: keys.ActionDownloadFile},
+			{label: "Open photo externally", action: keys.ActionOpenExternal},
+			{label: "save photo (download)", action: keys.ActionDownloadFile},
 		}
 	case store.MediaVideo, store.MediaVideoNote:
 		return []menuItem{
-			{label: "Open in app", action: keys.ActionOpenInViewer},
-			{label: "Open externally", action: keys.ActionOpenExternal},
-			{label: "Download", action: keys.ActionDownloadFile},
+			{label: "Open video externally", action: keys.ActionOpenExternal},
+			{label: "save video (download)", action: keys.ActionDownloadFile},
 		}
 	case store.MediaVoice:
 		return []menuItem{
-			{label: "Play", action: keys.ActionPlayVoice},
-			{label: "Download", action: keys.ActionDownloadFile},
+			{label: "Play voice", action: keys.ActionPlayVoice},
+			{label: "save voice (download)", action: keys.ActionDownloadFile},
 		}
-	case store.MediaAudio, store.MediaGIF, store.MediaFile:
-		return []menuItem{
-			{label: "Download", action: keys.ActionDownloadFile},
-		}
+	case store.MediaAudio:
+		return []menuItem{{label: "save audio (download)", action: keys.ActionDownloadFile}}
+	case store.MediaGIF:
+		return []menuItem{{label: "save GIF (download)", action: keys.ActionDownloadFile}}
+	case store.MediaFile:
+		return []menuItem{{label: "save file (download)", action: keys.ActionDownloadFile}}
 	default:
 		return nil
 	}
@@ -229,7 +254,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.setItems(mainItems(cm.isOut, cm.replyToMsgID != 0, cm.mediaKind, cm.hasMedia, cm.hasText))
+			cm.setItems(mainItems(cm.isOut, cm.replyToMsgID != 0, cm.mediaKind, cm.hasMedia, cm.hasText, cm.openTargets))
 			return cm, nil
 		}
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
@@ -298,6 +323,11 @@ func (cm *ContextMenu) View() string {
 	b := lipgloss.RoundedBorder()
 	ctx := cm.activeContext()
 
+	// Menu item labels carry the hotkey accented in place, matching the
+	// status-bar hint style (btop rules via hintLayout). The selected row stays
+	// plain so its highlight background keeps full contrast.
+	base := lipgloss.NewStyle().Background(OverlayMenuBg)
+	accent := lipgloss.NewStyle().Background(OverlayMenuBg).Foreground(lipgloss.Color("39"))
 	rows := make([]string, len(cm.items))
 	for i, item := range cm.items {
 		if item.action == keys.ActionNone {
@@ -305,13 +335,12 @@ func (cm *ContextMenu) View() string {
 			continue
 		}
 		k := cm.keyMap.KeyFor(ctx, item.action)
-		var label string
-		if k != "" {
-			label = k + " -> " + item.label
+		text, spans := hintLayout(k, item.label)
+		if i == cm.list.Cursor() {
+			rows[i] = "  " + text
 		} else {
-			label = item.label
+			rows[i] = "  " + applyAccent(text, spans, base, accent)
 		}
-		rows[i] = "  " + label
 	}
 
 	// build bottom nav hint (status-bar style)

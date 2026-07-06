@@ -90,6 +90,7 @@ type RootModel struct {
 	contextMenu       *components.ContextMenu
 	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
+	openPicker        *components.OpenPicker
 	reactionTargetID  int
 	folderBar         *screens.FoldersModel
 	activeFilter      *store.FolderFilter
@@ -212,6 +213,7 @@ func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }
 func (m RootModel) ChatMenuOpen() bool           { return m.chatMenu != nil }
 func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != nil }
+func (m RootModel) OpenPickerOpen() bool         { return m.openPicker != nil }
 func (m RootModel) FilePickerOpen() bool         { return m.filePicker != nil }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
@@ -354,6 +356,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if text, ok := m.chat.SelectedMessageText(); ok {
 			return m, copyToClipboardCmd(text)
 		}
+		return m, nil
+	case components.OpenTargetChosenMsg:
+		m.openPicker = nil
+		return m.openTarget(msg.Target)
+	case components.CloseOpenPickerMsg:
+		m.openPicker = nil
 		return m, nil
 	case ClearStatusErrMsg:
 		m.statusBar.ClearError(msg.Serial)

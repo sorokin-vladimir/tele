@@ -27,6 +27,15 @@ func (ml *MessageList) SelectedMessageText() (string, bool) {
 	return "", false
 }
 
+// SelectedMessageOpenTargets returns the openable targets (media + links) of the
+// selected message, in display order. Empty when nothing is openable.
+func (ml *MessageList) SelectedMessageOpenTargets() []OpenTarget {
+	if msg := ml.computeSelectedMsg(); msg != nil {
+		return MessageOpenTargets(*msg)
+	}
+	return nil
+}
+
 func (ml *MessageList) SelectedMessageReplyToMsgID() int {
 	if msg := ml.computeSelectedMsg(); msg != nil {
 		return msg.ReplyToMsgID

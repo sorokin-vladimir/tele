@@ -179,6 +179,45 @@ A plain console (cmd.exe / classic conhost) falls back to ANSI block-art photos.
 > Prefer a packaged install? A `.zip` containing `tele.exe`
 > (`tele_windows_amd64.zip`) is attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
 
+### Nix / NixOS
+
+`tele` ships a flake. Try it without installing anything:
+
+```sh
+nix run github:sorokin-vladimir/tele
+```
+
+Or install it into your profile:
+
+```sh
+nix profile install github:sorokin-vladimir/tele
+```
+
+To pull it in as an input of your own flake (e.g. a NixOS configuration):
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    tele = {
+      url = "github:sorokin-vladimir/tele";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+}
+```
+
+Then, in your configuration:
+
+```nix
+environment.systemPackages = [
+  inputs.tele.packages.${pkgs.system}.default
+];
+```
+
+A `nix develop` shell is also available in the repo for local development (go,
+golangci-lint, lefthook).
+
 ---
 
 ## First launch

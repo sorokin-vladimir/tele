@@ -43,6 +43,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   update; the edit handler discarded such edits to avoid a false "edited" label
   (#118) and, with them, the reactions they carried. The handler now applies the
   reactions from a hidden edit while still not marking the message edited (#160)
+- Archived chats now appear in custom Telegram folders when the folder rules
+  include them, including category matches such as groups
 
 ## [1.8.0] - 2026-07-06
 

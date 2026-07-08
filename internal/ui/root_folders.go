@@ -30,10 +30,11 @@ func (m RootModel) filteredChats() []store.Chat {
 		return out
 	}
 
-	// Custom filter: matches and not archived.
+	// Custom filter: FolderFilter.Matches owns Telegram folder rules, including
+	// whether archived chats should be excluded.
 	out := make([]store.Chat, 0, len(all))
 	for _, c := range all {
-		if !c.IsArchived && m.activeFilter.Matches(c) {
+		if m.activeFilter.Matches(c) {
 			out = append(out, c)
 		}
 	}

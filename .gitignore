@@ -26,6 +26,7 @@ docs/spec.md
 
 # Dev build
 /tele
+/result
 
 # GoReleaser output
 /dist/

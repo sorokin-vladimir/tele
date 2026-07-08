@@ -368,6 +368,10 @@ go build \
   -o tele ./cmd/tele/
 ```
 
+If you're touching the flake and change `go.mod`/`go.sum`, `vendorHash` in `flake.nix`
+needs regenerating too: run `nix build`, then copy the "got: sha256-..." hash it
+reports into `flake.nix`.
+
 ---
 
 ## License

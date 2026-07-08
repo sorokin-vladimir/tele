@@ -1,0 +1,41 @@
+name: Nix
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/nix.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/nix.yml"
+  workflow_dispatch:
+
+jobs:
+  flake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: flake check
+        run: nix flake check --print-build-logs
+
+      - name: build
+        run: nix build .#default --print-build-logs
+
+      - name: smoke test
+        run: ./result/bin/tele -version

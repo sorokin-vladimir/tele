@@ -16,7 +16,9 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        version = "1.8.0";
+        # Derived from the checked-out commit rather than hardcoded, so it
+        # can't drift from what's actually built (see PR review discussion).
+        version = self.shortRev or self.dirtyShortRev or "unknown";
       in
       {
         packages.default = pkgs.buildGoModule {
@@ -25,6 +27,8 @@
 
           src = ./.;
 
+          # Must be regenerated whenever go.mod/go.sum changes: run `nix build`,
+          # copy the "got: sha256-..." hash it reports, and paste it here.
           vendorHash = "sha256-tZkIsry/MyILMb2USafVmzBfTbqeNQNZ/QtRryGCHgQ=";
 
           subPackages = [ "cmd/tele" ];

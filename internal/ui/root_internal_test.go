@@ -90,3 +90,31 @@ func TestFilteredChats_ArchiveSplit(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, int64(2), got[0].ID)
 }
+
+func TestFilteredChats_CustomFolderIncludesArchivedExplicitPeer(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Normal", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(store.Chat{ID: 2, Title: "Archived", Peer: store.Peer{ID: 2, Type: store.PeerChannel}, IsArchived: true})
+
+	m := NewRootModel(nil, st, 50, false)
+	f := store.FolderFilter{ID: 7, Title: "News", IncludePeers: []int64{2}}
+	m.activeFilter = &f
+
+	got := m.filteredChats()
+	require.Len(t, got, 1)
+	assert.Equal(t, int64(2), got[0].ID)
+}
+
+func TestFilteredChats_CustomFolderIncludesArchivedCategoryMatch(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Normal", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.SetChat(store.Chat{ID: 2, Title: "Archived", Peer: store.Peer{ID: 2, Type: store.PeerGroup}, IsArchived: true})
+
+	m := NewRootModel(nil, st, 50, false)
+	f := store.FolderFilter{ID: 7, Title: "Groups", Groups: true}
+	m.activeFilter = &f
+
+	got := m.filteredChats()
+	require.Len(t, got, 1)
+	assert.Equal(t, int64(2), got[0].ID)
+}

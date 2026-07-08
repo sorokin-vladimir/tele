@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/gotd/log/logzap"
 	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 
@@ -88,7 +89,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		// our logger so the manager's recovery behavior after a long idle is
 		// observable (#119): "Idle timeout", "Getting difference", "Pts gap
 		// timeout" and channel-difference results all surface at debug level.
-		Logger: c.log.Named("updates"),
+		// gotd v0.154.0 changed Logger from *zap.Logger to gotd/log.Logger;
+		// wrap our zap logger with the logzap adapter to keep zap out of gotd's core graph.
+		Logger: logzap.New(c.log.Named("updates")),
 	}
 	// Persist channel access hashes so channels are re-registered at startup and
 	// UpdateChannelTooLong after a long idle is acted upon instead of dropped
@@ -144,7 +147,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		UpdateHandler:  hook,
 		SessionStorage: sess,
 		Resolver:       resolver,
-		Logger:         c.log,
+		Logger:         logzap.New(c.log),
 		// OnDead marks MTProto connection death (and the reconnect that follows)
 		// so a long-idle update stall (#119) can be correlated with connection
 		// drops in the logs. Logged at warn so it shows without -e.

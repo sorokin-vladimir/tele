@@ -2040,6 +2040,34 @@ func TestRoot_EventEditMessage_HiddenEdit_DoesNotMarkEdited(t *testing.T) {
 	assert.Nil(t, msgs[0].EditDate, "hidden edit must not set the edited marker")
 }
 
+func TestRoot_EventEditMessage_HiddenEdit_AppliesReactions(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}})
+	st.AppendMessage(store.Message{ID: 10, ChatID: 1, Text: "original"})
+	m := ui.NewRootModel(nil, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+
+	// In a 1:1 chat an incoming reaction is delivered as a hidden edit
+	// (edit_hide) carrying the message's new reactions, not as a separate
+	// UpdateMessageReactions. The reactions must be applied so they appear live,
+	// while the message must still not be flipped to "edited" (#160, #118).
+	newM, _ := m.Update(store.Event{
+		Kind: store.EventEditMessage,
+		Message: store.Message{
+			ID: 10, ChatID: 1, Text: "original", EditDate: nil,
+			Reactions: []store.Reaction{{Emoji: "👍", Count: 1}},
+		},
+	})
+	_ = newM.(ui.RootModel)
+
+	msgs := st.Messages(1)
+	require.Len(t, msgs, 1)
+	assert.Nil(t, msgs[0].EditDate, "hidden edit must not set the edited marker")
+	require.Len(t, msgs[0].Reactions, 1, "reactions from the hidden edit must be applied")
+	assert.Equal(t, "👍", msgs[0].Reactions[0].Emoji)
+	assert.Equal(t, 1, msgs[0].Reactions[0].Count)
+}
+
 func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 	mock := &mockTGClient{searchResult: []store.Chat{
 		{ID: 99, Title: "Zoe", Peer: store.Peer{ID: 99, Type: store.PeerUser}},

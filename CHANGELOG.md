@@ -35,6 +35,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   shown in the key's exact case so it reads as the actual keystroke (a lowercase
   key lowercases the letter, a Shift key keeps its capital)
 
+### Fixed
+
+- Incoming reactions from the other party now appear live in an open 1:1 chat
+  instead of only showing up after a chat refresh. In private chats a reaction is
+  delivered as a hidden edit (Telegram `edit_hide`), not as a separate reactions
+  update; the edit handler discarded such edits to avoid a false "edited" label
+  (#118) and, with them, the reactions they carried. The handler now applies the
+  reactions from a hidden edit while still not marking the message edited (#160)
+
 ## [1.8.0] - 2026-07-06
 
 ### Added

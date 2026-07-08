@@ -69,10 +69,17 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		// scroll position, matching the reactions-update path.
 		//
 		// A nil EditDate means the converter dropped it as a hidden edit
-		// (Telegram edit_hide), e.g. a reaction bump: not a real content edit.
-		// Ignore it so the message is not flipped to "edited"; the reaction
-		// itself arrives via EventReactionsUpdate (issue #118).
+		// (Telegram edit_hide), e.g. a reaction bump: not a real content edit, so
+		// the message must not be flipped to "edited" (issue #118). But in 1:1
+		// chats an incoming reaction is delivered ONLY as this hidden edit (it
+		// carries the message's new reactions), not as a separate
+		// UpdateMessageReactions — so apply those reactions here, otherwise peer
+		// reactions never show live and only appear after a chat refresh (#160).
 		if msg.Message.EditDate == nil {
+			m.st.UpdateMessageReactions(msg.Message.ChatID, msg.Message.ID, msg.Message.Reactions)
+			if msg.Message.ChatID == m.currentChatID {
+				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			}
 			return m, nil
 		}
 		editDate := *msg.Message.EditDate

@@ -31,6 +31,7 @@ func (s *SQLiteStore) ClearForNewAccount(ownerID int64) {
 	s.mu.Lock()
 	s.chats = make(map[int64]Chat)
 	s.messages = make(map[int64][]Message)
+	s.unreadReactionMsgs = make(map[int64]map[int]struct{})
 	s.msgChat = make(map[int]int64)
 	s.dirtyPersist = make(map[int64]struct{})
 	s.sortedIDs = nil

@@ -79,6 +79,13 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 			m.st.UpdateMessageReactions(msg.Message.ChatID, msg.Message.ID, msg.Message.Reactions)
 			if msg.Message.ChatID == m.currentChatID {
 				m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+				if m.focus == FocusChat && msg.Message.HasUnreadReactions {
+					return m, m.readReactionsCmd(msg.Message.ChatID)
+				}
+				return m, nil
+			}
+			if msg.Message.HasUnreadReactions && m.st.ApplyUnreadReaction(msg.Message.ChatID, msg.Message.ID, true) {
+				m.chatList.SetChats(m.filteredChats())
 			}
 			return m, nil
 		}
@@ -105,6 +112,13 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		m.st.UpdateMessageReactions(msg.ChatID, msg.MsgID, msg.Reactions)
 		if msg.ChatID == m.currentChatID {
 			m.chat.SetMessagesKeepScroll(m.st.Messages(m.currentChatID))
+			if m.focus == FocusChat && msg.ReactionsUnread {
+				return m, m.readReactionsCmd(msg.ChatID)
+			}
+			return m, nil
+		}
+		if msg.ReactionsUnread && m.st.ApplyUnreadReaction(msg.ChatID, msg.MsgID, true) {
+			m.chatList.SetChats(m.filteredChats())
 		}
 	case store.EventDeleteMessages:
 		if msg.ChatID != 0 {

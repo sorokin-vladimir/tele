@@ -60,6 +60,8 @@ func (m *mockClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { re
 
 func (m *mockClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error { return nil }
 
+func (m *mockClient) ReadReactions(_ context.Context, _ store.Peer) error { return nil }
+
 func (m *mockClient) SetMuted(_ context.Context, _ store.Peer, _ bool) error { return nil }
 
 func (m *mockClient) AddToFolder(_ context.Context, _ int, _ store.Peer, _ bool) error { return nil }

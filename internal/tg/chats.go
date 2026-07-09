@@ -299,6 +299,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []store.Chat {
 		chat.IsArchived = folderID == 1
 		chat.Pinned = m.pinned
 		chat.UnreadCount = dlg.UnreadCount
+		chat.UnreadReactionsCount = dlg.UnreadReactionsCount
 		chat.ReadInboxMaxID = dlg.ReadInboxMaxID
 		chat.ReadOutboxMaxID = dlg.ReadOutboxMaxID
 		chat.LastMessage = &store.Message{Date: m.lastMsgAt}

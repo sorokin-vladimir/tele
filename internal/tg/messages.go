@@ -301,6 +301,19 @@ func (c *GotdClient) MarkRead(ctx context.Context, peer store.Peer, maxID int) e
 	})
 }
 
+func (c *GotdClient) ReadReactions(ctx context.Context, peer store.Peer) error {
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+	return WithRetry(ctx, func() error {
+		_, err := api.MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{
+			Peer: peerToInput(peer),
+		})
+		return err
+	})
+}
+
 func (c *GotdClient) DeleteMessages(ctx context.Context, peer store.Peer, ids []int, revoke bool) error {
 	api, err := c.acquireAPI()
 	if err != nil {

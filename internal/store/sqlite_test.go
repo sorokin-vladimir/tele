@@ -381,6 +381,24 @@ func TestSQLite_MigratesMissingChatColumns(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, c.UnreadMark)
 	assert.False(t, c.IsArchived)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+}
+
+func TestSQLite_UnreadReactionsCount_Persist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tele.db")
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(store.Chat{ID: 42, Title: "Bob", UnreadReactionsCount: 3})
+	require.NoError(t, s.Close())
+
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	c, ok := s2.GetChat(42)
+	require.True(t, ok)
+	assert.Equal(t, 3, c.UnreadReactionsCount)
 }
 
 func TestSQLite_ChatStateMutators(t *testing.T) {

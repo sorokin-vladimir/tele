@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS chats (
 	is_muted           INTEGER NOT NULL DEFAULT 0,
 	online             INTEGER NOT NULL DEFAULT 0,
 	unread_mark        INTEGER NOT NULL DEFAULT 0,
-	is_archived        INTEGER NOT NULL DEFAULT 0
+	is_archived        INTEGER NOT NULL DEFAULT 0,
+	unread_reactions_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS update_state (
 	user_id INTEGER PRIMARY KEY,
@@ -74,8 +75,13 @@ type SQLiteStore struct {
 	mu       sync.RWMutex
 	chats    map[int64]Chat
 	messages map[int64][]Message
-	db       *sql.DB
-	log      *zap.Logger
+	// unreadReactionMsgs tracks, per chat, the message IDs observed this session
+	// to carry unread reactions. Keeps ApplyUnreadReaction idempotent so repeated
+	// updates for one message do not double-count. Session-only: the dialog list
+	// is authoritative on restart.
+	unreadReactionMsgs map[int64]map[int]struct{}
+	db                 *sql.DB
+	log                *zap.Logger
 
 	// sortedIDs caches chat IDs in display order; orderDirty marks it stale.
 	// Only the order is cached — field values are always read fresh from the
@@ -141,15 +147,16 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		return nil, err
 	}
 	s := &SQLiteStore{
-		chats:        make(map[int64]Chat),
-		messages:     make(map[int64][]Message),
-		msgChat:      make(map[int]int64),
-		dirtyPersist: make(map[int64]struct{}),
-		flushStop:    make(chan struct{}),
-		flushDone:    make(chan struct{}),
-		db:           db,
-		log:          log,
-		orderDirty:   true, // build the sorted view lazily on first Chats() call
+		chats:              make(map[int64]Chat),
+		messages:           make(map[int64][]Message),
+		unreadReactionMsgs: make(map[int64]map[int]struct{}),
+		msgChat:            make(map[int]int64),
+		dirtyPersist:       make(map[int64]struct{}),
+		flushStop:          make(chan struct{}),
+		flushDone:          make(chan struct{}),
+		db:                 db,
+		log:                log,
+		orderDirty:         true, // build the sorted view lazily on first Chats() call
 	}
 	if err := s.loadChats(); err != nil {
 		_ = db.Close()
@@ -247,6 +254,7 @@ func ensureChatColumns(db *sql.DB) error {
 	migrations := []struct{ col, ddl string }{
 		{"unread_mark", `ALTER TABLE chats ADD COLUMN unread_mark INTEGER NOT NULL DEFAULT 0`},
 		{"is_archived", `ALTER TABLE chats ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0`},
+		{"unread_reactions_count", `ALTER TABLE chats ADD COLUMN unread_reactions_count INTEGER NOT NULL DEFAULT 0`},
 	}
 	for _, m := range migrations {
 		if _, ok := existing[m.col]; ok {

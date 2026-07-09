@@ -29,6 +29,9 @@ var (
 	activeChatStyle   = lipgloss.NewStyle().Bold(true)
 	onlineDotStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	// reactionStyle tints the unread-reaction glyph pink to stand apart from the
+	// numeric unread badge.
+	reactionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	// chatHighlightBase is the tone the chat-row title highlight fades toward
 	// (approximates default light-grey text on a dark background).
 	chatHighlightBase = lipgloss.Color("250")
@@ -44,10 +47,24 @@ func formatUnread(count int) string {
 	return fmt.Sprintf("[%d]", count)
 }
 
-// rowIndicators builds the right-aligned status column for a chat row: an
-// optional dim muted marker followed by the unread token. The unread token is
-// the numeric badge when there are unread messages, or a manual-unread dot when
-// the chat was marked unread with no real count.
+// formatReactions renders the unread-reaction token: empty when none, a bare
+// heart for one, or a heart with the count for many.
+func formatReactions(count int) string {
+	switch {
+	case count <= 0:
+		return ""
+	case count == 1:
+		return "♥"
+	default:
+		return fmt.Sprintf("♥%d", count)
+	}
+}
+
+// rowIndicators builds the right-aligned status column for a chat row. Tokens
+// appear in order [mute] [reaction] [unread], each separated by a single space
+// and omitted when empty: the dim mute marker, the pink unread-reaction glyph,
+// then the unread token (numeric badge, or a manual-unread dot when marked
+// unread with no real count).
 func rowIndicators(c store.Chat) string {
 	var unread string
 	switch {
@@ -56,14 +73,21 @@ func rowIndicators(c store.Chat) string {
 	case c.UnreadMark:
 		unread = "[•]"
 	}
-	if !c.IsMuted {
-		return unread
+	var reaction string
+	if c.UnreadReactionsCount > 0 {
+		reaction = reactionStyle.Render(formatReactions(c.UnreadReactionsCount))
 	}
-	muted := mutedStyle.Render("×")
-	if unread == "" {
-		return muted
+	var muted string
+	if c.IsMuted {
+		muted = mutedStyle.Render("×")
 	}
-	return muted + " " + unread
+	parts := make([]string, 0, 3)
+	for _, p := range []string{muted, reaction, unread} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 type ChatListModel struct {

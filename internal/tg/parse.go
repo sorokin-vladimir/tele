@@ -290,6 +290,7 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 	}
 	if msg.Reactions.Results != nil {
 		out.Reactions = convertReactions(msg.Reactions)
+		out.HasUnreadReactions = reactionsHaveUnread(msg.Reactions)
 	}
 	if media, ok := msg.Media.(*tg.MessageMediaPhoto); ok {
 		if photo, ok := media.Photo.(*tg.Photo); ok && len(photo.Sizes) > 0 {
@@ -318,6 +319,17 @@ func convertMessage(raw tg.MessageClass, chatID int64) (store.Message, bool) {
 		}
 	}
 	return out, true
+}
+
+// reactionsHaveUnread reports whether any recent reaction on the message is
+// flagged unread (a not-yet-viewed reaction on one of our messages).
+func reactionsHaveUnread(mr tg.MessageReactions) bool {
+	for _, r := range mr.RecentReactions {
+		if r.Unread {
+			return true
+		}
+	}
+	return false
 }
 
 func convertReactions(mr tg.MessageReactions) []store.Reaction {

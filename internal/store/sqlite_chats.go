@@ -11,7 +11,8 @@ import (
 func (s *SQLiteStore) loadChats() error {
 	rows, err := s.db.Query(`SELECT id, title, peer_type, peer_access_hash, pinned,
 		unread_count, read_inbox_max_id, read_outbox_max_id, last_message,
-		is_contact, is_bot, is_muted, online, unread_mark, is_archived FROM chats`)
+		is_contact, is_bot, is_muted, online, unread_mark, is_archived,
+		unread_reactions_count FROM chats`)
 	if err != nil {
 		return err
 	}
@@ -24,7 +25,7 @@ func (s *SQLiteStore) loadChats() error {
 			&c.ID, &c.Title, &c.Peer.Type, &c.Peer.AccessHash,
 			&pinned, &c.UnreadCount, &c.ReadInboxMaxID, &c.ReadOutboxMaxID,
 			&lastMsgJSON, &isContact, &isBot, &isMuted, &online,
-			&unreadMark, &isArchived,
+			&unreadMark, &isArchived, &c.UnreadReactionsCount,
 		)
 		if err != nil {
 			return err
@@ -66,13 +67,14 @@ func (s *SQLiteStore) persistChat(c Chat) {
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO chats
 		(id, title, peer_type, peer_access_hash, pinned, unread_count,
 		 read_inbox_max_id, read_outbox_max_id, last_message,
-		 is_contact, is_bot, is_muted, online, unread_mark, is_archived)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 is_contact, is_bot, is_muted, online, unread_mark, is_archived,
+		 unread_reactions_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, c.Title, c.Peer.Type, c.Peer.AccessHash,
 		boolInt(c.Pinned), c.UnreadCount, c.ReadInboxMaxID, c.ReadOutboxMaxID,
 		lastMsgJSON,
 		boolInt(c.IsContact), boolInt(c.IsBot), boolInt(c.IsMuted), boolInt(c.Online),
-		boolInt(c.UnreadMark), boolInt(c.IsArchived),
+		boolInt(c.UnreadMark), boolInt(c.IsArchived), c.UnreadReactionsCount,
 	)
 	if err != nil {
 		s.log.Error("persist chat failed", zap.Int64("chat_id", c.ID), zap.Error(err))
@@ -134,7 +136,8 @@ func (s *SQLiteStore) GetChat(id int64) (Chat, bool) {
 func (s *SQLiteStore) SetChat(chat Chat) {
 	s.mu.Lock()
 	s.chats[chat.ID] = chat
-	s.orderDirty = true // title/pin/last-message may change ordering
+	delete(s.unreadReactionMsgs, chat.ID) // server count is authoritative; drop stale session tracking
+	s.orderDirty = true                   // title/pin/last-message may change ordering
 	s.mu.Unlock()
 	s.persistChat(chat)
 }

@@ -72,6 +72,15 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// Drop the previous chat's placements; reconcile (after this update)
 		// transmits the now-visible images.
 		m.requestKittyReset()
+		// Clear unread reactions optimistically on open and reconcile server-side.
+		var reactionsCmd tea.Cmd
+		if m.st != nil {
+			if c, ok := m.st.GetChat(msg.Chat.ID); ok && c.UnreadReactionsCount > 0 {
+				m.st.SetChatReactionsRead(c.ID)
+				m.chatList.SetChats(m.filteredChats())
+				reactionsCmd = m.readReactionsCmd(c.ID)
+			}
+		}
 		if m.tgClient != nil {
 			m.chat.SetLoading(true)
 			ctx := m.ctx
@@ -86,9 +95,9 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				}
 				return ChatHistoryMsg{ChatID: chatID, Messages: msgs}
 			}
-			return m, tea.Batch(draftFlush, historyCmd)
+			return m, tea.Batch(draftFlush, historyCmd, reactionsCmd)
 		}
-		return m, draftFlush
+		return m, tea.Batch(draftFlush, reactionsCmd)
 
 	case ChatHistoryMsg:
 		if m.st != nil {
@@ -117,6 +126,13 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			if chat, ok := m.st.GetChat(msg.chatID); ok {
 				m.chatList.SetChatUnread(msg.chatID, chat.UnreadCount)
 			}
+		}
+		return m, nil
+
+	case readReactionsDoneMsg:
+		if m.st != nil {
+			m.st.SetChatReactionsRead(msg.chatID)
+			m.chatList.SetChats(m.filteredChats())
 		}
 		return m, nil
 

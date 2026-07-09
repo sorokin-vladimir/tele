@@ -160,10 +160,11 @@ func setupDispatcher(
 		reactions := convertReactions(upd.Reactions)
 		select {
 		case mustDeliver <- store.Event{
-			Kind:      store.EventReactionsUpdate,
-			ChatID:    chatID,
-			MsgID:     upd.MsgID,
-			Reactions: reactions,
+			Kind:            store.EventReactionsUpdate,
+			ChatID:          chatID,
+			MsgID:           upd.MsgID,
+			Reactions:       reactions,
+			ReactionsUnread: reactionsHaveUnread(upd.Reactions),
 		}:
 		case <-ctx.Done():
 		}

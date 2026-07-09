@@ -120,6 +120,10 @@ type Chat struct {
 	// UnreadMark is the Telegram dialog `unread_mark` flag: a manual
 	// "mark as unread" that is independent of UnreadCount.
 	UnreadMark bool
+	// UnreadReactionsCount is the Telegram dialog `unread_reactions_count`:
+	// reactions on your messages that you have not yet viewed. Persisted like
+	// UnreadCount; cleared by messages.readReactions when the chat is opened.
+	UnreadReactionsCount int
 	// IsArchived reports whether the chat lives in the built-in Archive
 	// folder (folder_id 1).
 	IsArchived bool
@@ -166,7 +170,10 @@ type Message struct {
 	ReplyToMsgID int          // 0 if not a reply
 	EditDate     *time.Time   // nil if not edited
 	Reactions    []Reaction
-	Forward      *ForwardInfo // nil if not forwarded
+	// HasUnreadReactions is true when the raw message carried at least one recent
+	// reaction flagged unread (a not-yet-viewed reaction on one of our messages).
+	HasUnreadReactions bool
+	Forward            *ForwardInfo // nil if not forwarded
 	// LocalMedia describes media being uploaded for an optimistic outgoing bubble,
 	// rendered from a local file before the server confirms. nil for normal messages.
 	LocalMedia *LocalMedia
@@ -263,16 +270,19 @@ func (a TypingAction) Label() string {
 }
 
 type Event struct {
-	Kind         EventKind
-	Message      Message
-	ChatID       int64
-	ReadMaxID    int
-	MsgID        int
-	MsgIDs       []int
-	Reactions    []Reaction
-	Online       bool
-	TypingAction TypingAction
-	Muted        bool
+	Kind      EventKind
+	Message   Message
+	ChatID    int64
+	ReadMaxID int
+	MsgID     int
+	MsgIDs    []int
+	Reactions []Reaction
+	// ReactionsUnread reports that an EventReactionsUpdate carries at least one
+	// unread recent reaction (from UpdateMessageReactions).
+	ReactionsUnread bool
+	Online          bool
+	TypingAction    TypingAction
+	Muted           bool
 	// Draft carries the new draft text for EventDraftMessage.
 	Draft string
 }

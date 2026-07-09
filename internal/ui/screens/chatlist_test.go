@@ -112,6 +112,49 @@ func TestChatList_Muted_ShowsMarker(t *testing.T) {
 	assert.Contains(t, view, "×", "muted chat shows the mute marker")
 }
 
+func TestChatList_ShowsReactionIndicator(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 1}})
+	view := m.View()
+	assert.Contains(t, view, "♥")
+}
+
+func TestChatList_ReactionIndicatorWithCount(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 3}})
+	view := m.View()
+	assert.Contains(t, view, "♥3")
+}
+
+func TestChatList_NoReactionIndicatorWhenZero(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadReactionsCount: 0}})
+	view := m.View()
+	assert.NotContains(t, view, "♥")
+}
+
+func TestChatList_ReactionAndUnreadBadgeCoexist(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", UnreadCount: 2, UnreadReactionsCount: 1}})
+	view := m.View()
+	assert.Contains(t, view, "♥")
+	assert.Contains(t, view, "[2]")
+}
+
+func TestChatList_MutedReactionUnread_AllRender(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(40, 20)
+	m.SetChats([]store.Chat{{ID: 1, Title: "Alice", IsMuted: true, UnreadCount: 5, UnreadReactionsCount: 1}})
+	view := m.View()
+	assert.Contains(t, view, "×")
+	assert.Contains(t, view, "♥")
+	assert.Contains(t, view, "[5]")
+}
+
 func TestChatList_NotMuted_NoMarker(t *testing.T) {
 	m := screens.NewChatListModel()
 	m.SetSize(40, 20)

@@ -41,6 +41,13 @@ type Store interface {
 	SetChatDraft(chatID int64, text string)
 	SetChatUnreadMark(chatID int64, mark bool)
 	SetChatArchived(chatID int64, archived bool)
+	// ApplyUnreadReaction idempotently adjusts a chat's unread-reaction count
+	// from a per-message signal, tracking which messages carry unread reactions.
+	// Returns true when the count changed.
+	ApplyUnreadReaction(chatID int64, msgID int, hasUnread bool) bool
+	// SetChatReactionsRead clears a chat's unread-reaction count and its tracked
+	// message set (e.g. on open or readReactions completion).
+	SetChatReactionsRead(chatID int64)
 	FolderFilters() []FolderFilter
 	SetFolderFilters(filters []FolderFilter)
 	ClearForNewAccount(ownerID int64)

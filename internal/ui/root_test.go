@@ -51,6 +51,7 @@ type mockTGClient struct {
 	lastSearchQuery       string
 	searchResult          []store.Chat
 	searchErr             error
+	readReactionsCalls    int
 }
 
 type savedDraft struct {
@@ -108,6 +109,10 @@ func (m *mockTGClient) UploadFile(_ context.Context, p internaltg.UploadParams) 
 	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
 }
 func (m *mockTGClient) MarkRead(_ context.Context, _ store.Peer, _ int) error { return nil }
+func (m *mockTGClient) ReadReactions(_ context.Context, _ store.Peer) error {
+	m.readReactionsCalls++
+	return nil
+}
 func (m *mockTGClient) MarkDialogUnread(_ context.Context, _ store.Peer, _ bool) error {
 	return nil
 }
@@ -1816,6 +1821,68 @@ func TestRoot_EventEditMessage_UpdatesStoredText(t *testing.T) {
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "edited", msgs[0].Text)
 	require.NotNil(t, msgs[0].EditDate)
+}
+
+func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
+	m, st := newRootWithTwoChats(t)
+	// Neither chat is open, so a reaction on chat 2 should bump its indicator.
+	newM, _ := m.Update(store.Event{
+		Kind:            store.EventReactionsUpdate,
+		ChatID:          2,
+		MsgID:           500,
+		ReactionsUnread: true,
+	})
+	root := newM.(ui.RootModel)
+
+	c, ok := st.GetChat(2)
+	require.True(t, ok)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// The chat list reflects the new count.
+	var chat2 store.Chat
+	for _, ch := range root.ChatList().Chats() {
+		if ch.ID == 2 {
+			chat2 = ch
+		}
+	}
+	assert.Equal(t, 1, chat2.UnreadReactionsCount)
+}
+
+func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
+	mock := &mockTGClient{}
+	m, st := newRootWithOpenChat(t, mock) // chat 1 open and focused
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadReactionsCount: 1})
+
+	newM, cmd := m.Update(store.Event{
+		Kind:            store.EventReactionsUpdate,
+		ChatID:          1,
+		MsgID:           500,
+		ReactionsUnread: true,
+	})
+	_ = newM.(ui.RootModel)
+	require.NotNil(t, cmd)
+
+	// Invoking the command sends readReactions to the server.
+	done := cmd()
+	_ = done
+	assert.Equal(t, 1, mock.readReactionsCalls)
+}
+
+func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
+	mock := &mockTGClient{}
+	st := store.NewMemory()
+	st.SetChat(store.Chat{ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser}, UnreadReactionsCount: 3})
+	m := ui.NewRootModel(mock, st, 50, false)
+	m = m.WithScreen(ui.ScreenMain)
+
+	newM, _ := m.Update(screens.OpenChatMsg{Chat: store.Chat{
+		ID: 1, Title: "Alice", Peer: store.Peer{ID: 1, Type: store.PeerUser},
+	}})
+	_ = newM.(ui.RootModel)
+
+	c, ok := st.GetChat(1)
+	require.True(t, ok)
+	assert.Equal(t, 0, c.UnreadReactionsCount, "opening a chat optimistically clears its unread reactions")
 }
 
 func TestRoot_PasteMsg_WhenComposerFocused_InsertsText(t *testing.T) {

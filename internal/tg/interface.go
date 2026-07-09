@@ -33,6 +33,9 @@ type Client interface {
 	MarkRead(ctx context.Context, peer store.Peer, maxID int) error
 	// MarkDialogUnread sets or clears the manual unread mark on a dialog.
 	MarkDialogUnread(ctx context.Context, peer store.Peer, unread bool) error
+	// ReadReactions marks all unread reactions in a dialog as read
+	// (messages.readReactions), clearing the unread-reaction indicator server-side.
+	ReadReactions(ctx context.Context, peer store.Peer) error
 	// SetMuted mutes (indefinitely) or unmutes a peer's notifications.
 	SetMuted(ctx context.Context, peer store.Peer, muted bool) error
 	// AddToFolder adds or removes a peer from an existing dialog filter's

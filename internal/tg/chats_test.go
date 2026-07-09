@@ -111,6 +111,25 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 	assert.Equal(t, 5, chats[0].UnreadCount)
 }
 
+func TestParseDialogs_UnreadReactionsCount(t *testing.T) {
+	c := &GotdClient{peers: make(map[int64]store.Peer)}
+	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
+	dialog := &tg.Dialog{
+		Peer:                 &tg.PeerUser{UserID: 7},
+		TopMessage:           1,
+		UnreadReactionsCount: 4,
+	}
+	msg := &tg.Message{ID: 1, Date: int(time.Now().Unix())}
+	result := &tg.MessagesDialogs{
+		Dialogs:  []tg.DialogClass{dialog},
+		Messages: []tg.MessageClass{msg},
+		Users:    []tg.UserClass{user},
+	}
+	chats := c.parseDialogs(result)
+	require.Len(t, chats, 1)
+	assert.Equal(t, 4, chats[0].UnreadReactionsCount)
+}
+
 func TestParseDialogs_ExtractsDraft(t *testing.T) {
 	c := &GotdClient{peers: make(map[int64]store.Peer)}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}

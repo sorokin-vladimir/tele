@@ -13,7 +13,9 @@ import (
 )
 
 func TestComposerAttachmentChip(t *testing.T) {
-	c := components.NewComposer(40)
+	// Wide enough that the filename and the "Send as" toggle both fit without
+	// truncation (narrow-width truncation is covered separately, #162).
+	c := components.NewComposer(60)
 	base := c.VisualHeight()
 
 	c.SetAttachment("pic.jpg", 2100000, store.MediaPhoto, store.MediaPhoto, true)
@@ -62,6 +64,64 @@ func TestComposerAttachmentChip_Video(t *testing.T) {
 	}
 	if strings.Contains(v, "[Video]") {
 		t.Fatalf("File is selected, Video must not be bracketed:\n%s", v)
+	}
+}
+
+func TestComposerAttachmentChip_TruncatesToWidth(t *testing.T) {
+	const width = 40
+	c := components.NewComposer(width)
+	longName := "a_very_long_filename_that_overflows_the_box.png"
+	c.SetAttachment(longName, 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	v := c.View()
+
+	for _, ln := range strings.Split(v, "\n") {
+		if w := lipgloss.Width(ln); w > width {
+			t.Fatalf("line exceeds box width %d (got %d): %q", width, w, ln)
+		}
+	}
+	// The toggle stays readable; the filename is what gets ellipsized.
+	if !strings.Contains(v, "Send as") {
+		t.Fatalf("toggle dropped on narrow width:\n%s", v)
+	}
+	if !strings.Contains(v, "…") {
+		t.Fatalf("expected filename ellipsis on narrow width:\n%s", v)
+	}
+	if strings.Contains(v, longName) {
+		t.Fatalf("full filename should have been truncated:\n%s", v)
+	}
+}
+
+func TestComposerAttachmentChip_FitsWideNoTruncate(t *testing.T) {
+	const width = 80
+	c := components.NewComposer(width)
+	c.SetAttachment("pic.jpg", 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	v := c.View()
+
+	for _, ln := range strings.Split(v, "\n") {
+		if w := lipgloss.Width(ln); w > width {
+			t.Fatalf("line exceeds box width %d (got %d): %q", width, w, ln)
+		}
+	}
+	if !strings.Contains(v, "pic.jpg") {
+		t.Fatalf("short filename must remain intact:\n%s", v)
+	}
+	if strings.Contains(v, "…") {
+		t.Fatalf("no ellipsis expected when the chip fits:\n%s", v)
+	}
+}
+
+func TestComposerAttachmentChip_ExtremeNarrow_NoOverflow(t *testing.T) {
+	// Width so small the toggle alone overflows: the whole line is truncated as
+	// a fallback and the box must still not overflow (#162).
+	const width = 10
+	c := components.NewComposer(width)
+	c.SetAttachment("photo.png", 2_100_000, store.MediaPhoto, store.MediaPhoto, true)
+	v := c.View()
+
+	for _, ln := range strings.Split(v, "\n") {
+		if w := lipgloss.Width(ln); w > width {
+			t.Fatalf("line exceeds box width %d (got %d): %q", width, w, ln)
+		}
 	}
 }
 

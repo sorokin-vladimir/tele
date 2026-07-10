@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
@@ -119,11 +120,15 @@ func (c *Composer) ClearAttachment() {
 func (c *Composer) HasAttachment() bool { return c.attachOn }
 
 // attachmentLine renders the chip shown above the textarea, or "" if none.
+// The line is clamped to the composer's inner width so it never overflows the
+// box border (RenderBox pads short lines but does not truncate long ones): the
+// filename is ellipsized first to keep the "Send as" toggle readable, and the
+// whole line is truncated only as a last resort on very narrow widths (#162).
 func (c *Composer) attachmentLine() string {
 	if !c.attachOn {
 		return ""
 	}
-	line := fmt.Sprintf("📎 %s  %s", c.attachName, humanSize(c.attachSize))
+	suffix := ""
 	if c.attachToggle {
 		kindLabel := "Photo"
 		if c.attachKind == store.MediaVideo {
@@ -135,9 +140,25 @@ func (c *Composer) attachmentLine() string {
 		} else {
 			kindLabel = "[" + kindLabel + "]"
 		}
-		line += fmt.Sprintf("   Send as: %s %s", kindLabel, file)
+		suffix = fmt.Sprintf("   Send as: %s %s", kindLabel, file)
 	}
-	return line
+
+	const prefix = "📎 "
+	sizePart := "  " + humanSize(c.attachSize)
+	name := c.attachName
+
+	inner := c.width - 2
+	// Width left for the filename once the fixed parts (icon, size, toggle) are placed.
+	nameBudget := inner - runewidth.StringWidth(prefix) - runewidth.StringWidth(sizePart) - runewidth.StringWidth(suffix)
+	if nameBudget < runewidth.StringWidth(name) {
+		if nameBudget < 1 {
+			// Even an empty filename overflows (extremely narrow pane or a very
+			// long toggle): truncate the assembled line as a whole.
+			return runewidth.Truncate(prefix+name+sizePart+suffix, max(inner, 0), "…")
+		}
+		name = runewidth.Truncate(name, nameBudget, "…")
+	}
+	return prefix + name + sizePart + suffix
 }
 
 func humanSize(n int64) string {

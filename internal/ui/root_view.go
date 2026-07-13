@@ -119,6 +119,9 @@ func (m RootModel) View() tea.View {
 		if m.reactionPicker != nil {
 			content = m.overlayMenuNearBubble(content, m.reactionPicker.View(), chatPanelLeft, chatBoxW)
 		}
+		if m.mentionPopup != nil {
+			content = m.overlayAboveComposer(content, m.mentionPopup.View(), chatPanelLeft)
+		}
 		if m.openPicker != nil {
 			content = m.overlayMenuNearBubble(content, m.openPicker.View(), chatPanelLeft, chatBoxW)
 		}
@@ -150,6 +153,21 @@ func (m RootModel) View() tea.View {
 // of outgoing bubbles, right of incoming, top-aligned, clamped to the chat
 // panel. If the bubble geometry is unavailable (no selection, scrolled out,
 // empty chat) it falls back to the bottom-right corner.
+// overlayAboveComposer stamps the mention popup just above the composer box, at
+// the left edge of the chat panel. The composer sits at the bottom of the chat
+// pane above the 1-row status bar; the popup is placed directly on top of it.
+func (m RootModel) overlayAboveComposer(content, popup string, chatPanelLeft int) string {
+	_, popupH := measureBox(popup)
+	// h-1 is the status bar row; the composer occupies ComposerHeight() rows
+	// above it; place the popup immediately above the composer.
+	top := m.height - 1 - m.chat.ComposerHeight() - popupH
+	if top < 0 {
+		top = 0
+	}
+	left := chatPanelLeft + 1
+	return overlayAt(content, popup, m.width, m.height, top, left)
+}
+
 func (m RootModel) overlayMenuNearBubble(content, menu string, chatPanelLeft, chatBoxW int) string {
 	rect, ok := m.chat.SelectedBubbleRect()
 	if !ok {

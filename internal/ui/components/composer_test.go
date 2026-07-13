@@ -327,3 +327,132 @@ func TestComposer_View_ReplyPreviewBlankSeparator(t *testing.T) {
 	trimmed := strings.TrimSpace(strings.Trim(lineAfter, "│ "))
 	assert.Empty(t, trimmed, "expected blank line after reply preview in composer")
 }
+
+func TestMentionQueryDetection(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("hello @ali")
+	q, active := c.MentionQuery()
+	if !active || q != "ali" {
+		t.Fatalf("want active 'ali', got active=%v q=%q", active, q)
+	}
+
+	c.SetValue("hello @ali bob") // whitespace after token -> not active at end
+	if _, active := c.MentionQuery(); active {
+		t.Fatal("query must be inactive when cursor is past a completed token")
+	}
+
+	c.SetValue("plain text")
+	if _, active := c.MentionQuery(); active {
+		t.Fatal("no @ -> inactive")
+	}
+
+	c.SetValue("@ali") // at start of line
+	if q, active := c.MentionQuery(); !active || q != "ali" {
+		t.Fatalf("start-of-line @: want 'ali', got active=%v q=%q", active, q)
+	}
+}
+
+func TestApplyMentionUsername(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("hi @al")
+	c.ApplyMention(store.ChatMember{UserID: 5, Username: "alice", DisplayName: "Alice A"})
+	if v := c.Value(); v != "hi @alice " {
+		t.Fatalf("want 'hi @alice ', got %q", v)
+	}
+	text, ents := c.ResolveEntities()
+	if text != "hi @alice" {
+		t.Fatalf("want trimmed 'hi @alice', got %q", text)
+	}
+	if len(ents) != 0 {
+		t.Fatalf("username mention must not emit an entity, got %d", len(ents))
+	}
+}
+
+func TestApplyMentionNameAndResolve(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("hi @iv")
+	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	if v := c.Value(); v != "hi @Ivan P " {
+		t.Fatalf("want 'hi @Ivan P ', got %q", v)
+	}
+	text, ents := c.ResolveEntities()
+	if len(ents) != 1 {
+		t.Fatalf("want 1 entity, got %d", len(ents))
+	}
+	e := ents[0]
+	// "hi " = 3 UTF-16 units; "@Ivan P" length = 7.
+	if e.Type != "mention_name" || e.Offset != 3 || e.Length != 7 || e.UserID != 7 || e.AccessHash != 88 {
+		t.Fatalf("unexpected entity: %+v (text=%q)", e, text)
+	}
+}
+
+func TestResolveDroppedMention(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("@iv")
+	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	c.SetValue("nothing here") // user erased the mention
+	_, ents := c.ResolveEntities()
+	if len(ents) != 0 {
+		t.Fatalf("erased mention must produce no entity, got %d", len(ents))
+	}
+}
+
+func TestPastedTokenNotAnEntity(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("hey @Ivan P here") // pasted, never selected from popup
+	_, ents := c.ResolveEntities()
+	if len(ents) != 0 {
+		t.Fatalf("pasted @token must not become a name mention, got %d", len(ents))
+	}
+}
+
+func TestResetClearsPending(t *testing.T) {
+	c := components.NewComposer(40)
+	c.SetValue("@iv")
+	c.ApplyMention(store.ChatMember{UserID: 7, AccessHash: 88, DisplayName: "Ivan P"})
+	c.Reset()
+	c.SetValue("Ivan P") // same text, but pending cleared
+	_, ents := c.ResolveEntities()
+	if len(ents) != 0 {
+		t.Fatalf("Reset must clear pending, got %d", len(ents))
+	}
+}
+
+func TestResolvePrefixNameNotMatchedInsideLonger(t *testing.T) {
+	c := components.NewComposer(60)
+	// Insert the longer name first, then type a distinct trailing word.
+	c.SetValue("@Iv")
+	c.ApplyMention(store.ChatMember{UserID: 20, AccessHash: 2, DisplayName: "Ivan Petrov"})
+	// Value is now "@Ivan Petrov "; a pending "@Ivan P" prefix must NOT match here.
+	text, ents := c.ResolveEntities()
+	if len(ents) != 1 {
+		t.Fatalf("want 1 entity for the full name, got %d (%q)", len(ents), text)
+	}
+	if ents[0].UserID != 20 || ents[0].Length != len([]rune("@Ivan Petrov")) {
+		t.Fatalf("entity should cover the full name: %+v", ents[0])
+	}
+}
+
+func TestResolveTwoPrefixNamesMapToCorrectUsers(t *testing.T) {
+	c := components.NewComposer(60)
+	c.SetValue("@An")
+	c.ApplyMention(store.ChatMember{UserID: 1, AccessHash: 1, DisplayName: "Anna"})
+	c.SetValue(c.Value() + "@An")
+	c.ApplyMention(store.ChatMember{UserID: 2, AccessHash: 2, DisplayName: "Ann"})
+	// Value: "@Anna @Ann "
+	text, ents := c.ResolveEntities()
+	if len(ents) != 2 {
+		t.Fatalf("want 2 entities, got %d (%q)", len(ents), text)
+	}
+	// First entity is "@Anna" (offset 0), second is "@Ann" after it.
+	if ents[0].UserID != 1 || ents[0].Offset != 0 || ents[0].Length != 5 {
+		t.Fatalf("first entity should be @Anna: %+v", ents[0])
+	}
+	if ents[1].UserID != 2 || ents[1].Length != 4 {
+		t.Fatalf("second entity should be @Ann: %+v", ents[1])
+	}
+	// The second (@Ann) must not have matched the "@Ann" prefix inside "@Anna".
+	if ents[1].Offset < ents[0].Offset+ents[0].Length {
+		t.Fatalf("@Ann matched inside @Anna: %+v", ents[1])
+	}
+}

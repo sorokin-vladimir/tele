@@ -92,6 +92,8 @@ type RootModel struct {
 	reactionPicker    *components.ReactionPicker
 	openPicker        *components.OpenPicker
 	reactionTargetID  int
+	mentionPopup      *components.MentionPopup
+	mentionMembers    map[int64][]store.ChatMember
 	folderBar         *screens.FoldersModel
 	activeFilter      *store.FolderFilter
 	logo              components.LogoLoader
@@ -153,6 +155,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 		imageCache:        imagecache.New(thumbCacheCap),
 		fullImageCache:    imagecache.New(fullCacheCap),
 		gifFrames:         make(map[int64][]image.Image),
+		mentionMembers:    make(map[int64][]store.ChatMember),
 		kittyStore:        media.NewKittyStore(),
 		kittyLive:         make(map[int64]bool),
 		logo:              components.NewLogoLoader(80),
@@ -213,6 +216,7 @@ func (m RootModel) Search() *screens.SearchModel { return m.searchModel }
 func (m RootModel) ContextMenuOpen() bool        { return m.contextMenu != nil }
 func (m RootModel) ChatMenuOpen() bool           { return m.chatMenu != nil }
 func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != nil }
+func (m RootModel) MentionPopupOpen() bool       { return m.mentionPopup != nil }
 func (m RootModel) OpenPickerOpen() bool         { return m.openPicker != nil }
 func (m RootModel) FilePickerOpen() bool         { return m.filePicker != nil }
 
@@ -333,6 +337,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleEditMsgFailed(msg)
 	case components.ReactConfirmedMsg:
 		return m.handleReactConfirmed(msg)
+	case components.MentionSelectedMsg:
+		return m.handleMentionSelected(msg)
+	case components.CloseMentionPopupMsg:
+		return m.handleCloseMentionPopup()
+	case participantsLoadedMsg:
+		return m.handleParticipantsLoaded(msg)
 	case components.DeleteMsgRequest:
 		return m.handleDeleteMsg(msg)
 	case screens.ForwardToChatRequest:

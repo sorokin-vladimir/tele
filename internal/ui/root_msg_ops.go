@@ -59,6 +59,9 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 		Date:         time.Now(),
 		IsOut:        true,
 		ReplyToMsgID: msg.ReplyToMsgID,
+		// Carry mention entities so an outgoing @mention is highlighted
+		// immediately in the optimistic bubble, not only after a server refresh.
+		Entities: msg.Entities,
 	}
 	if m.st != nil {
 		m.st.AppendMessage(sentinel)
@@ -69,9 +72,10 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	peer := msg.Peer
 	text := msg.Text
 	replyToMsgID := msg.ReplyToMsgID
+	entities := msg.Entities
 	chatID := m.currentChatID
 	return m, func() tea.Msg {
-		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID)
+		realID, err := client.SendMessage(ctx, peer, text, replyToMsgID, entities)
 		if err != nil {
 			return sentMsgConfirmedMsg{chatID: chatID, sentinelID: sentinelID, realID: 0, failed: true}
 		}
@@ -451,7 +455,7 @@ func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootMo
 	comment := msg.Comment
 	return m, func() tea.Msg {
 		if comment != "" {
-			if _, err := client.SendMessage(ctx, to, comment, 0); err != nil {
+			if _, err := client.SendMessage(ctx, to, comment, 0, nil); err != nil {
 				return forwardDoneMsg{toTitle: toTitle, failed: true}
 			}
 		}

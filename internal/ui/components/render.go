@@ -14,8 +14,37 @@ import (
 // compat.HasDarkBackground, which the app updates on terminal background change.
 var (
 	linkColor = lipcompat.AdaptiveColor{Light: lipgloss.Color("25"), Dark: lipgloss.Color("45")}  // url/email/phone/bank_card, text_url
-	refColor  = lipcompat.AdaptiveColor{Light: lipgloss.Color("90"), Dark: lipgloss.Color("213")} // mention/hashtag/cashtag/bot_command
+	refColor  = lipcompat.AdaptiveColor{Light: lipgloss.Color("90"), Dark: lipgloss.Color("213")} // mention/mention_name/hashtag/cashtag/bot_command
 )
+
+var (
+	selfMentionID   int64
+	selfMentionUser string // lowercase, without leading '@'
+)
+
+// SetSelfIdentity records the signed-in user so @me mentions can be highlighted
+// distinctly. Updated by the root model after auth. 256-color-safe styling.
+func SetSelfIdentity(userID int64, username string) {
+	selfMentionID = userID
+	selfMentionUser = strings.ToLower(username)
+}
+
+// selfMentionStyle: readable in 256-color terminals (reverse of refColor accent).
+var selfMentionStyle = lipgloss.NewStyle().Bold(true).
+	Foreground(lipgloss.Color("0")).Background(lipgloss.Color("213"))
+
+// isSelfMention reports whether a span refers to the signed-in user. For
+// mention_name it matches by user id; for a plain @username mention it compares
+// the visible text against the stored username.
+func isSelfMention(typ string, userID int64, visible string) bool {
+	switch typ {
+	case "mention_name":
+		return selfMentionID != 0 && userID == selfMentionID
+	case "mention":
+		return selfMentionUser != "" && strings.EqualFold(strings.TrimPrefix(visible, "@"), selfMentionUser)
+	}
+	return false
+}
 
 // utf16ToRuneIndex converts a UTF-16 code unit offset to a rune index in s.
 // Telegram entity offsets are in UTF-16 code units; Go strings are UTF-8.
@@ -42,7 +71,7 @@ func isKnownEntity(typ string) bool {
 	switch typ {
 	case "bold", "italic", "code", "pre", "underline", "strike",
 		"text_url", "url", "email", "phone", "bank_card",
-		"mention", "hashtag", "cashtag", "bot_command":
+		"mention", "mention_name", "hashtag", "cashtag", "bot_command":
 		return true
 	}
 	return false
@@ -66,7 +95,7 @@ func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
 		return s.Foreground(linkColor).Underline(true)
 	case "url", "email", "phone", "bank_card":
 		return s.Foreground(linkColor)
-	case "mention", "hashtag", "cashtag", "bot_command":
+	case "mention", "mention_name", "hashtag", "cashtag", "bot_command":
 		return s.Foreground(refColor)
 	}
 	return s
@@ -89,6 +118,7 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		start, end int
 		typ        string
 		url        string
+		userID     int64
 	}
 	spans := make([]span, 0, len(entities))
 	boundarySet := map[int]struct{}{0: {}, n: {}}
@@ -110,7 +140,7 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		if e.Type == "url" || e.Type == "email" {
 			linkTarget = normalizeLinkTarget(e.Type, string(runes[start:end]))
 		}
-		spans = append(spans, span{start, end, e.Type, linkTarget})
+		spans = append(spans, span{start, end, e.Type, linkTarget, e.UserID})
 		boundarySet[start] = struct{}{}
 		boundarySet[end] = struct{}{}
 	}
@@ -132,6 +162,7 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 		}
 		style := lipgloss.NewStyle()
 		styled := false
+		self := false
 		linkURL := ""
 		linkID := 0
 		for idx, s := range spans {
@@ -142,10 +173,15 @@ func RenderEntities(text string, entities []store.MessageEntity) string {
 					linkURL = s.url
 					linkID = idx + 1
 				}
+				if isSelfMention(s.typ, s.userID, string(runes[s.start:s.end])) {
+					self = true
+				}
 			}
 		}
 		segment := string(runes[lo:hi])
-		if styled {
+		if self {
+			segment = selfMentionStyle.Render(segment)
+		} else if styled {
 			segment = style.Render(segment)
 		}
 		if linkURL != "" {

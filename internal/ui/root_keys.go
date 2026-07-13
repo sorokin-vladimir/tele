@@ -68,6 +68,17 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// In insert mode, bypass global bindings and pass key directly to chat/composer
 	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
+		// While the mention popup is open it owns navigation/selection keys.
+		// ctrl+j/ctrl+k move the cursor without leaving insert mode, where plain
+		// j/k must stay literal text.
+		if m.mentionPopup != nil {
+			switch keys.NormalizeKey(keyStr) {
+			case "up", "down", "ctrl+j", "ctrl+k", "enter", "tab", "esc":
+				newPopup, cmd := m.mentionPopup.Update(msg)
+				m.mentionPopup = newPopup
+				return m, cmd
+			}
+		}
 		// Normalize so the toggle fires on the same physical key under non-Latin
 		// layouts (e.g. Russian ЙЦУКЕН), like the other bindings.
 		if keys.NormalizeKey(keyStr) == "ctrl+t" && m.pendingAttachment != nil {
@@ -87,7 +98,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		newPane, cmd := m.chat.Update(msg)
 		m.chat = newPane.(*screens.ChatModel)
-		return m, tea.Batch(cmd, m.markReadCmd())
+		mentionCmd := m.syncMentionPopup()
+		return m, tea.Batch(cmd, mentionCmd, m.markReadCmd())
 	}
 
 	// Global bindings take priority, unless the focused context explicitly binds

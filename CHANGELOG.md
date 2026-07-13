@@ -13,6 +13,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Mention group members with `@`. Typing `@` in the composer opens an
+  autocomplete popup of chat participants (fetched on demand and cached per
+  chat), filterable by name or username as you type. Navigate it with `↑/↓` or
+  `ctrl+j`/`ctrl+k`, pick with Enter/Tab, dismiss with Esc; the list scrolls to
+  keep the cursor visible. Selecting a member inserts the mention and sends the
+  correct Telegram entity, including name-based mentions for users without a
+  public username. Incoming mentions are highlighted in message bubbles, and
+  mentions of you are highlighted distinctly (#49)
 - Copy a message's text to the clipboard: press `y` on the focused bubble, or
   choose "Copy text" from its context menu. The action is offered only when the
   message actually has text — media-only messages (a photo or sticker with no
@@ -25,6 +33,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   plain URLs and emails are now also wrapped as OSC 8 terminal hyperlinks so they
   are click-through where the terminal supports it. Also reachable from the
   context-menu "Open" entry (#165)
+- Unread-mention indicator in the chat list: a chat with an unread @mention (or
+  reply to you) is flagged next to its unread badge, cleared once you read it
+  (#155)
+- Unread-reaction indicators in the chat list, shown next to the unread badge
+  when someone reacts to your messages; opening the chat marks the reactions as
+  read. Incoming reactions also raise a desktop notification (#142)
+- Privacy option to hide message text in desktop notifications, showing only the
+  sender instead of the message body (#80)
+- Native Linux packaging and reproducible builds: a Nix flake with a default
+  package, app, and dev shell (`nix run` / `nix profile install`), plus prebuilt
+  package formats and additional registries/distributions (#164, #52)
 
 ### Changed
 
@@ -44,7 +63,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   (#118) and, with them, the reactions they carried. The handler now applies the
   reactions from a hidden edit while still not marking the message edited (#160)
 - Archived chats now appear in custom Telegram folders when the folder rules
-  include them, including category matches such as groups
+  include them, including category matches such as groups (#167)
+- The composer's attachment chip is truncated on narrow panes instead of
+  overflowing the box border; the filename is ellipsized first to keep the
+  "Send as" toggle readable (#162)
+- Sent messages have surrounding whitespace and blank lines trimmed, so composer
+  padding and stray leading/trailing lines are not sent; a message that is empty
+  after trimming is dropped (#154)
 
 ## [1.8.0] - 2026-07-06
 

@@ -19,6 +19,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -179,8 +180,9 @@ func (a *App) Run() error {
 	// Start gotd in background goroutine
 	tgErr := make(chan error, 1)
 	go func() {
-		tgErr <- a.client.Connect(ctx, a.cfg, authFlow, readyCh, func(userID int64) {
+		tgErr <- a.client.Connect(ctx, a.cfg, authFlow, readyCh, func(userID int64, username string) {
 			a.st.ClearForNewAccount(userID)
+			components.SetSelfIdentity(userID, username)
 		})
 	}()
 

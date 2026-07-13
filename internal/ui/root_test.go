@@ -47,6 +47,8 @@ type mockTGClient struct {
 	lastForwardTo         store.Peer
 	lastForwardIDs        []int
 	lastSendText          string
+	lastSendEntities      []store.MessageEntity
+	participants          []store.ChatMember
 	sendCount             int
 	lastSearchQuery       string
 	searchResult          []store.Chat
@@ -80,10 +82,11 @@ func (m *mockTGClient) RefreshMessage(_ context.Context, _ store.Peer, msgID int
 	}
 	return store.Message{}, nil
 }
-func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text string, replyToMsgID int) (int, error) {
+func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error) {
 	m.lastSendCtx = ctx
 	m.lastReplyToMsgID = replyToMsgID
 	m.lastSendText = text
+	m.lastSendEntities = entities
 	m.sendCount++
 	if m.sendErr != nil {
 		return 0, m.sendErr
@@ -92,6 +95,9 @@ func (m *mockTGClient) SendMessage(ctx context.Context, _ store.Peer, text strin
 		return m.sendFunc(), nil
 	}
 	return 42, nil
+}
+func (m *mockTGClient) GetParticipants(_ context.Context, _ store.Peer) ([]store.ChatMember, error) {
+	return m.participants, nil
 }
 func (m *mockTGClient) SendMedia(_ context.Context, p internaltg.SendMediaParams) (int, error) {
 	m.lastSendMediaParams = p

@@ -77,7 +77,7 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 	return msgs, err
 }
 
-func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error) {
+func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return 0, err
@@ -93,7 +93,7 @@ func (c *GotdClient) SendMessage(ctx context.Context, peer store.Peer, text stri
 		}
 		randomID := int64(binary.LittleEndian.Uint64(buf[:]))
 
-		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID))
+		updates, err := api.MessagesSendMessage(ctx, buildSendRequest(inputPeer, text, randomID, replyToMsgID, entities))
 		if err != nil {
 			c.log.Error("MessagesSendMessage failed", zap.Error(err))
 			return err
@@ -199,7 +199,7 @@ func isForwardRestrictedErr(err error) bool {
 	return tgerr.Is(err, "CHAT_FORWARDS_RESTRICTED")
 }
 
-func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int) *tg.MessagesSendMessageRequest {
+func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, replyToMsgID int, entities []store.MessageEntity) *tg.MessagesSendMessageRequest {
 	req := &tg.MessagesSendMessageRequest{
 		Peer:     inputPeer,
 		Message:  text,
@@ -208,7 +208,31 @@ func buildSendRequest(inputPeer tg.InputPeerClass, text string, randomID int64, 
 	if replyToMsgID != 0 {
 		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: replyToMsgID}
 	}
+	if ent := convertToTGEntities(entities); len(ent) > 0 {
+		req.Entities = ent
+	}
 	return req
+}
+
+// convertToTGEntities maps store entities to Telegram send-side entities. Only
+// name-based mentions need an explicit entity (they carry an InputUser); plain
+// @username mentions are detected server-side and are skipped here.
+func convertToTGEntities(es []store.MessageEntity) []tg.MessageEntityClass {
+	if len(es) == 0 {
+		return nil
+	}
+	var out []tg.MessageEntityClass
+	for _, e := range es {
+		if e.Type != "mention_name" {
+			continue
+		}
+		out = append(out, &tg.InputMessageEntityMentionName{
+			Offset: e.Offset,
+			Length: e.Length,
+			UserID: &tg.InputUser{UserID: e.UserID, AccessHash: e.AccessHash},
+		})
+	}
+	return out
 }
 
 func buildSendMediaRequest(inputPeer tg.InputPeerClass, media tg.InputMediaClass, caption string, randomID int64, replyToMsgID int) *tg.MessagesSendMediaRequest {

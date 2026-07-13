@@ -19,6 +19,7 @@ type SendMsgRequest struct {
 	Peer         store.Peer
 	Text         string
 	ReplyToMsgID int
+	Entities     []store.MessageEntity
 }
 
 // SendMediaRequest is emitted when enter is pressed with a staged attachment.
@@ -209,10 +210,24 @@ func (m *ChatModel) SetInboxReadMaxID(id int)     { m.msgList.SetInboxReadMaxID(
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
 	return m.msgList.ScrollToFirstUnread(readMaxID)
 }
-func (m *ChatModel) VisibleReadMaxID() int  { return m.msgList.VisibleReadMaxID() }
-func (m *ChatModel) ComposerFocused() bool  { return m.composerFocused }
-func (m *ChatModel) ComposerValue() string  { return m.composer.Value() }
-func (m *ChatModel) ComposerHeight() int    { return m.composer.VisualHeight() }
+func (m *ChatModel) VisibleReadMaxID() int { return m.msgList.VisibleReadMaxID() }
+func (m *ChatModel) ComposerFocused() bool { return m.composerFocused }
+func (m *ChatModel) ComposerValue() string { return m.composer.Value() }
+func (m *ChatModel) ComposerHeight() int   { return m.composer.VisualHeight() }
+
+// ComposerMentionQuery reports the active @mention token left of the cursor.
+func (m *ChatModel) ComposerMentionQuery() (string, bool) { return m.composer.MentionQuery() }
+
+// ApplyComposerMention inserts the chosen member as a mention in the composer.
+func (m *ChatModel) ApplyComposerMention(member store.ChatMember) { m.composer.ApplyMention(member) }
+
+// CurrentPeer returns the open chat's peer (zero value when no chat is open).
+func (m *ChatModel) CurrentPeer() store.Peer {
+	if m.chat == nil {
+		return store.Peer{}
+	}
+	return m.chat.Peer
+}
 func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID() }
 func (m *ChatModel) SelectedMessageText() (string, bool) {
 	return m.msgList.SelectedMessageText()
@@ -543,10 +558,11 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				}
 			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
-				// Trim surrounding whitespace/blank lines so padding and empty
-				// leading/trailing lines are not sent; a message that is empty
-				// after trimming is dropped by the text != "" guard below (#154).
-				text := strings.TrimSpace(m.composer.Value())
+				// ResolveEntities trims surrounding whitespace/blank lines (like the
+				// former TrimSpace) and resolves any inserted @mentions into
+				// mention_name entities; a message empty after trimming is dropped
+				// by the text != "" guard below (#154).
+				text, entities := m.composer.ResolveEntities()
 				replyID := m.replyToMsgID
 				editID := m.editMsgID
 				wasTyping := !m.lastTypingAt.IsZero()
@@ -563,7 +579,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 						}
 					} else {
 						sendCmd = func() tea.Msg {
-							return SendMsgRequest{Peer: peer, Text: text, ReplyToMsgID: replyID}
+							return SendMsgRequest{Peer: peer, Text: text, ReplyToMsgID: replyID, Entities: entities}
 						}
 					}
 					if wasTyping {

@@ -120,6 +120,24 @@ func TestChat_SendMessage_EmitsRequest(t *testing.T) {
 	assert.Equal(t, "hello", req.Text)
 }
 
+func TestChat_SendMessage_CarriesMentionEntities(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	chat := &store.Chat{ID: 10, Peer: store.Peer{ID: 10, Type: store.PeerChannel}}
+	m.SetChat(chat)
+	newPane, _ := m.Update(keys.ActionMsg{Action: keys.ActionInsert})
+	m = newPane.(*screens.ChatModel)
+	m.SetComposerValue("hi @iv")
+	m.ApplyComposerMention(store.ChatMember{UserID: 7, AccessHash: 8, DisplayName: "Ivan P"})
+	newPane, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_ = newPane
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.SendMsgRequest)
+	require.True(t, ok)
+	require.Len(t, req.Entities, 1)
+	assert.Equal(t, "mention_name", req.Entities[0].Type)
+	assert.Equal(t, int64(7), req.Entities[0].UserID)
+}
+
 func TestChatModel_LoadMoreMsg_OnUpAtTop(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &store.Chat{ID: 42, Title: "Test"}

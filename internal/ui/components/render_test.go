@@ -178,3 +178,36 @@ func TestRenderEntities_OSC8_ZeroWidth(t *testing.T) {
 	assert.Equal(t, lipgloss.Width(plain), lipgloss.Width(result),
 		"OSC 8 + SGR escapes must not add display width")
 }
+
+func TestRenderMentionNameStyled(t *testing.T) {
+	components.SetSelfIdentity(0, "") // not me
+	entities := []store.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 123}}
+	out := components.RenderEntities("Alice hello", entities)
+	if out == "Alice hello" {
+		t.Fatal("mention_name should be styled, got plain text")
+	}
+}
+
+func TestRenderSelfMentionByUserID(t *testing.T) {
+	components.SetSelfIdentity(123, "me")
+	defer components.SetSelfIdentity(0, "")
+	entities := []store.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 123}}
+	me := components.RenderEntities("Alice hello", entities)
+	components.SetSelfIdentity(999, "other")
+	notMe := components.RenderEntities("Alice hello", entities)
+	if me == notMe {
+		t.Fatal("self mention (by user id) must render differently from a non-self mention")
+	}
+}
+
+func TestRenderSelfMentionByUsername(t *testing.T) {
+	components.SetSelfIdentity(123, "me")
+	defer components.SetSelfIdentity(0, "")
+	entities := []store.MessageEntity{{Type: "mention", Offset: 0, Length: 3}}
+	me := components.RenderEntities("@me hi", entities)
+	components.SetSelfIdentity(123, "someoneelse")
+	notMe := components.RenderEntities("@me hi", entities)
+	if me == notMe {
+		t.Fatal("self mention (by username) must render differently")
+	}
+}

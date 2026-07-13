@@ -303,7 +303,7 @@ func TestIsForwardRestrictedErr(t *testing.T) {
 
 func TestBuildSendRequest_WithReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10, AccessHash: 20}
-	req := buildSendRequest(peer, "hello", 123, 42)
+	req := buildSendRequest(peer, "hello", 123, 42, nil)
 	require.NotNil(t, req.ReplyTo)
 	replyTo, ok := req.ReplyTo.(*tg.InputReplyToMessage)
 	require.True(t, ok)
@@ -312,7 +312,7 @@ func TestBuildSendRequest_WithReply(t *testing.T) {
 
 func TestBuildSendRequest_WithoutReply(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 10}
-	req := buildSendRequest(peer, "hello", 123, 0)
+	req := buildSendRequest(peer, "hello", 123, 0, nil)
 	assert.Nil(t, req.ReplyTo)
 }
 

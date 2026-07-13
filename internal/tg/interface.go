@@ -21,7 +21,9 @@ type Client interface {
 	// RefreshMessage re-fetches a single message to obtain fresh media file
 	// references (Telegram FileReferences expire).
 	RefreshMessage(ctx context.Context, peer store.Peer, msgID int) (store.Message, error)
-	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int) (int, error)
+	SendMessage(ctx context.Context, peer store.Peer, text string, replyToMsgID int, entities []store.MessageEntity) (int, error)
+	// GetParticipants returns mention candidates for a group/channel peer.
+	GetParticipants(ctx context.Context, peer store.Peer) ([]store.ChatMember, error)
 	// SendMedia sends a ready-made InputMediaClass via messages.sendMedia,
 	// returning the confirmed message ID. It is type-agnostic: the caller builds
 	// the InputMedia (photo/document/...); SendMedia knows nothing about MIME.

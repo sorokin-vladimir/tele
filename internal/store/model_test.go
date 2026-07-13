@@ -131,3 +131,17 @@ func TestEventTyping_TypingActionField(t *testing.T) {
 	assert.Equal(t, store.TypingActionTyping, evt.TypingAction)
 	assert.Equal(t, int64(42), evt.ChatID)
 }
+
+func TestMentionNameEntityFields(t *testing.T) {
+	e := store.MessageEntity{Type: "mention_name", Offset: 3, Length: 5, UserID: 777, AccessHash: 999}
+	if e.UserID != 777 || e.AccessHash != 999 {
+		t.Fatalf("mention_name fields not stored: %+v", e)
+	}
+}
+
+func TestChatMemberFields(t *testing.T) {
+	m := store.ChatMember{UserID: 1, Username: "alice", DisplayName: "Alice A", AccessHash: 42}
+	if m.UserID != 1 || m.Username != "alice" || m.DisplayName != "Alice A" || m.AccessHash != 42 {
+		t.Fatalf("ChatMember fields not stored: %+v", m)
+	}
+}

@@ -43,13 +43,17 @@ func (m *mockClient) RefreshMessage(_ context.Context, _ store.Peer, _ int) (sto
 	return store.Message{}, nil
 }
 
-func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _ int) (int, error) {
+func (m *mockClient) SendMessage(_ context.Context, _ store.Peer, text string, _ int, _ []store.MessageEntity) (int, error) {
 	m.sent = append(m.sent, text)
 	return 0, nil
 }
 
 func (m *mockClient) SendMedia(_ context.Context, _ internaltg.SendMediaParams) (int, error) {
 	return 0, nil
+}
+
+func (m *mockClient) GetParticipants(_ context.Context, _ store.Peer) ([]store.ChatMember, error) {
+	return nil, nil
 }
 
 func (m *mockClient) UploadFile(_ context.Context, _ internaltg.UploadParams) (tg.InputFileClass, error) {

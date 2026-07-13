@@ -29,10 +29,22 @@ type Reaction struct {
 }
 
 type MessageEntity struct {
-	Type   string // "bold", "italic", "code", "pre", "strike", "underline", "text_url", "url", "email", "phone", "bank_card", "mention", "hashtag", "cashtag", "bot_command" — UTF-16 offsets (Telegram encoding)
+	Type   string // "bold", "italic", "code", "pre", "strike", "underline", "text_url", "url", "email", "phone", "bank_card", "mention", "mention_name", "hashtag", "cashtag", "bot_command" — UTF-16 offsets (Telegram encoding)
 	Offset int
 	Length int
 	URL    string // for "text_url": the hidden target URL; empty otherwise
+	// UserID/AccessHash are set only for Type=="mention_name" (name-based
+	// mention of a user without a public username).
+	UserID     int64
+	AccessHash int64
+}
+
+// ChatMember is a group/channel participant offered by the @mention autocomplete.
+type ChatMember struct {
+	UserID      int64
+	Username    string // without leading '@'; empty if the user has no public username
+	DisplayName string // First + Last, trimmed
+	AccessHash  int64
 }
 
 type PhotoRef struct {

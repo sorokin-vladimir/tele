@@ -406,6 +406,8 @@ func convertEntities(entities []tg.MessageEntityClass) []store.MessageEntity {
 			out = append(out, store.MessageEntity{Type: "bank_card", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityMention:
 			out = append(out, store.MessageEntity{Type: "mention", Offset: v.Offset, Length: v.Length})
+		case *tg.MessageEntityMentionName:
+			out = append(out, store.MessageEntity{Type: "mention_name", Offset: v.Offset, Length: v.Length, UserID: v.UserID})
 		case *tg.MessageEntityHashtag:
 			out = append(out, store.MessageEntity{Type: "hashtag", Offset: v.Offset, Length: v.Length})
 		case *tg.MessageEntityCashtag:

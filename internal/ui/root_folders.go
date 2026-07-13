@@ -55,7 +55,7 @@ func (m RootModel) computeFolderUnreads() map[int]int {
 		}
 		chatsWithUnread := 0
 		for _, c := range chats {
-			if !c.IsArchived && f.Matches(c) && c.UnreadCount > 0 {
+			if f.Matches(c) && c.UnreadCount > 0 {
 				chatsWithUnread++
 			}
 		}

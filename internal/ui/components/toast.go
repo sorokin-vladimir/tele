@@ -57,16 +57,20 @@ type toast struct {
 	text    string
 	zone    ToastZone
 	actions []ToastAction
+	// clickMsg, when non-nil, makes the whole toast box a click target returning
+	// this message (e.g. a notify toast that opens its chat).
+	clickMsg tea.Msg
 }
 
 // ToastStack holds all active toasts in one flat slice (ordered by serial) and
 // renders them grouped by zone.
 type ToastStack struct {
-	width, height int
-	maxVisible    int
-	toasts        []toast
-	serial        int
-	zoneFor       map[ToastKind]ToastZone
+	width, height     int
+	maxVisible        int
+	toasts            []toast
+	serial            int
+	zoneFor           map[ToastKind]ToastZone
+	hasDarkBackground bool
 }
 
 // NewToastStack builds a stack. errorZone receives info/warning/error toasts;
@@ -86,6 +90,22 @@ func NewToastStack(width, height, maxVisible int, errorZone, notifyZone ToastZon
 }
 
 func (s *ToastStack) SetSize(w, h int) { s.width, s.height = w, h }
+
+// SetDarkBackground records the terminal theme so toast panel colors adapt to a
+// dark vs light background.
+func (s *ToastStack) SetDarkBackground(isDark bool) { s.hasDarkBackground = isDark }
+
+// SetClick attaches a whole-box click message to the toast with the given
+// serial (no-op if the serial matches nothing). Used to make a notify toast
+// open its chat on click.
+func (s *ToastStack) SetClick(serial int, msg tea.Msg) {
+	for i := range s.toasts {
+		if s.toasts[i].serial == serial {
+			s.toasts[i].clickMsg = msg
+			return
+		}
+	}
+}
 
 // Add appends a toast in the zone resolved for its kind and returns its serial.
 func (s *ToastStack) Add(kind ToastKind, text string, actions ...ToastAction) int {
@@ -156,18 +176,35 @@ func toastBorderColor(k ToastKind) color.Color {
 }
 
 // renderToast renders one toast box (border + wrapped text + optional footer
-// hints) to a multi-line string of exactly boxWidth() display cells wide.
+// hints) to a multi-line string of exactly boxWidth() display cells wide. A
+// theme-aware panel background makes the toast stand out from the app behind it.
 func (s *ToastStack) renderToast(t toast) string {
 	innerW := s.boxWidth() - 2 // account for left/right border
-	body := lipgloss.NewStyle().Width(innerW).Render(t.text)
+	bg := s.panelBg()
+	fg := s.panelFg()
+	body := lipgloss.NewStyle().Width(innerW).Background(bg).Foreground(fg).Render(t.text)
 	if footer := s.footer(t, innerW); footer != "" {
 		body = body + "\n" + footer
 	}
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(toastBorderColor(t.kind)).
+		BorderBackground(bg).
+		Background(bg).
+		Foreground(fg).
 		Width(innerW).
 		Render(body)
+}
+
+// panelBg returns the toast panel background for the current theme: a shade a
+// step off the usual terminal background so the toast reads as a raised panel.
+func (s *ToastStack) panelBg() color.Color {
+	return lipgloss.LightDark(s.hasDarkBackground)(lipgloss.Color("254"), lipgloss.Color("237"))
+}
+
+// panelFg returns readable body text for the panel background.
+func (s *ToastStack) panelFg() color.Color {
+	return lipgloss.LightDark(s.hasDarkBackground)(lipgloss.Color("236"), lipgloss.Color("252"))
 }
 
 // footer renders the accented action hints for a toast, or "" if none.
@@ -175,14 +212,15 @@ func (s *ToastStack) footer(t toast, innerW int) string {
 	if len(t.actions) == 0 {
 		return ""
 	}
-	base := lipgloss.NewStyle()
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
+	bg := s.panelBg()
+	base := lipgloss.NewStyle().Background(bg).Foreground(s.panelFg())
+	accent := lipgloss.NewStyle().Background(bg).Foreground(lipgloss.Color("39")).Bold(true)
 	parts := make([]string, 0, len(t.actions))
 	for _, a := range t.actions {
 		text, spans := hintLayout(a.Key, a.Label)
 		parts = append(parts, applyAccent(text, spans, base, accent))
 	}
-	return lipgloss.NewStyle().Width(innerW).Render(strings.Join(parts, "  "))
+	return lipgloss.NewStyle().Width(innerW).Background(bg).Render(strings.Join(parts, "  "))
 }
 
 // visibleFor returns the toasts to show for a zone (most recent maxVisible) and
@@ -285,14 +323,23 @@ type ClickRegion struct {
 // heights. A box's footer is its second-to-last line (last is the bottom
 // border), so footerRow = entryTop + len(lines) - 2.
 func (s *ToastStack) actionRegions() []ClickRegion {
+	boxW := s.boxWidth()
 	var regions []ClickRegion
 	for _, zone := range []ToastZone{ZoneBottomRight, ZoneTopRight} {
 		entries, top, left := s.zoneLayout(zone)
 		row := top
 		for _, e := range entries {
+			// Footer action labels are more specific than a whole-box click, so
+			// they are collected first and win in HitTest's first-match scan.
 			if e.t != nil && len(e.t.actions) > 0 {
 				footerRow := row + len(e.lines) - 2
 				regions = append(regions, layoutActionRegions(*e.t, left+1, footerRow)...)
+			}
+			if e.t != nil && e.t.clickMsg != nil {
+				regions = append(regions, ClickRegion{
+					Rect: Rect{Top: row, Left: left, Height: len(e.lines), Width: boxW},
+					Msg:  e.t.clickMsg,
+				})
 			}
 			row += len(e.lines)
 		}
@@ -317,11 +364,13 @@ func layoutActionRegions(t toast, left, row int) []ClickRegion {
 	return out
 }
 
-// HitTest returns the action Msg at absolute cell (x, y), if any.
+// HitTest returns the action Msg at absolute cell (x, y), if any. Regions may
+// span multiple rows (a whole-box click target), so containment checks the full
+// vertical range.
 func (s *ToastStack) HitTest(x, y int) (tea.Msg, bool) {
 	for _, r := range s.actionRegions() {
 		rect := r.Rect
-		if y == rect.Top && x >= rect.Left && x < rect.Left+rect.Width {
+		if y >= rect.Top && y < rect.Top+rect.Height && x >= rect.Left && x < rect.Left+rect.Width {
 			return r.Msg, true
 		}
 	}

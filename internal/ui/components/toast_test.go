@@ -183,6 +183,45 @@ func TestToastStack_HitTestMissOffTarget(t *testing.T) {
 	}
 }
 
+func TestToastStack_ClickMsgWholeBoxHits(t *testing.T) {
+	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
+	want := toastTestMsg{id: 99}
+	serial := s.Add(ToastNotify, "Alice\nhey there")
+	s.SetClick(serial, want)
+
+	z := s.Zones()[0] // notify -> top-right, the only non-empty zone
+	// A point inside the box body (not on the border) must return the click msg.
+	cx, cy := z.Left+3, z.Top+1
+	msg, ok := s.HitTest(cx, cy)
+	if !ok {
+		t.Fatalf("expected whole-box click hit at (%d,%d)", cx, cy)
+	}
+	if msg != tea.Msg(want) {
+		t.Fatalf("wrong click msg: got %#v want %#v", msg, want)
+	}
+}
+
+func TestToastStack_NoClickMsgNoWholeBoxHit(t *testing.T) {
+	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
+	s.Add(ToastNotify, "Alice\nhey there") // no SetClick
+	z := s.Zones()[0]
+	if _, ok := s.HitTest(z.Left+3, z.Top+1); ok {
+		t.Fatal("a toast without a click msg must not be a whole-box target")
+	}
+}
+
+func TestToastStack_DarkBackgroundChangesRender(t *testing.T) {
+	mk := func(dark bool) string {
+		s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
+		s.SetDarkBackground(dark)
+		s.Add(ToastError, "boom")
+		return s.Zones()[0].Block
+	}
+	if mk(true) == mk(false) {
+		t.Fatal("dark and light backgrounds should render differently")
+	}
+}
+
 // test-only helper Msg used across toast tests.
 type toastTestMsg struct{ id int }
 

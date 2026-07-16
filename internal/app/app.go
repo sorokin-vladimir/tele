@@ -43,13 +43,6 @@ func truncate(s string, n int) string {
 	return string(runes[:n]) + "…"
 }
 
-// notifyFreshnessWindow bounds how old an incoming message may be and still
-// raise a desktop notification. Catch-up/backlog messages recovered via
-// getDifference after an idle period carry their original (old) send time, so
-// anything older than this window is treated as catch-up and stays silent
-// (#123). Live delivery latency is typically well under this.
-const notifyFreshnessWindow = 10 * time.Second
-
 // shouldNotify decides whether evt warrants a desktop notification. Pure and
 // clock-injected so the freshness rule is unit-testable. now is the reference
 // time the event age is measured against (time.Now() in production).
@@ -59,46 +52,22 @@ func shouldNotify(st store.Store, evt store.Event, currentChatID int64, now time
 		if evt.Message.IsOut {
 			return false
 		}
-		return notifiable(st, evt.Message.ChatID, currentChatID, evt.Message.Date, now)
+		return store.Notifiable(st, evt.Message.ChatID, currentChatID, evt.Message.Date, now)
 	case store.EventReactionsUpdate:
 		// A peer reacted to one of our messages in a group/channel.
 		if !evt.ReactionsUnread {
 			return false
 		}
-		return notifiable(st, evt.ChatID, currentChatID, evt.ReactionDate, now)
+		return store.Notifiable(st, evt.ChatID, currentChatID, evt.ReactionDate, now)
 	case store.EventEditMessage:
 		// 1:1 peer reactions arrive as a hidden edit; a real text edit carries no
 		// unread reactions and must not notify.
 		if !evt.Message.HasUnreadReactions {
 			return false
 		}
-		return notifiable(st, evt.Message.ChatID, currentChatID, evt.ReactionDate, now)
+		return store.Notifiable(st, evt.Message.ChatID, currentChatID, evt.ReactionDate, now)
 	}
 	return false
-}
-
-// notifiable applies the gating shared by message and reaction notifications:
-// the chat must exist, not be the open one, not be muted/archived, and the
-// triggering event must be fresh (not catch-up backlog recovered after idle).
-func notifiable(st store.Store, chatID, currentChatID int64, eventTime, now time.Time) bool {
-	if chatID == currentChatID {
-		return false
-	}
-	chat, ok := st.GetChat(chatID)
-	if !ok {
-		return false
-	}
-	// Suppress notifications for muted chats and anything in the Archive folder
-	// (archived chats are treated as muted).
-	if chat.IsMuted || chat.IsArchived {
-		return false
-	}
-	// Suppress catch-up backlog: an old-dated event is a difference-recovery
-	// item, not live traffic (#123). A zero time never passes this gate.
-	if eventTime.IsZero() || now.Sub(eventTime) > notifyFreshnessWindow {
-		return false
-	}
-	return true
 }
 
 func maybeNotify(notifier Notifier, st store.Store, evt store.Event, currentChatID int64, preview bool) {

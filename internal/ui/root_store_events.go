@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
 func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
@@ -45,6 +46,12 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 			m.chatHighlightSerial++
 			highlightCmd = chatHighlightFadeCmd(m.chatHighlightSerial)
 		}
+		// In-app notification: a fresh message in an inactive, unmuted chat pops a
+		// top-right toast (#59), gated identically to OS notifications.
+		var notifyCmd tea.Cmd
+		if incomingOther && store.Notifiable(m.st, msg.Message.ChatID, m.currentChatID, msg.Message.Date, time.Now()) {
+			notifyCmd = m.showInAppNotify(msg.Message)
+		}
 		if msg.Message.ChatID == m.currentChatID {
 			m.chat.SetMessages(m.st.Messages(m.currentChatID))
 			cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]store.Message{msg.Message})}
@@ -53,7 +60,7 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
-		return m, highlightCmd
+		return m, tea.Batch(highlightCmd, notifyCmd)
 	case store.EventReadInbox:
 		if m.st.UpdateChatReadMaxID(msg.ChatID, msg.ReadMaxID) {
 			if chat, ok := m.st.GetChat(msg.ChatID); ok {
@@ -191,4 +198,40 @@ func (m RootModel) handleStoreEvent(msg store.Event) (RootModel, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 	return m, nil
+}
+
+// notifyOpenMsg is emitted when a notify toast is clicked: it dismisses the
+// toast and opens the target chat (#59 click-to-open).
+type notifyOpenMsg struct {
+	chat   store.Chat
+	serial int
+}
+
+// showInAppNotify adds a top-right notify toast for an incoming message in an
+// inactive chat and returns its auto-dismiss command. The whole toast is a
+// click target that opens the chat. Respects the notification-preview setting.
+func (m RootModel) showInAppNotify(msg store.Message) tea.Cmd {
+	chat, _ := m.st.GetChat(msg.ChatID)
+	title := "New message"
+	if chat.Title != "" {
+		title = chat.Title
+	}
+	body := "New message"
+	if m.cfg == nil || m.cfg.UI.NotificationPreview {
+		body = truncatePreview(msg.Text, 100)
+	}
+	serial := m.toasts.Add(components.ToastNotify, title+"\n"+body)
+	m.toasts.SetClick(serial, notifyOpenMsg{chat: chat, serial: serial})
+	return tea.Tick(durationFor(components.SeverityInfo), func(time.Time) tea.Msg {
+		return ClearStatusErrMsg{Serial: serial}
+	})
+}
+
+// truncatePreview shortens s to at most n runes, appending an ellipsis when cut.
+func truncatePreview(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }

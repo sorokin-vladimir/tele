@@ -16,6 +16,7 @@ func (m *RootModel) setDarkBackground(isDark bool) {
 	m.logo.SetDarkBackground(isDark)
 	m.chat.SetDarkBackground(isDark)
 	m.chatList.SetDarkBackground(isDark)
+	m.toasts.SetDarkBackground(isDark)
 	// compat.AdaptiveColor (context menu / hint / reaction-picker backgrounds)
 	// resolves against this package-level flag, which is otherwise detected once
 	// at init and never updated. Keep it in sync so those explicit light/dark

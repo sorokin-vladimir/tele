@@ -134,6 +134,7 @@ func NewRootModel(client internaltg.Client, st store.Store, historyLimit int, ve
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
 	ts := components.NewToastStack(80, 24, 3, components.ZoneBottomRight, components.ZoneTopRight)
+	ts.SetDarkBackground(true) // matches hasDarkBackground default; updated on theme detection
 	cl := screens.NewChatListModel()
 	cl.SetFocused(true)
 	chat := screens.NewChatModel(80, 24)
@@ -208,6 +209,7 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	}
 	m.toasts = components.NewToastStack(w, h, cfg.UI.Toasts.MaxVisible,
 		parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
+	m.toasts.SetDarkBackground(m.hasDarkBackground)
 	return m
 }
 
@@ -398,6 +400,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ClearStatusErrMsg:
 		m.toasts.Dismiss(msg.Serial)
 		return m, nil
+	case notifyOpenMsg:
+		// Clicking a notify toast dismisses it and opens the target chat via the
+		// existing open path.
+		m.toasts.Dismiss(msg.serial)
+		chat := msg.chat
+		return m, func() tea.Msg { return screens.OpenChatMsg{Chat: chat} }
 	case chatLoadErrMsg:
 		return m.handleChatLoadErr(msg)
 	case retryChatLoadMsg:

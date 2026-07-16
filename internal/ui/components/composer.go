@@ -64,6 +64,13 @@ func NewComposer(width int) *Composer {
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "shift+enter"))
 	ta.KeyMap.Paste = key.NewBinding() // handled at root level via readClipboardCmd → tea.PasteMsg
 	ta.CharLimit = 4096
+	// MaxHeight alone caps the draft itself: the textarea's content guard falls back
+	// to blocking at MaxHeight logical lines, so newlines hit a hard wall at the
+	// visible cap (#159). Setting MaxContentHeight scopes MaxHeight to the viewport
+	// and moves the guard onto visual lines; CharLimit+1 is the most rows the budget
+	// can ever produce (a newline costs a char), so the char budget always binds
+	// first and the overflow scrolls inside the capped viewport.
+	ta.MaxContentHeight = ta.CharLimit + 1
 	ta.SetWidth(width - 2)
 	return &Composer{ta: ta, width: width}
 }

@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -455,4 +456,74 @@ func TestResolveTwoPrefixNamesMapToCorrectUsers(t *testing.T) {
 	if ents[1].Offset < ents[0].Offset+ents[0].Length {
 		t.Fatalf("@Ann matched inside @Anna: %+v", ents[1])
 	}
+}
+
+// pressNewline feeds the InsertNewline binding (alt+enter) into the composer.
+func pressNewline(c *components.Composer) *components.Composer {
+	nc, _ := c.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
+	return nc
+}
+
+// Regression for #159: the textarea's height cap must bound only the visible
+// viewport, not the draft itself. The content limit is the CharLimit, so short
+// lines must keep accepting newlines well past the cap.
+func TestComposer_AcceptsNewlinesPastHeightCap(t *testing.T) {
+	c := components.NewComposer(60)
+	c.Focus()
+
+	const wantLines = 12 // comfortably past maxComposerLines (5)
+	c = typeRune(c, 'a')
+	for i := 1; i < wantLines; i++ {
+		c = pressNewline(c)
+		c = typeRune(c, 'a')
+	}
+
+	got := strings.Count(c.Value(), "\n") + 1
+	assert.Equalf(t, wantLines, got,
+		"newline insert blocked past the height cap (value=%q)", c.Value())
+}
+
+// Regression for #159: once the draft outgrows the cap the viewport must follow
+// the cursor, so the row being typed stays on screen and the scrolled-off head
+// leaves the view.
+func TestComposer_ScrollsToCursorPastHeightCap(t *testing.T) {
+	c := components.NewComposer(60)
+	c.Focus()
+
+	// Markers are zero-padded so no label is a prefix of another ("L1" would
+	// match inside "L12").
+	for i := 1; i <= 12; i++ {
+		if i > 1 {
+			c = pressNewline(c)
+		}
+		for _, ch := range fmt.Sprintf("L%02d", i) {
+			c = typeRune(c, ch)
+		}
+	}
+
+	v := c.View()
+	assert.Containsf(t, v, "L12", "row under the cursor is not visible:\n%s", v)
+	assert.NotContainsf(t, v, "L01", "view did not scroll past the first row:\n%s", v)
+}
+
+// Companion to #159: accepting more lines must not let the box grow past the
+// cap — the overflow scrolls inside the capped viewport instead.
+func TestComposer_HeightStaysCappedPastLimit(t *testing.T) {
+	c := components.NewComposer(60)
+	c.Focus()
+
+	capped := 0
+	for i := range 12 {
+		if i > 0 {
+			c = pressNewline(c)
+		}
+		c = typeRune(c, 'a')
+		if i == 4 { // at maxComposerLines, the box has reached its cap
+			capped = c.VisualHeight()
+		}
+	}
+
+	require.NotZero(t, capped, "composer never reached the height cap")
+	assert.Equalf(t, capped, c.VisualHeight(),
+		"composer grew past its height cap (value=%q)", c.Value())
 }

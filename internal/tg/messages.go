@@ -71,6 +71,11 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer store.Peer, offsetID i
 			return err
 		}
 		msgs = parseHistory(result, peer.ID)
+		// Seed the sender-name cache from the fully-resolved history so a later
+		// live update that omits a sender's entity still resolves the name (#161).
+		for _, m := range msgs {
+			c.senderNames.put(m.SenderID, m.SenderName)
+		}
 		c.traceLog.Debug("GetHistory done", zap.Int64("peer_id", peer.ID), zap.Int("count", len(msgs)))
 		return nil
 	})

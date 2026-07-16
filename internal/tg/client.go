@@ -33,6 +33,10 @@ type GotdClient struct {
 	suppressMu   sync.Mutex
 	suppressIDs  map[int]struct{}
 	stateStorage updates.StateStorage
+	// senderNames remembers userID -> display name across updates and history
+	// fetches so a live update that omits the sender's entity still resolves the
+	// author instead of rendering "?" (#161).
+	senderNames *nameCache
 }
 
 func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace bool) *GotdClient {
@@ -49,6 +53,7 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 		traceLog:     traceLog,
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
+		senderNames:  newNameCache(),
 	}
 }
 
@@ -79,7 +84,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 			return true
 		}
 		return false
-	})
+	}, c.senderNames)
 
 	// updates.New does not return an error — confirmed via go doc.
 	updCfg := updates.Config{

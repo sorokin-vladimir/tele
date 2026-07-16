@@ -19,7 +19,7 @@ func newTestDispatcher(t *testing.T, suppress func(int) bool) (*tg.UpdateDispatc
 	mustDeliver := make(chan store.Event, 4)
 	droppable := make(chan store.Event, 4)
 	d := tg.NewUpdateDispatcher()
-	setupDispatcher(&d, mustDeliver, droppable, zap.NewNop(), suppress)
+	setupDispatcher(&d, mustDeliver, droppable, zap.NewNop(), suppress, newNameCache())
 	return &d, mustDeliver, droppable
 }
 
@@ -246,6 +246,55 @@ func TestSetupDispatcher_ForwardedMessage_SetsForwardName(t *testing.T) {
 		assert.Equal(t, "Bob", evt.Message.Forward.From)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
+	}
+}
+
+// A supergroup live update sometimes omits the sender's User entity. The name
+// seen in an earlier update from that sender must be reused instead of leaving
+// SenderName empty (renders "?"). Reproduces #161.
+func TestSetupDispatcher_ChannelMessage_MissingSenderEntity_ResolvesFromCache(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+	ctx := context.Background()
+
+	// First message carries the sender's User entity — seeds the name cache.
+	msg1 := &tg.Message{
+		ID:      101,
+		PeerID:  &tg.PeerChannel{ChannelID: 500},
+		FromID:  &tg.PeerUser{UserID: 42},
+		Message: "first",
+		Date:    int(time.Now().Unix()),
+	}
+	err := dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{&tg.UpdateNewChannelMessage{Message: msg1, Pts: 1, PtsCount: 1}},
+		Users:   []tg.UserClass{&tg.User{ID: 42, FirstName: "Igor", LastName: "Bloom"}},
+	})
+	require.NoError(t, err)
+	select {
+	case evt := <-mustDeliver:
+		require.Equal(t, "Igor Bloom", evt.Message.SenderName)
+	case <-time.After(time.Second):
+		t.Fatal("no event received for first message")
+	}
+
+	// Second message from the same sender omits the User entity in this update.
+	msg2 := &tg.Message{
+		ID:      102,
+		PeerID:  &tg.PeerChannel{ChannelID: 500},
+		FromID:  &tg.PeerUser{UserID: 42},
+		Message: "second",
+		Date:    int(time.Now().Unix()),
+	}
+	err = dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{&tg.UpdateNewChannelMessage{Message: msg2, Pts: 2, PtsCount: 1}},
+		Users:   nil, // sender entity absent — the #161 condition
+	})
+	require.NoError(t, err)
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, "Igor Bloom", evt.Message.SenderName,
+			"missing sender entity must resolve from the name cache, not render empty")
+	case <-time.After(time.Second):
+		t.Fatal("no event received for second message")
 	}
 }
 

@@ -14,12 +14,23 @@ import (
 )
 
 // shouldSuppress is called for every incoming message; it must be non-blocking.
+// userDisplayName renders a user's name the way the chat view expects: trimmed
+// "First Last", falling back to "User <id>" when both name parts are empty.
+func userDisplayName(user *tg.User) string {
+	name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if name == "" {
+		name = fmt.Sprintf("User %d", user.ID)
+	}
+	return name
+}
+
 func setupDispatcher(
 	dispatcher *tg.UpdateDispatcher,
 	mustDeliver chan<- store.Event,
 	droppable chan<- store.Event,
 	log *zap.Logger,
 	shouldSuppress func(id int) bool,
+	names *nameCache,
 ) {
 	var drops atomic.Int64
 
@@ -38,21 +49,23 @@ func setupDispatcher(
 		if !ok {
 			return nil
 		}
+		// Seed the name cache from every user entity this update carries, so a
+		// later update that omits a sender's User can still resolve the name (#161).
+		for id, user := range e.Users {
+			names.put(id, userDisplayName(user))
+		}
 		if user, ok := e.Users[msg.SenderID]; ok {
-			name := strings.TrimSpace(user.FirstName + " " + user.LastName)
-			if name == "" {
-				name = fmt.Sprintf("User %d", user.ID)
-			}
-			msg.SenderName = name
+			msg.SenderName = userDisplayName(user)
+		} else if msg.SenderID != 0 && !msg.IsOut {
+			// This update omitted the sender's User entity (intermittent for
+			// supergroup messages) — fall back to a name seen in an earlier
+			// update or history fetch instead of rendering "?" (#161).
+			msg.SenderName = names.get(msg.SenderID)
 		} else if msg.SenderID == 0 && !msg.IsOut {
 			// nil FromID: sender is the chat peer — try user first (private chat),
 			// then channel or group (anonymous post)
 			if user, ok := e.Users[peerID]; ok {
-				name := strings.TrimSpace(user.FirstName + " " + user.LastName)
-				if name == "" {
-					name = fmt.Sprintf("User %d", user.ID)
-				}
-				msg.SenderName = name
+				msg.SenderName = userDisplayName(user)
 			} else if ch, ok := e.Channels[peerID]; ok {
 				msg.SenderName = channelTitle(ch)
 			} else if chat, ok := e.Chats[peerID]; ok {

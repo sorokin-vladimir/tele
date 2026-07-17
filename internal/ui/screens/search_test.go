@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -448,4 +449,97 @@ func TestSearch_NoHintWithoutKeyMap(t *testing.T) {
 	m := screens.NewSearchModel(makeSearchChats(), 80, 24, nil)
 	view := m.View()
 	assert.NotContains(t, view, "->")
+}
+
+// --- #149: overlay input lines must stay inside the box ---
+
+// assertBoxLinesWidth asserts the box invariant: every rendered line measures
+// exactly the box width. RenderBox pads short lines but never truncates long
+// ones, so a wider line means the right border has been pushed out.
+func assertBoxLinesWidth(t *testing.T, view string) {
+	t.Helper()
+	lines := strings.Split(view, "\n")
+	require.NotEmpty(t, lines)
+	want := lipgloss.Width(lines[0]) // the top border defines the box width
+	for i, l := range lines {
+		assert.Equal(t, want, lipgloss.Width(l), "line %d escapes the box: %q", i, l)
+	}
+}
+
+func TestForwardPicker_LongCommentStaysInsideBox(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	for i := 0; i < 120; i++ {
+		m, _ = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	}
+	assertBoxLinesWidth(t, m.View())
+}
+
+func TestSearch_LongQueryStaysInsideBox(t *testing.T) {
+	m := screens.NewSearchModel(makeSearchChats(), 80, 24, keys.DefaultKeyMap())
+	for i := 0; i < 120; i++ {
+		m, _ = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	}
+	assertBoxLinesWidth(t, m.View())
+}
+
+func TestForwardPicker_CommentWindowsToTail(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	for _, r := range strings.Repeat("x", 60) + "TAIL" {
+		m, _ = m.Update(tea.KeyPressMsg{Text: string(r)})
+	}
+	view := m.View()
+	// Assert on "TAIL█", not "> TAIL█": searchPrompt.Render emits ANSI between the
+	// prompt and the text, so only text+caret is contiguous in the output.
+	assert.Contains(t, view, "TAIL█", "newest text and the caret must stay visible")
+	assert.Contains(t, view, "…", "the hidden head must be marked")
+	assertBoxLinesWidth(t, view)
+}
+
+func TestForwardPicker_ShortCommentNotEllipsized(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m, _ = m.Update(tea.KeyPressMsg{Text: "hi"})
+	view := m.View()
+	assert.Contains(t, view, "hi█", "short text renders verbatim with the caret")
+	assert.NotContains(t, view, "…", "text that fits must not be ellipsized")
+	assertBoxLinesWidth(t, view)
+}
+
+func TestForwardPicker_WideRuneCommentStaysInsideBox(t *testing.T) {
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	for i := 0; i < 60; i++ { // 2-cell runes: the tail window must not overshoot
+		m, _ = m.Update(tea.KeyPressMsg{Text: "漢"})
+	}
+	assertBoxLinesWidth(t, m.View())
+}
+
+func makeLongTitleForwardChats() []store.Chat {
+	return []store.Chat{
+		{
+			ID:    1,
+			Title: "Engineering / Platform / Infrastructure Working Group Daily",
+			Peer:  store.Peer{ID: 1, Type: store.PeerUser},
+		},
+	}
+}
+
+func TestForwardPicker_LongTitleStaysInsideBox(t *testing.T) {
+	m := screens.NewForwardPicker(makeLongTitleForwardChats(), 55, 80, 24, keys.DefaultKeyMap())
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	// No comment typed: the title alone must not break the frame.
+	assertBoxLinesWidth(t, m.View())
+}
+
+func TestForwardPicker_NarrowTerminalStaysInsideBox(t *testing.T) {
+	// width 6 -> inner 4 -> text budget 1: both the title and the input must
+	// survive a terminal too narrow to show either.
+	m := screens.NewForwardPicker(makeForwardChats(), 55, 6, 24, nil)
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	for i := 0; i < 20; i++ {
+		m, _ = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	}
+	assertBoxLinesWidth(t, m.View())
 }

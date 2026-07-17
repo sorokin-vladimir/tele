@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -392,6 +393,29 @@ func (m *SearchModel) filter() {
 	m.syncCount()
 }
 
+const searchCaret = "█"
+
+// inputLine renders the "> text█" prompt line clamped to inner cells, so it can
+// never push RenderBox's right border out (RenderBox pads short lines but does
+// not truncate long ones). Neither the query nor the comment supports left/right
+// cursor movement, so the caret always sits at the end of the text: overflow
+// windows to the tail, keeping the newest text visible with a leading "…" for the
+// hidden head. Adding caret movement would require a real scroll offset here.
+func inputLine(text string, inner int) string {
+	const prompt = "> "
+	budget := inner - runewidth.StringWidth(prompt) - runewidth.StringWidth(searchCaret)
+	if budget < 1 {
+		// Too narrow for any text at all: keep the frame intact regardless.
+		return runewidth.Truncate(prompt+searchCaret, max(inner, 0), "")
+	}
+	// TruncateLeft pads the prefix when a wide grapheme straddles the cut, so the
+	// result is exactly budget cells wide for CJK/emoji too.
+	if w := runewidth.StringWidth(text); w > budget {
+		text = runewidth.TruncateLeft(text, w-budget+1, "…")
+	}
+	return searchPrompt.Render(prompt) + text + searchCaret
+}
+
 func (m *SearchModel) View() string {
 	w := searchOverlayWidth
 	if m.width > 0 && m.width < w {
@@ -406,15 +430,17 @@ func (m *SearchModel) View() string {
 	inner := w - 2
 
 	if m.forwardMsgID != 0 && m.phase == forwardComment {
-		title := "Comment to " + m.target.Title
-		promptLine := searchPrompt.Render("> ") + m.comment + "█"
+		// A title has no caret to keep visible, so it cuts at the tail (unlike
+		// inputLine, which windows to it).
+		title := runewidth.Truncate("Comment to "+m.target.Title, inner, "…")
+		promptLine := inputLine(m.comment, inner)
 		lines := []string{title, strings.Repeat("─", inner), promptLine}
 		content := strings.Join(lines, "\n")
 		h := len(lines) + 2
 		return components.RenderBox(content, "", "", hint, "", lipgloss.RoundedBorder(), nil, w, h)
 	}
 
-	queryLine := searchPrompt.Render("> ") + m.query + "█"
+	queryLine := inputLine(m.query, inner)
 	divider := strings.Repeat("─", inner)
 
 	lines := []string{queryLine, divider}

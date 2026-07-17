@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-07-17
+
 ### Added
 
 - Mention group members with `@`. Typing `@` in the composer opens an

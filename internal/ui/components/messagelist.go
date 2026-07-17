@@ -45,10 +45,12 @@ type MessageList struct {
 	// newest visible message. It is the target for per-message actions.
 	cursorMsgID int
 
-	// highlightedMsgID is the message currently flashed by a "Jump to original"
-	// highlight; highlightStep counts down HighlightFadeSteps → 0 (0 = none).
+	// highlightedMsgID is the message currently flashed by a highlight;
+	// highlightStep counts down HighlightFadeSteps → 0 (0 = none);
+	// highlightKind selects the accent (info jump-to vs error rollback).
 	highlightedMsgID int
 	highlightStep    int
+	highlightKind    HighlightKind
 
 	// heightCache memoizes itemHeight by item index. Measuring a message's
 	// rendered height runs a full word-wrap (RenderEntities + lipgloss), and

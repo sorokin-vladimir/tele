@@ -29,11 +29,13 @@ type reactionFailedMsg struct {
 
 type deleteMsgFailedMsg struct {
 	chatID   int64
+	msgID    int
 	messages []store.Message
 }
 
 type editMsgFailedMsg struct {
 	chatID   int64
+	msgID    int
 	messages []store.Message
 }
 
@@ -117,20 +119,33 @@ func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.C
 	entities := msg.Entities
 	return m, func() tea.Msg {
 		if err := client.EditMessage(ctx, peer, msgID, text, entities); err != nil {
-			return editMsgFailedMsg{chatID: chatID, messages: origMessages}
+			return editMsgFailedMsg{chatID: chatID, msgID: msgID, messages: origMessages}
 		}
 		return nil
 	}
 }
 
 func (m RootModel) handleEditMsgFailed(msg editMsgFailedMsg) (RootModel, tea.Cmd) {
-	if m.st != nil {
-		m.st.SetMessages(msg.chatID, msg.messages)
-		if msg.chatID == m.currentChatID {
-			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
-		}
+	toast := func() tea.Msg { return StatusErrMsg{Text: "edit failed", Sev: components.SeverityWarning} }
+	if m.st == nil {
+		return m, toast
 	}
-	return m, func() tea.Msg { return StatusErrMsg{Text: "edit failed", Sev: components.SeverityWarning} }
+	m.st.SetMessages(msg.chatID, msg.messages)
+	if msg.chatID != m.currentChatID {
+		return m, toast
+	}
+	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
+	return m.flashRollback(msg.msgID, toast)
+}
+
+// flashRollback scrolls the open chat to msgID, starts a red error highlight on
+// it, and returns a command batching the failure toast with the highlight fade
+// tick. Call only when the failing chat is the current chat.
+func (m RootModel) flashRollback(msgID int, toast tea.Cmd) (RootModel, tea.Cmd) {
+	m.chat.ScrollToMessage(msgID)
+	m.chat.HighlightMessageError(msgID)
+	m.msgHighlightSerial++
+	return m, tea.Batch(toast, msgHighlightFadeCmd(m.msgHighlightSerial))
 }
 
 // SetComposerValueForTest sets the open chat's composer text (tests only).
@@ -243,13 +258,16 @@ func (m RootModel) handleReactConfirmed(msg components.ReactConfirmedMsg) (RootM
 }
 
 func (m RootModel) handleReactionFailed(msg reactionFailedMsg) (RootModel, tea.Cmd) {
-	if m.st != nil {
-		m.st.UpdateMessageReactions(msg.chatID, msg.msgID, msg.reactions)
-		if msg.chatID == m.currentChatID {
-			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
-		}
+	toast := func() tea.Msg { return StatusErrMsg{Text: "reaction failed", Sev: components.SeverityWarning} }
+	if m.st == nil {
+		return m, toast
 	}
-	return m, func() tea.Msg { return StatusErrMsg{Text: "reaction failed", Sev: components.SeverityWarning} }
+	m.st.UpdateMessageReactions(msg.chatID, msg.msgID, msg.reactions)
+	if msg.chatID != m.currentChatID {
+		return m, toast
+	}
+	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
+	return m.flashRollback(msg.msgID, toast)
 }
 
 func (m RootModel) handleDeleteMsg(msg components.DeleteMsgRequest) (RootModel, tea.Cmd) {
@@ -275,20 +293,23 @@ func (m RootModel) handleDeleteMsg(msg components.DeleteMsgRequest) (RootModel, 
 	revoke := msg.Revoke
 	return m, func() tea.Msg {
 		if err := client.DeleteMessages(ctx, peer, []int{msgID}, revoke); err != nil {
-			return deleteMsgFailedMsg{chatID: chatID, messages: origMessages}
+			return deleteMsgFailedMsg{chatID: chatID, msgID: msgID, messages: origMessages}
 		}
 		return nil
 	}
 }
 
 func (m RootModel) handleDeleteMsgFailed(msg deleteMsgFailedMsg) (RootModel, tea.Cmd) {
-	if m.st != nil {
-		m.st.SetMessages(msg.chatID, msg.messages)
-		if msg.chatID == m.currentChatID {
-			m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
-		}
+	toast := func() tea.Msg { return StatusErrMsg{Text: "delete failed", Sev: components.SeverityWarning} }
+	if m.st == nil {
+		return m, toast
 	}
-	return m, func() tea.Msg { return StatusErrMsg{Text: "delete failed", Sev: components.SeverityWarning} }
+	m.st.SetMessages(msg.chatID, msg.messages)
+	if msg.chatID != m.currentChatID {
+		return m, toast
+	}
+	m.chat.SetMessagesKeepScroll(m.st.Messages(msg.chatID))
+	return m.flashRollback(msg.msgID, toast)
 }
 
 func buildOptimisticReactions(current []store.Reaction, emoji string) []store.Reaction {

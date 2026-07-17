@@ -42,3 +42,36 @@ func TestBubbleBorderFg_OtherMessagesUnaffected(t *testing.T) {
 	got := ml.bubbleBorderFg(store.Message{ID: 99, IsOut: false})
 	assert.Equal(t, lipgloss.Color("238"), got)
 }
+
+func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Dark(t *testing.T) {
+	ml := NewMessageList(20, 80)
+	ml.SetDarkBackground(true)
+	ml.HighlightMessageError(1)
+	got := ml.bubbleBorderFg(store.Message{ID: 1, IsOut: false})
+	want := FadeAccentColor(ErrorAccent, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	assert.Equal(t, want, got)
+	assert.Equal(t, HighlightError, ml.HighlightKind())
+}
+
+func TestBubbleBorderFg_ErrorAccentWhenHighlighted_Light(t *testing.T) {
+	ml := NewMessageList(20, 80)
+	ml.SetDarkBackground(false)
+	ml.HighlightMessageError(1)
+	got := ml.bubbleBorderFg(store.Message{ID: 1, IsOut: false})
+	want := FadeAccentColor(ErrorAccentLight, lipgloss.Color("238"), HighlightFadeSteps, HighlightFadeSteps)
+	assert.Equal(t, want, got)
+}
+
+func TestHighlightMessage_SetsInfoKind(t *testing.T) {
+	ml := NewMessageList(20, 80)
+	ml.HighlightMessage(1)
+	assert.Equal(t, HighlightInfo, ml.HighlightKind())
+	assert.Equal(t, HighlightInitialStep, ml.HighlightStep())
+}
+
+func TestHighlightMessageError_SetsStepAndID(t *testing.T) {
+	ml := NewMessageList(20, 80)
+	ml.HighlightMessageError(42)
+	assert.Equal(t, 42, ml.HighlightedMsgID())
+	assert.Equal(t, HighlightInitialStep, ml.HighlightStep())
+}

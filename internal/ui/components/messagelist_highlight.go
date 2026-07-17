@@ -7,11 +7,24 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// HighlightMessage starts a fade highlight on the bubble with the given id.
+// HighlightMessage starts an info (amber) fade highlight on the bubble with the
+// given id.
 func (ml *MessageList) HighlightMessage(id int) {
 	ml.highlightedMsgID = id
 	ml.highlightStep = HighlightInitialStep
+	ml.highlightKind = HighlightInfo
 }
+
+// HighlightMessageError starts an error (red) fade highlight on the bubble with
+// the given id, used when an optimistic action is rolled back.
+func (ml *MessageList) HighlightMessageError(id int) {
+	ml.highlightedMsgID = id
+	ml.highlightStep = HighlightInitialStep
+	ml.highlightKind = HighlightError
+}
+
+// HighlightKind returns the kind of the active highlight (info when none).
+func (ml *MessageList) HighlightKind() HighlightKind { return ml.highlightKind }
 
 // StepHighlight advances the fade by one step. It returns true while the
 // highlight is still visible; on reaching 0 it clears the highlight and
@@ -45,7 +58,11 @@ func (ml *MessageList) bubbleBorderFg(msg store.Message) color.Color {
 		borderFg = lipgloss.Color("238")
 	}
 	if ml.highlightStep > 0 && msg.ID == ml.highlightedMsgID {
-		borderFg = FadeAccentColor(HighlightAccentFor(ml.hasDarkBackground), borderFg, ml.highlightStep, HighlightFadeSteps)
+		accent := HighlightAccentFor(ml.hasDarkBackground)
+		if ml.highlightKind == HighlightError {
+			accent = ErrorAccentFor(ml.hasDarkBackground)
+		}
+		borderFg = FadeAccentColor(accent, borderFg, ml.highlightStep, HighlightFadeSteps)
 	}
 	return borderFg
 }

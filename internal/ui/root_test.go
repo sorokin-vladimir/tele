@@ -243,8 +243,13 @@ func TestRoot_ReactionFailure_SurfacesError(t *testing.T) {
 	failMsg := cmd() // reactionFailedMsg
 	_, c2 := m.Update(failMsg)
 	require.NotNil(t, c2)
-	_, ok := c2().(ui.StatusErrMsg)
-	assert.True(t, ok, "reaction failure should surface a StatusErrMsg")
+	var sawErr bool
+	for _, mm := range drainMsgs(c2()) {
+		if _, ok := mm.(ui.StatusErrMsg); ok {
+			sawErr = true
+		}
+	}
+	assert.True(t, sawErr, "reaction failure should surface a StatusErrMsg")
 }
 
 func TestRoot_EventNewMessage_FiresPhotoDownload(t *testing.T) {

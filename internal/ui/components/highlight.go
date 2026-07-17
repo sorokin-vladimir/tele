@@ -44,6 +44,32 @@ func HighlightAccentFor(isDark bool) color.Color {
 	return HighlightAccentLight
 }
 
+// HighlightKind selects which accent a highlight fades from: the amber info tone
+// (jump-to) or the red error tone (optimistic-action rollback).
+type HighlightKind int
+
+const (
+	HighlightInfo HighlightKind = iota
+	HighlightError
+)
+
+// Error accent tones a rollback highlight starts at. The dark-background tone is
+// the truecolor form of xterm 203 — the same red as the toast error border, so
+// the row highlight and the failure toast read as one color. The light-theme
+// tone is a deeper red for readability on a light background.
+var (
+	ErrorAccent      color.Color = lipgloss.Color("#ff5f5f") // dark bg; xterm 203
+	ErrorAccentLight color.Color = lipgloss.Color("#d70000") // light bg; xterm 160
+)
+
+// ErrorAccentFor returns the error accent suited to the background.
+func ErrorAccentFor(isDark bool) color.Color {
+	if isDark {
+		return ErrorAccent
+	}
+	return ErrorAccentLight
+}
+
 // FadeAccentColor linearly interpolates RGB from base (step 0) toward accent
 // (step == total), returning a truecolor lipgloss color. lipgloss downsamples
 // on limited-color terminals. step is clamped to [0, total].

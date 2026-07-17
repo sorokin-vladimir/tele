@@ -279,6 +279,13 @@ func (m *ChatModel) ScrollToMessage(id int) bool       { return m.msgList.Scroll
 // HighlightMessage flashes the given message id in the list (jump-to highlight).
 func (m *ChatModel) HighlightMessage(id int) { m.msgList.HighlightMessage(id) }
 
+// HighlightMessageError flashes the given message id red (optimistic-action
+// rollback highlight).
+func (m *ChatModel) HighlightMessageError(id int) { m.msgList.HighlightMessageError(id) }
+
+// HighlightKind reports the kind of the active list highlight (info vs error).
+func (m *ChatModel) HighlightKind() components.HighlightKind { return m.msgList.HighlightKind() }
+
 // StepHighlight advances the jump-to highlight fade; true while still active.
 func (m *ChatModel) StepHighlight() bool { return m.msgList.StepHighlight() }
 

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -124,6 +126,65 @@ func TestRoot_ChatHighlightFade_DecrementsAndStaleIgnored(t *testing.T) {
 	m = newM.(RootModel)
 	assert.Equal(t, before, m.ChatList().HighlightStep())
 	assert.Nil(t, cmd)
+}
+
+// drainBatch expands a tea.BatchMsg into the messages its commands produce; a
+// non-batch message is returned as a single-element slice.
+func drainBatch(msg tea.Msg) []tea.Msg {
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
+	}
+	var out []tea.Msg
+	for _, c := range batch {
+		out = append(out, c())
+	}
+	return out
+}
+
+func TestRoot_DeleteMsgFailed_StartsErrorHighlight(t *testing.T) {
+	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
+	restored := []store.Message{{ID: 5, ChatID: 1, Text: "target", Date: time.Now()}}
+
+	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 1, msgID: 5, messages: restored})
+	root := newM.(RootModel)
+
+	assert.Equal(t, 5, root.Chat().HighlightedMsgID())
+	assert.Equal(t, components.HighlightError, root.Chat().HighlightKind())
+	assert.Equal(t, components.HighlightInitialStep, root.Chat().HighlightStep())
+	require.NotNil(t, cmd)
+
+	var sawToast bool
+	for _, mm := range drainBatch(cmd()) {
+		if _, ok := mm.(StatusErrMsg); ok {
+			sawToast = true
+		}
+	}
+	assert.True(t, sawToast, "the failure toast must still be emitted alongside the highlight")
+}
+
+func TestRoot_EditMsgFailed_StartsErrorHighlight(t *testing.T) {
+	m := rootOnOpenChatWithMsg(t, 7)
+	restored := []store.Message{{ID: 7, ChatID: 1, Text: "orig", Date: time.Now()}}
+
+	newM, cmd := m.Update(editMsgFailedMsg{chatID: 1, msgID: 7, messages: restored})
+	root := newM.(RootModel)
+
+	assert.Equal(t, 7, root.Chat().HighlightedMsgID())
+	assert.Equal(t, components.HighlightError, root.Chat().HighlightKind())
+	require.NotNil(t, cmd)
+}
+
+func TestRoot_MsgFailed_NoHighlightForOtherChat(t *testing.T) {
+	m := rootOnOpenChatWithMsg(t, 5) // open chat is 1
+	restored := []store.Message{{ID: 5, ChatID: 2, Text: "x", Date: time.Now()}}
+
+	newM, cmd := m.Update(deleteMsgFailedMsg{chatID: 2, msgID: 5, messages: restored})
+	root := newM.(RootModel)
+
+	assert.Equal(t, 0, root.Chat().HighlightedMsgID(),
+		"a rollback in another chat must not highlight the open chat")
+	require.NotNil(t, cmd, "the failure toast is still emitted")
 }
 
 // newRootWithTwoChatsInternal mirrors newRootWithTwoChats from root_test.go for

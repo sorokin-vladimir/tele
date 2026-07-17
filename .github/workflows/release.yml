@@ -99,13 +99,19 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
 
       # Publish the Homebrew formula to both taps from dist/checksums.txt.
+      # Runs even if a late goreleaser pipe (winget/snap) failed, so an
+      # unrelated publisher error never blocks Homebrew. A cancelled run still
+      # stops here.
       - name: Update Homebrew formula
+        if: ${{ !cancelled() }}
         run: bash scripts/update-formula.sh "${GITHUB_REF_NAME}"
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-      # Upload deb/rpm to Gemfury (stable tags only; the script self-skips betas).
+      # Upload deb/rpm to Gemfury (stable tags only; the script self-skips
+      # betas). Same rationale as above: independent of the winget/snap pipes.
       - name: Publish to Gemfury
+        if: ${{ !cancelled() }}
         run: bash scripts/update-fury.sh "${GITHUB_REF_NAME}"
         env:
           FURY_TOKEN: ${{ secrets.FURY_TOKEN }}

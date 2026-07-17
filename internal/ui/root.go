@@ -118,8 +118,9 @@ type RootModel struct {
 	// scheduled. The loops self-stop when nothing is visible/active and are
 	// re-armed by ensureAnimationTicks on the next event, so an idle app issues no
 	// periodic repaints (issue #147).
-	logoTicking    bool
-	spinnerTicking bool
+	logoTicking      bool
+	spinnerTicking   bool
+	toastAnimTicking bool
 }
 
 // Image-cache capacities (entry counts). Thumbnails churn fast and are small;
@@ -270,6 +271,15 @@ func (m RootModel) Init() tea.Cmd {
 	// and enables OS color-scheme reports (mode 2031) for event-driven theme
 	// updates (issue #148).
 	return tea.Batch(requestBGColorCmd(), enableColorSchemeReportsCmd())
+}
+
+// SettleToastsForTest advances the toast slide animation to completion so a
+// freshly added toast is fully on screen (test-only). The toast stack is held by
+// pointer, so this mutates the shared stack even on a value receiver.
+func (m RootModel) SettleToastsForTest() {
+	for i := 0; i < 100 && m.toasts.Animating(); i++ {
+		m.toasts.StepToastAnim()
+	}
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -454,6 +464,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.CloseReactionPickerMsg,
 		components.LogoTickMsg,
 		components.SpinnerTickMsg,
+		toastAnimTickMsg,
 		tea.FocusMsg,
 		tea.BlurMsg,
 		uv.DarkColorSchemeEvent,

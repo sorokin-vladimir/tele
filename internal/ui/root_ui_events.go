@@ -9,6 +9,9 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
+// toastAnimTickMsg advances the toast slide animation by one frame.
+type toastAnimTickMsg struct{}
+
 // setDarkBackground records the terminal/OS theme and propagates it to the
 // components whose colors depend on a dark vs light background.
 func (m *RootModel) setDarkBackground(isDark bool) {
@@ -206,6 +209,14 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			return m, spinnerTickCmd()
 		}
 		m.spinnerTicking = false
+		return m, nil
+
+	case toastAnimTickMsg:
+		m.toasts.StepToastAnim()
+		if m.toasts.Animating() {
+			return m, toastAnimTickCmd()
+		}
+		m.toastAnimTicking = false
 		return m, nil
 
 	case components.TypingDotsTickMsg:

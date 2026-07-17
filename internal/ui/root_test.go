@@ -761,6 +761,7 @@ func TestRoot_StatusErrMsg_SetsAndSchedulesClear(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	newM, cmd := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "network down", Sev: components.SeverityError})
 	root := newM.(ui.RootModel)
+	root.SettleToastsForTest()
 	assert.Contains(t, root.View().Content, "network down")
 	require.NotNil(t, cmd) // an auto-clear tick was scheduled
 }
@@ -771,7 +772,9 @@ func TestRoot_ClearStatusErrMsg_StaleSerialKeepsError(t *testing.T) {
 	m2, _ := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "first", Sev: components.SeverityError})
 	root := m2.(ui.RootModel)
 	m3, _ := root.Update(ui.ClearStatusErrMsg{Serial: -999}) // never a real serial
-	assert.Contains(t, m3.(ui.RootModel).View().Content, "first")
+	settled := m3.(ui.RootModel)
+	settled.SettleToastsForTest()
+	assert.Contains(t, settled.View().Content, "first")
 }
 
 // An error completion clears the download indicator and surfaces the error text.
@@ -780,7 +783,9 @@ func TestRoot_DocumentOpenDone_ErrorShowsStatus(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.DocumentOpenDoneMsgForTest(1, "open file failed: boom", components.SeverityWarning)
 	m2, _ := newM.(ui.RootModel).Update(done)
-	assert.Contains(t, m2.(ui.RootModel).View().Content, "open file failed: boom")
+	root := m2.(ui.RootModel)
+	root.SettleToastsForTest()
+	assert.Contains(t, root.View().Content, "open file failed: boom")
 }
 
 // A successful completion adds no error text to the status bar.
@@ -797,7 +802,9 @@ func TestRoot_FileDownloadDone_SuccessShowsPath(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.FileDownloadDoneMsgForTest(1, "Saved to /tmp/report.pdf", components.SeverityInfo)
 	m2, _ := newM.(ui.RootModel).Update(done)
-	assert.Contains(t, m2.(ui.RootModel).View().Content, "Saved to /tmp/report.pdf")
+	root := m2.(ui.RootModel)
+	root.SettleToastsForTest()
+	assert.Contains(t, root.View().Content, "Saved to /tmp/report.pdf")
 }
 
 func TestRoot_FileDownloadDone_ErrorShowsText(t *testing.T) {
@@ -805,7 +812,9 @@ func TestRoot_FileDownloadDone_ErrorShowsText(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.FileDownloadDoneMsgForTest(1, "download failed: boom", components.SeverityWarning)
 	m2, _ := newM.(ui.RootModel).Update(done)
-	assert.Contains(t, m2.(ui.RootModel).View().Content, "download failed: boom")
+	root := m2.(ui.RootModel)
+	root.SettleToastsForTest()
+	assert.Contains(t, root.View().Content, "download failed: boom")
 }
 
 // Selecting a file and pressing the download key starts a download (dispatches a

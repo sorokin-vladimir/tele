@@ -3,10 +3,13 @@ package components
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	xansi "github.com/charmbracelet/x/ansi"
 )
 
 // Severity classifies a transient message. It lives here (not statusbar.go)
@@ -42,6 +45,26 @@ const (
 	ZoneBottomLeft                   // reserved for the future Demo keycast
 )
 
+// toastPhase is a toast's slide-animation state.
+type toastPhase int
+
+const (
+	phaseEntering toastPhase = iota // sliding in from the right edge
+	phaseShown                      // at rest, interactive
+	phaseLeaving                    // sliding out past the right edge, then removed
+)
+
+const (
+	// toastAnimSteps is the number of frames a slide-in or slide-out takes.
+	toastAnimSteps = 6
+	// toastAnimInterval is the delay between successive slide frames.
+	toastAnimInterval = 30 * time.Millisecond
+)
+
+// ToastAnimInterval is the delay between toast slide frames, exposed for the
+// root tick command.
+var ToastAnimInterval = toastAnimInterval
+
 // ToastAction is a labelled action attached to a toast. Key is the hotkey for
 // the future ContextToast focus mode (informational for now). Msg is returned
 // to RootModel as a command when the action is activated (mouse click today).
@@ -52,11 +75,13 @@ type ToastAction struct {
 }
 
 type toast struct {
-	serial  int
-	kind    ToastKind
-	text    string
-	zone    ToastZone
-	actions []ToastAction
+	serial   int
+	kind     ToastKind
+	text     string
+	zone     ToastZone
+	actions  []ToastAction
+	phase    toastPhase
+	animStep int
 	// clickMsg, when non-nil, makes the whole toast box a click target returning
 	// this message (e.g. a notify toast that opens its chat).
 	clickMsg tea.Msg
@@ -117,34 +142,95 @@ func (s *ToastStack) SetClick(serial int, msg tea.Msg) {
 func (s *ToastStack) Add(kind ToastKind, text string, actions ...ToastAction) int {
 	s.serial++
 	s.toasts = append(s.toasts, toast{
-		serial:  s.serial,
-		kind:    kind,
-		text:    text,
-		zone:    s.zoneFor[kind],
-		actions: actions,
+		serial:   s.serial,
+		kind:     kind,
+		text:     text,
+		zone:     s.zoneFor[kind],
+		actions:  actions,
+		phase:    phaseEntering,
+		animStep: toastAnimSteps,
 	})
 	return s.serial
 }
 
-// Dismiss removes the toast with the given serial. A serial that matches no
-// active toast is a no-op, so a stale auto-dismiss timer cannot remove a newer
-// toast.
+// Dismiss starts the slide-out of the toast with the given serial. A serial that
+// matches no active toast, or one already leaving, is a no-op — so a stale
+// auto-dismiss timer cannot re-trigger or remove a toast.
 func (s *ToastStack) Dismiss(serial int) {
-	for i, t := range s.toasts {
-		if t.serial == serial {
-			s.toasts = append(s.toasts[:i], s.toasts[i+1:]...)
+	for i := range s.toasts {
+		if s.toasts[i].serial == serial {
+			if s.toasts[i].phase != phaseLeaving {
+				s.toasts[i].phase = phaseLeaving
+			}
 			return
 		}
 	}
 }
 
-// DismissTop removes the most recently added toast. Returns false when empty.
+// DismissTop starts the slide-out of the most recently added toast. Returns
+// false when empty.
 func (s *ToastStack) DismissTop() bool {
 	if len(s.toasts) == 0 {
 		return false
 	}
-	s.toasts = s.toasts[:len(s.toasts)-1]
+	last := &s.toasts[len(s.toasts)-1]
+	if last.phase != phaseLeaving {
+		last.phase = phaseLeaving
+	}
 	return true
+}
+
+// StepToastAnim advances every entering/leaving toast by one frame, removes
+// leaving toasts that have fully slid out, and returns true while any toast is
+// still moving.
+func (s *ToastStack) StepToastAnim() bool {
+	kept := s.toasts[:0]
+	for _, t := range s.toasts {
+		switch t.phase {
+		case phaseEntering:
+			t.animStep--
+			if t.animStep <= 0 {
+				t.animStep = 0
+				t.phase = phaseShown
+			}
+			kept = append(kept, t)
+		case phaseLeaving:
+			t.animStep++
+			if t.animStep >= toastAnimSteps {
+				continue // fully off-screen: drop it
+			}
+			kept = append(kept, t)
+		default:
+			kept = append(kept, t)
+		}
+	}
+	s.toasts = kept
+	return s.Animating()
+}
+
+// Animating reports whether any toast is currently entering or leaving.
+func (s *ToastStack) Animating() bool {
+	for _, t := range s.toasts {
+		if t.phase == phaseEntering || t.phase == phaseLeaving {
+			return true
+		}
+	}
+	return false
+}
+
+// toastOffset returns the right-anchored horizontal offset (cells) for a toast
+// at the given animation step: 0 at rest, up to boxW+2 (fully off-screen) at the
+// max step, easing out quadratically in between.
+func toastOffset(animStep, boxW int) int {
+	if animStep <= 0 {
+		return 0
+	}
+	if animStep > toastAnimSteps {
+		animStep = toastAnimSteps
+	}
+	span := float64(boxW + 2)
+	frac := float64(animStep) / float64(toastAnimSteps)
+	return int(math.Round(span * frac * frac))
 }
 
 func (s *ToastStack) Empty() bool { return len(s.toasts) == 0 }
@@ -301,19 +387,39 @@ func (s *ToastStack) zoneLayout(zone ToastZone) (entries []zoneEntry, top, left 
 	return entries, top, left
 }
 
-// Zones renders every non-empty zone with its absolute stamping origin.
+// Zones renders each stacked toast (and any overflow marker) as its own
+// ZoneRender, positioned with its right-anchored slide offset and truncated so
+// it never overflows the viewport width. Fully off-screen toasts are omitted.
 func (s *ToastStack) Zones() []ZoneRender {
 	var out []ZoneRender
 	for _, zone := range []ToastZone{ZoneBottomRight, ZoneTopRight} {
 		entries, top, left := s.zoneLayout(zone)
-		if len(entries) == 0 {
-			continue
-		}
-		var lines []string
+		row := top
 		for _, e := range entries {
-			lines = append(lines, e.lines...)
+			h := len(e.lines)
+			entryLeft := left
+			if e.t != nil {
+				entryLeft += toastOffset(e.t.animStep, s.boxWidth())
+			}
+			if visW := s.width - entryLeft; visW > 0 {
+				block := strings.Join(truncateLinesToWidth(e.lines, visW), "\n")
+				out = append(out, ZoneRender{Block: block, Top: row, Left: entryLeft})
+			}
+			row += h
 		}
-		out = append(out, ZoneRender{Block: strings.Join(lines, "\n"), Top: top, Left: left})
+	}
+	return out
+}
+
+// truncateLinesToWidth clips each line to at most w display cells, ANSI-aware.
+func truncateLinesToWidth(lines []string, w int) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		if lipgloss.Width(l) > w {
+			out[i] = xansi.Truncate(l, w, "")
+		} else {
+			out[i] = l
+		}
 	}
 	return out
 }
@@ -335,6 +441,10 @@ func (s *ToastStack) actionRegions() []ClickRegion {
 		entries, top, left := s.zoneLayout(zone)
 		row := top
 		for _, e := range entries {
+			if e.t != nil && e.t.phase != phaseShown {
+				row += len(e.lines)
+				continue
+			}
 			// Footer action labels are more specific than a whole-box click, so
 			// they are collected first and win in HitTest's first-match scan.
 			if e.t != nil && len(e.t.actions) > 0 {
@@ -392,6 +502,18 @@ func (s *ToastStack) HitTestRects() []ClickRegion { return s.actionRegions() }
 func (s *ToastStack) actionRects() []ClickRegion { return s.actionRegions() }
 
 func (s *ToastStack) count() int { return len(s.toasts) }
+
+// CountForTest returns the number of active toasts (test-only).
+func (s *ToastStack) CountForTest() int { return len(s.toasts) }
+
+// LastSerialForTest returns the serial of the most recently added toast, or 0
+// when empty (test-only).
+func (s *ToastStack) LastSerialForTest() int {
+	if len(s.toasts) == 0 {
+		return 0
+	}
+	return s.toasts[len(s.toasts)-1].serial
+}
 
 func (s *ToastStack) hasSerial(serial int) bool {
 	for _, t := range s.toasts {

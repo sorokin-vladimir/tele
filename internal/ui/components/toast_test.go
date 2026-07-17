@@ -31,7 +31,9 @@ func TestToastStack_DismissRemovesMatching(t *testing.T) {
 	s := newTestStack()
 	first := s.Add(ToastInfo, "one")
 	s.Add(ToastError, "two")
+	settle(s)
 	s.Dismiss(first)
+	settle(s)
 	if s.count() != 1 {
 		t.Fatalf("want 1 toast after dismiss, got %d", s.count())
 	}
@@ -50,9 +52,11 @@ func TestToastStack_DismissTopRemovesNewest(t *testing.T) {
 	s := newTestStack()
 	oldest := s.Add(ToastInfo, "one")
 	s.Add(ToastError, "two")
+	settle(s)
 	if !s.DismissTop() {
 		t.Fatal("DismissTop should return true when non-empty")
 	}
+	settle(s)
 	if s.count() != 1 {
 		t.Fatalf("want 1 left, got %d", s.count())
 	}
@@ -83,6 +87,7 @@ func TestToastStack_ZonesRenderNonEmptyOnly(t *testing.T) {
 		t.Fatal("empty stack renders no zones")
 	}
 	s.Add(ToastError, "boom")
+	settle(s)
 	zones := s.Zones()
 	if len(zones) != 1 {
 		t.Fatalf("want 1 non-empty zone, got %d", len(zones))
@@ -95,6 +100,7 @@ func TestToastStack_ZonesRenderNonEmptyOnly(t *testing.T) {
 func TestToastStack_ZonesContainText(t *testing.T) {
 	s := newTestStack()
 	s.Add(ToastError, "connection lost")
+	settle(s)
 	block := s.Zones()[0].Block
 	if !strings.Contains(block, "connection lost") {
 		t.Fatalf("block missing toast text:\n%s", block)
@@ -104,6 +110,7 @@ func TestToastStack_ZonesContainText(t *testing.T) {
 func TestToastStack_FooterShowsActionLabels(t *testing.T) {
 	s := newTestStack()
 	s.Add(ToastError, "failed", ToastAction{Label: "retry", Key: "r"}, ToastAction{Label: "close", Key: "x"})
+	settle(s)
 	// Strip ANSI: the accent styling splits highlighted letters from the rest of
 	// the label with escape sequences, so assert on the visible text.
 	block := xansi.Strip(s.Zones()[0].Block)
@@ -127,6 +134,7 @@ func TestToastStack_OverflowShowsMore(t *testing.T) {
 func TestToastStack_BottomRightAnchoredAboveStatusBar(t *testing.T) {
 	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 	s.Add(ToastError, "x")
+	settle(s)
 	z := s.Zones()[0]
 	blockH := strings.Count(z.Block, "\n") + 1
 	if z.Top != 24-blockH-1 {
@@ -140,6 +148,7 @@ func TestToastStack_BottomRightAnchoredAboveStatusBar(t *testing.T) {
 func TestToastStack_TopRightAnchoredAtTop(t *testing.T) {
 	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 	s.Add(ToastNotify, "new message")
+	settle(s)
 	z := s.Zones()[0]
 	if z.Top != 1 {
 		t.Fatalf("top-right top = %d, want 1", z.Top)
@@ -157,6 +166,7 @@ func TestToastStack_HitTestReturnsActionMsg(t *testing.T) {
 	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 	want := toastTestMsg{id: 7}
 	s.Add(ToastError, "failed", ToastAction{Label: "retry", Key: "r", Msg: want})
+	settle(s)
 
 	// Find the region the component itself reports and click its center.
 	rects := s.actionRects()
@@ -188,6 +198,7 @@ func TestToastStack_ClickMsgWholeBoxHits(t *testing.T) {
 	want := toastTestMsg{id: 99}
 	serial := s.Add(ToastNotify, "Alice\nhey there")
 	s.SetClick(serial, want)
+	settle(s)
 
 	z := s.Zones()[0] // notify -> top-right, the only non-empty zone
 	// A point inside the box body (not on the border) must return the click msg.
@@ -204,6 +215,7 @@ func TestToastStack_ClickMsgWholeBoxHits(t *testing.T) {
 func TestToastStack_NoClickMsgNoWholeBoxHit(t *testing.T) {
 	s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 	s.Add(ToastNotify, "Alice\nhey there") // no SetClick
+	settle(s)
 	z := s.Zones()[0]
 	if _, ok := s.HitTest(z.Left+3, z.Top+1); ok {
 		t.Fatal("a toast without a click msg must not be a whole-box target")
@@ -215,6 +227,7 @@ func TestToastStack_DarkBackgroundChangesRender(t *testing.T) {
 		s := NewToastStack(80, 24, 3, ZoneBottomRight, ZoneTopRight)
 		s.SetDarkBackground(dark)
 		s.Add(ToastError, "boom")
+		settle(s)
 		return s.Zones()[0].Block
 	}
 	if mk(true) == mk(false) {
@@ -234,6 +247,7 @@ func TestToastStack_BottomInsetClearsComposer(t *testing.T) {
 	s := NewToastStack(80, height, 3, ZoneBottomRight, ZoneTopRight)
 	s.SetBottomInset(composerH)
 	s.Add(ToastWarning, "message limit reached")
+	settle(s)
 
 	zones := s.Zones()
 	if len(zones) != 1 {

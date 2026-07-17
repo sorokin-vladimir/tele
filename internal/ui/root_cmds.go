@@ -126,6 +126,12 @@ func voiceTickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return voiceTickMsg{} })
 }
 
+func toastAnimTickCmd() tea.Cmd {
+	return tea.Tick(components.ToastAnimInterval, func(time.Time) tea.Msg {
+		return toastAnimTickMsg{}
+	})
+}
+
 func readClipboardCmd() tea.Cmd {
 	return func() tea.Msg {
 		str, err := clipboard.ReadAll()

@@ -40,6 +40,11 @@ func (m *RootModel) spinnerShouldTick() bool {
 	return false
 }
 
+// toastShouldTick reports whether any toast is mid-slide (entering or leaving).
+func (m *RootModel) toastShouldTick() bool {
+	return m.toasts.Animating()
+}
+
 // ensureAnimationTicks re-arms a tick loop whose content has become
 // visible/active while the loop was asleep. It runs after every event (in
 // Update), so an idle→active transition restarts the loop without each call
@@ -54,6 +59,10 @@ func (m *RootModel) ensureAnimationTicks() tea.Cmd {
 	if !m.spinnerTicking && m.spinnerShouldTick() {
 		m.spinnerTicking = true
 		cmds = append(cmds, spinnerTickCmd())
+	}
+	if !m.toastAnimTicking && m.toastShouldTick() {
+		m.toastAnimTicking = true
+		cmds = append(cmds, toastAnimTickCmd())
 	}
 	if len(cmds) == 0 {
 		return nil

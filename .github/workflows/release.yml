@@ -86,10 +86,22 @@ jobs:
       - name: Prepare release notes
         run: bash scripts/changelog-notes.sh "${GITHUB_REF_NAME}"
 
-      - uses: goreleaser/goreleaser-action@v7
+      # Install the goreleaser binary only; run it in a separate step so its
+      # output can be tee'd to a log the summary step parses.
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean --parallelism 1
+          install-only: true
+
+      # continue-on-error so a late publisher failure (winget/snap) does not
+      # abort the job before Homebrew/Gemfury, the summary, and the gate run.
+      # GitHub's bash shell runs with pipefail, so the step still reflects
+      # goreleaser's exit code via steps.goreleaser.outcome.
+      - name: Run goreleaser
+        id: goreleaser
+        continue-on-error: true
+        run: goreleaser release --clean --parallelism 1 2>&1 | tee goreleaser.log
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TG_API_ID: ${{ secrets.TG_API_ID }}
@@ -99,19 +111,42 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
 
       # Publish the Homebrew formula to both taps from dist/checksums.txt.
-      # Runs even if a late goreleaser pipe (winget/snap) failed, so an
-      # unrelated publisher error never blocks Homebrew. A cancelled run still
-      # stops here.
+      # Independent of the winget/snap pipes; continue-on-error so the gate is
+      # the single red/green decision point.
       - name: Update Homebrew formula
+        id: homebrew
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: bash scripts/update-formula.sh "${GITHUB_REF_NAME}"
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-      # Upload deb/rpm to Gemfury (stable tags only; the script self-skips
-      # betas). Same rationale as above: independent of the winget/snap pipes.
+      # Upload deb/rpm to Gemfury (stable tags only; the script self-skips betas).
       - name: Publish to Gemfury
+        id: gemfury
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: bash scripts/update-fury.sh "${GITHUB_REF_NAME}"
         env:
           FURY_TOKEN: ${{ secrets.FURY_TOKEN }}
+
+      # Render release notes + a per-target publish status table to the job
+      # summary. Never fails the job; emits any_failed for the gate.
+      - name: Release summary
+        id: summary
+        if: ${{ !cancelled() }}
+        run: bash scripts/release-summary.sh
+        env:
+          LOG_FILE: goreleaser.log
+          GORELEASER_OUTCOME: ${{ steps.goreleaser.outcome }}
+          HOMEBREW_OUTCOME: ${{ steps.homebrew.outcome }}
+          GEMFURY_OUTCOME: ${{ steps.gemfury.outcome }}
+
+      # Single red/green gate: fail the job if any target had a problem.
+      - name: Release gate
+        if: ${{ !cancelled() }}
+        run: |
+          if [ "${{ steps.summary.outputs.any_failed }}" = "1" ]; then
+            echo "One or more release targets failed; see the job summary." >&2
+            exit 1
+          fi

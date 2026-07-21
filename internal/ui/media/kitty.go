@@ -169,14 +169,14 @@ func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
 // transmitted to the terminal via KittyStore. Output is cached per (photo, cols).
 type KittyRenderer struct {
 	store *KittyStore
-	cache map[blockKey][]string
+	cache *renderCache
 }
 
 // NewKittyRenderer returns a renderer backed by the given store.
 func NewKittyRenderer(store *KittyStore) *KittyRenderer {
 	return &KittyRenderer{
 		store: store,
-		cache: make(map[blockKey][]string),
+		cache: newRenderCache(),
 	}
 }
 
@@ -187,19 +187,16 @@ func (r *KittyRenderer) Render(photoID int64, img image.Image, cols int) []strin
 		return nil
 	}
 	k := blockKey{photoID: photoID, cols: cols}
-	if v, ok := r.cache[k]; ok {
-		return v
-	}
-	b := img.Bounds()
-	rows := PhotoRows(b.Dx(), b.Dy(), cols, CellAspect())
-	v := placeholderLines(r.store.IDFor(photoID), cols, rows)
-	r.cache[k] = v
-	return v
+	return r.cache.get(k, func() []string {
+		b := img.Bounds()
+		rows := PhotoRows(b.Dx(), b.Dy(), cols, CellAspect())
+		return placeholderLines(r.store.IDFor(photoID), cols, rows)
+	})
 }
 
 // Reset clears the placeholder cache (call on width change).
 func (r *KittyRenderer) Reset() {
-	clear(r.cache)
+	r.cache.reset()
 }
 
 // PlaceholderLines exposes the Kitty Unicode-placeholder grid for a transmitted

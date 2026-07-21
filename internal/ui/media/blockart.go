@@ -62,28 +62,23 @@ func RenderBlockArt(img image.Image, cols int) []string {
 // BlockRenderer renders photos as ANSI half-block art and caches the result
 // per (photoID, cols). It is the universal fallback renderer.
 type BlockRenderer struct {
-	cache map[blockKey][]string
+	cache *renderCache
 }
 
 // NewBlockRenderer returns an empty-cache BlockRenderer.
 func NewBlockRenderer() *BlockRenderer {
-	return &BlockRenderer{cache: make(map[blockKey][]string)}
+	return &BlockRenderer{cache: newRenderCache()}
 }
 
 // Render returns cached half-block lines for the image, rendering on miss.
 func (r *BlockRenderer) Render(photoID int64, img image.Image, cols int) []string {
 	k := blockKey{photoID: photoID, cols: cols}
-	if v, ok := r.cache[k]; ok {
-		return v
-	}
-	v := RenderBlockArt(img, cols)
-	r.cache[k] = v
-	return v
+	return r.cache.get(k, func() []string { return RenderBlockArt(img, cols) })
 }
 
 // Reset clears the render cache (call when the target width changes).
 func (r *BlockRenderer) Reset() {
-	clear(r.cache)
+	r.cache.reset()
 }
 
 // maxPhotoRows bounds the terminal-row height of an inline photo. It keeps the

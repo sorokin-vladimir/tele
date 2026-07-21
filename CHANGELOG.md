@@ -24,6 +24,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Status-bar and overlay hints now draw their wording from a single source, so
   an action reads the same everywhere and hints stay in sync with the bindings
   across every pane, mode, and menu
+- Inline-image render caches are now bounded by an LRU, so scrolling through many
+  photos over a long session no longer grows memory without limit. Both the
+  half-block and Kitty renderers share a single cache with one eviction policy
+  (#97, #96)
 
 ### Fixed
 

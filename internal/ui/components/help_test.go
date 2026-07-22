@@ -29,6 +29,18 @@ func TestHelpModal_ListsBindingWithKey(t *testing.T) {
 	assert.Contains(t, seen, "Chat")
 }
 
+func TestHelpModal_ListsPasteImage(t *testing.T) {
+	h := components.NewHelpModal(keys.DefaultKeyMap(), 80, 24)
+	// The composer paste-image binding (#163) is listed; scroll to reveal it.
+	var seen string
+	for i := 0; i < 100; i++ {
+		seen += plain(h.View())
+		h, _ = h.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
+	}
+	assert.Contains(t, seen, "ctrl+v")
+	assert.Contains(t, seen, "paste image from clipboard as photo")
+}
+
 func TestHelpModal_FitsIn80x24(t *testing.T) {
 	h := components.NewHelpModal(keys.DefaultKeyMap(), 80, 24)
 	// lipgloss.Width measures display cells (box-drawing runes are multi-byte).

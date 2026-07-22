@@ -134,7 +134,7 @@ func toastAnimTickCmd() tea.Cmd {
 
 func readClipboardCmd() tea.Cmd {
 	return func() tea.Msg {
-		str, err := clipboard.ReadAll()
+		str, err := clipboardRead()
 		if err != nil || str == "" {
 			return nil
 		}
@@ -142,9 +142,21 @@ func readClipboardCmd() tea.Cmd {
 	}
 }
 
+// clipboardRead reads text from the system clipboard. It is a variable so tests
+// can stub out the external clipboard.
+var clipboardRead = clipboard.ReadAll
+
 // clipboardWrite writes text to the system clipboard. It is a variable so tests
 // can stub out the external clipboard.
 var clipboardWrite = clipboard.WriteAll
+
+// SetClipboardReaderForTest swaps the clipboard text reader and returns a restore
+// func, so tests can drive the text-paste fallback without the real clipboard.
+func SetClipboardReaderForTest(fn func() (string, error)) func() {
+	prev := clipboardRead
+	clipboardRead = fn
+	return func() { clipboardRead = prev }
+}
 
 // messageCopiedMsg reports that a message's text was copied to the clipboard,
 // so the status bar can confirm it.

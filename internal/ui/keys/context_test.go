@@ -48,6 +48,17 @@ func TestKnownActions_IncludesShowHelp(t *testing.T) {
 	assert.True(t, keys.KnownActions()[keys.ActionShowHelp])
 }
 
+func TestDefaultKeyMap_PasteImageBinding(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	// ctrl+v in the composer pastes a clipboard image as a photo (#163).
+	assert.Equal(t, keys.ActionPasteImage, km.Resolve(keys.ContextComposer, "ctrl+v"))
+	// Bindable from config and carries a label.
+	assert.True(t, keys.KnownActions()[keys.ActionPasteImage])
+	lbl, ok := keys.Describe(keys.ContextComposer, keys.ActionPasteImage)
+	assert.True(t, ok)
+	assert.Equal(t, "paste image", lbl.Short)
+}
+
 func TestKeyMap_Resolve_Unknown(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionNone, km.Resolve(keys.ContextChatList, "F9"))

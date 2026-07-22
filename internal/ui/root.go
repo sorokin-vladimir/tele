@@ -399,6 +399,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardDone(msg)
 	case StatusErrMsg:
 		return m.handleStatusErr(msg)
+	case clipboardImagePastedMsg:
+		return m.handleClipboardImagePasted(msg)
 	case components.ComposerLimitMsg:
 		return m.handleComposerLimit(msg)
 	case documentOpenDoneMsg:

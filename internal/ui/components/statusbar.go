@@ -170,6 +170,7 @@ func (sb *StatusBar) profile() []footerItem {
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
 		return []footerItem{
 			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionConfirm},
+			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionPasteImage},
 			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionNormal},
 		}
 	case sb.activePane == "chat":

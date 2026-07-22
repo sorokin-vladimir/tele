@@ -29,6 +29,7 @@ func KnownActions() map[Action]bool {
 		ActionCopyMessage: true,
 		// Media attach / send.
 		ActionAttach: true, ActionToggleSendAs: true, ActionCancelUpload: true,
+		ActionPasteImage: true,
 	}
 }
 

@@ -104,6 +104,7 @@ func DefaultKeyMap() KeyMap {
 			"enter":  ActionConfirm,
 			"esc":    ActionNormal,
 			"ctrl+t": ActionToggleSendAs,
+			"ctrl+v": ActionPasteImage,
 		},
 		ContextContextMenu: {
 			"j":     ActionDown,

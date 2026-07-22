@@ -103,8 +103,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.chat = newPane.(*screens.ChatModel)
 			return m, cmd
 		}
-		if keyStr == "ctrl+v" {
-			return m, readClipboardCmd()
+		if m.keyMap.Resolve(keys.ContextComposer, keys.NormalizeKey(keyStr)) == keys.ActionPasteImage {
+			// In the composer, a clipboard image is staged as a photo; anything
+			// else falls back to the text paste (#163). Resolved through the keymap
+			// so a rebound paste key still works.
+			return m, readClipboardForComposerCmd(m.tmpDir)
 		}
 		newPane, cmd := m.chat.Update(msg)
 		m.chat = newPane.(*screens.ChatModel)

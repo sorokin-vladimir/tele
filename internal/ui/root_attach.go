@@ -36,17 +36,24 @@ func (m RootModel) handleFileSelected(msg screens.FileSelectedMsg) (RootModel, t
 	}
 	m.filePicker = nil
 	m.statusBar.SetPickerOpen(false)
+	return m.stageAttachmentFromPath(msg.Path)
+}
 
-	mime, err := media.DetectMIME(msg.Path)
+// stageAttachmentFromPath stages a local file as a pending attachment: it MIME-
+// detects the kind, shows the composer chip, enters insert mode so the caption
+// field is active, and focuses the composer. Shared by the file picker and the
+// clipboard-image paste (#163). Photo/File is toggleable for image/video.
+func (m RootModel) stageAttachmentFromPath(path string) (RootModel, tea.Cmd) {
+	mime, err := media.DetectMIME(path)
 	if err != nil {
 		return m, func() tea.Msg {
 			return StatusErrMsg{Text: "cannot read file", Sev: components.SeverityWarning}
 		}
 	}
 	kind := media.DefaultMediaType(mime)
-	name, size := fileNameSize(msg.Path)
+	name, size := fileNameSize(path)
 	m.pendingAttachment = &pendingAttachment{
-		path:   msg.Path,
+		path:   path,
 		mime:   mime,
 		kind:   kind,
 		sendAs: kind,
@@ -71,6 +78,14 @@ func (m RootModel) handleFileSelected(msg screens.FileSelectedMsg) (RootModel, t
 		return m, tea.Batch(focusCmd, toastCmd)
 	}
 	return m, focusCmd
+}
+
+// PendingAttachmentSendAs reports the staged "send as" kind (test accessor).
+func (m RootModel) PendingAttachmentSendAs() (store.MediaKind, bool) {
+	if m.pendingAttachment == nil {
+		return 0, false
+	}
+	return m.pendingAttachment.sendAs, true
 }
 
 // toggleSendAs flips the staged attachment between its native kind and File.

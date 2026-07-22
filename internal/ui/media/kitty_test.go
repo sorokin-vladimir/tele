@@ -43,11 +43,11 @@ func TestKittyStore_ClearResetsTransmissionButKeepsIDs(t *testing.T) {
 	require.Equal(t, id, s.IDFor(100), "ids remain stable across clear")
 }
 
-func TestKittyStore_DeleteAllSeqIsKittyAPC(t *testing.T) {
-	seq := media.DeleteAllSeq()
+func TestKittyStore_DeleteSeqIsKittyAPC(t *testing.T) {
+	seq := media.DeleteSeq(7)
 	require.True(t, strings.HasPrefix(seq, "\x1b_G"), "starts with Kitty APC")
 	require.Contains(t, seq, "a=d")
-	require.Contains(t, seq, "d=A") // delete all images and free data
+	require.Contains(t, seq, "d=I") // delete by id and free data (unambiguous for virtual placements)
 	require.True(t, strings.HasSuffix(seq, "\x1b\\"), "ends with ST")
 }
 
@@ -121,4 +121,21 @@ func TestKittyRenderer_CellsCarryPlaceholderAndDiacritics(t *testing.T) {
 	require.Contains(t, first, string(kitty.Diacritic(0)))      // row 0
 	require.Contains(t, first, string(kitty.Diacritic(cols-1))) // last column
 	require.True(t, strings.HasSuffix(first, "\x1b[0m"), "line resets SGR")
+}
+
+func TestKittyStore_DeleteLiveSeq_PerID(t *testing.T) {
+	s := media.NewKittyStore()
+	id1 := s.IDFor(11)
+	id2 := s.IDFor(22)
+
+	seq := s.DeleteLiveSeq([]int64{11, 22})
+
+	require.Equal(t, media.DeleteSeq(id1)+media.DeleteSeq(id2), seq)
+	require.NotEmpty(t, seq)
+}
+
+func TestKittyStore_DeleteLiveSeq_SkipsUnassigned(t *testing.T) {
+	s := media.NewKittyStore()
+	// 99 was never assigned an image id, so it contributes nothing.
+	require.Empty(t, s.DeleteLiveSeq([]int64{99}))
 }

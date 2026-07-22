@@ -49,13 +49,16 @@ func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
 	// under test is the retransmit, not an animation re-arm (issue #147).
 	m.chatList.SetChats([]store.Chat{{ID: 1}})
 	m.chat.SetMessages([]store.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
+	// Seed one live placement so the reset has a placement to delete by id (#94).
+	m.kittyStore.IDFor(500)
+	m.kittyLive = map[int64]bool{500: true}
 	m.retransmitGen = 2
 
 	_, cmd := m.Update(retransmitTickMsg{gen: 1})
 	require.Nil(t, cmd, "a superseded (older) debounce tick must not reset/retransmit")
 
 	m2, cmd2 := m.Update(retransmitTickMsg{gen: 2})
-	require.NotNil(t, cmd2, "the latest debounce tick must reset placements (delete-all)")
+	require.NotNil(t, cmd2, "the latest debounce tick must reset placements (delete live)")
 	require.False(t, m2.(RootModel).kittyResetPending, "reconcile must consume the reset request")
 }
 

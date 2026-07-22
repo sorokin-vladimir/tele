@@ -58,28 +58,31 @@ func (s *KittyStore) MarkTransmitted(photoID int64, cols int) {
 	s.colsByPhoto[photoID] = cols
 }
 
-// Clear marks every image untransmitted (ids stay stable). Call after sending
-// DeleteAllSeq so images re-transmit on demand.
+// Clear marks every image untransmitted (ids stay stable). Call after deleting
+// the live placements (DeleteLiveSeq) so images re-transmit on demand.
 func (s *KittyStore) Clear() {
 	clear(s.colsByPhoto)
+}
+
+// DeleteLiveSeq returns the concatenated delete-by-id sequences (d=I, freeing
+// each placement and its data) for the given photo ids that have an assigned
+// image id. Unlike a blanket d=A this is unambiguous for the virtual (U=1)
+// placements used for Unicode placeholders; see #94. Photo ids without an
+// assigned image id are skipped.
+func (s *KittyStore) DeleteLiveSeq(photoIDs []int64) string {
+	var b strings.Builder
+	for _, pid := range photoIDs {
+		if id, ok := s.idByPhoto[pid]; ok {
+			b.WriteString(DeleteSeq(id))
+		}
+	}
+	return b.String()
 }
 
 // Untransmit marks a single photo's placement as gone (after deleting it from
 // the terminal), so it re-transmits on demand. The id mapping is kept stable.
 func (s *KittyStore) Untransmit(photoID int64) {
 	delete(s.colsByPhoto, photoID)
-}
-
-// DeleteAllSeq returns the Kitty sequence that deletes all images and frees
-// their data (a=d, d=A), quietly.
-func DeleteAllSeq() string {
-	opts := &kitty.Options{
-		Action:          kitty.Delete,
-		Delete:          kitty.DeleteAll,
-		DeleteResources: true,
-		Quite:           2,
-	}
-	return ansi.KittyGraphics(nil, opts.Options()...)
 }
 
 // DeleteSeq returns the Kitty sequence that deletes a single image by id and

@@ -94,10 +94,19 @@ func (m *RootModel) reconcileKittyCmd() tea.Cmd {
 	var pre tea.Cmd
 	if m.kittyResetPending {
 		m.kittyResetPending = false
+		// Delete each currently-live placement by its own id (d=I) rather than a
+		// blanket d=A, which is ambiguous for virtual (U=1) placements. Build the
+		// sequence from the live set before clearing it. See #94.
+		live := make([]int64, 0, len(m.kittyLive))
+		for id := range m.kittyLive {
+			live = append(live, id)
+		}
+		if seq := m.kittyStore.DeleteLiveSeq(live); seq != "" {
+			pre = func() tea.Msg { return tea.Raw(seq)() }
+		}
 		m.kittyStore.Clear()
 		m.kittyLive = make(map[int64]bool)
 		m.kittyLRU = nil
-		pre = func() tea.Msg { return tea.Raw(media.DeleteAllSeq())() }
 	}
 
 	visible := m.chat.VisiblePhotoIDs()

@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-23
+
 ### Added
 
 - Chats now open instantly on restart and stay usable offline. Recent message

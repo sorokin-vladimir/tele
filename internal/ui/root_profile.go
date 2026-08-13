@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"image"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -20,6 +23,22 @@ type profileLoadedMsg struct {
 // an answer without reaching into the unexported type.
 func ProfileLoadedMsgForTest(userID int64, user domain.User) tea.Msg {
 	return profileLoadedMsg{userID: userID, user: user}
+}
+
+// avatarReadyMsg carries a decoded avatar back. It names both the person and
+// the picture: the person because the overlay may have been closed and another
+// opened, and the picture because the person may have changed it while this one
+// was in flight.
+type avatarReadyMsg struct {
+	userID   int64
+	avatarID int64
+	img      image.Image
+}
+
+// AvatarReadyMsgForTest builds the completion message for tests in other
+// packages.
+func AvatarReadyMsgForTest(userID, avatarID int64, img image.Image) tea.Msg {
+	return avatarReadyMsg{userID: userID, avatarID: avatarID, img: img}
 }
 
 // profileTargetUserID picks the person the focused pane is currently about: the
@@ -77,8 +96,22 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 		return m, nil
 	}
 	m.profile = p
+
+	// What this person looked like last time is drawn at once, before anything
+	// is known about whether it is still current: the answer arriving a moment
+	// later either confirms it or replaces it, and a face that was right a
+	// minute ago beats letters while we wait (#223).
+	var cmds []tea.Cmd
+	if m.imageMode == media.ModeKitty {
+		m.profile.SetRenderer(media.NewKittyRenderer(m.kittyStore))
+		if entry, ok := m.avatars.Get(userID); ok {
+			m.profile.SetAvatar(entry.img)
+			cmds = append(cmds, m.transmitAvatarCmd(entry.img))
+		}
+	}
+
 	ctx, owner := m.ctx, m.owner
-	return m, func() tea.Msg {
+	cmds = append(cmds, func() tea.Msg {
 		full, err := owner.GetUser(ctx, userID)
 		if err != nil {
 			// A profile that could not be completed stays as it opened. The
@@ -86,6 +119,26 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 			return nil
 		}
 		return profileLoadedMsg{userID: userID, user: full}
+	})
+	return m, tea.Batch(cmds...)
+}
+
+// transmitAvatarCmd encodes the picture for the terminal under the overlay's
+// stable image id. Only ever called in Kitty mode.
+//
+// It goes through kittyEncodedMsg like every other image rather than writing
+// the sequence itself: that path writes the placement first and only then marks
+// it ready, so the overlay keeps drawing the monogram until the picture really
+// is on the terminal, and a failed encode never marks anything ready (#95).
+func (m RootModel) transmitAvatarCmd(img image.Image) tea.Cmd {
+	cols, rows := components.AvatarBox()
+	id := m.kittyStore.IDFor(components.ProfileAvatarImageKey)
+	return func() tea.Msg {
+		seq, err := media.TransmitSeq(id, img, cols, rows)
+		if err != nil {
+			return nil
+		}
+		return kittyEncodedMsg{photoID: components.ProfileAvatarImageKey, cols: cols, seq: seq}
 	}
 }
 
@@ -96,7 +149,56 @@ func (m RootModel) handleProfileLoaded(msg profileLoadedMsg) (RootModel, tea.Cmd
 		return m, nil
 	}
 	m.profile.SetUser(msg.user)
-	return m, nil
+	return m, m.avatarCmdFor(msg.userID, msg.user.AvatarID)
+}
+
+// avatarCmdFor asks for the person's picture, unless there is nothing to ask
+// for or nothing would come of it:
+//
+//   - a terminal that cannot draw images is never sent one, because the
+//     monogram is what it will show either way;
+//   - AvatarID 0 means the person set no avatar or their privacy withholds it,
+//     which is a whole answer rather than a failed fetch;
+//   - a picture already on screen under the same id is the current one, and the
+//     id changing is precisely how a changed avatar announces itself (#223).
+func (m RootModel) avatarCmdFor(userID, avatarID int64) tea.Cmd {
+	if m.imageMode != media.ModeKitty || m.owner == nil || avatarID == 0 {
+		return nil
+	}
+	if entry, ok := m.avatars.Get(userID); ok && entry.avatarID == avatarID {
+		return nil
+	}
+	return fetchAvatarCmd(m.ctx, m.owner, userID, avatarID)
+}
+
+// handleAvatarReady records the picture and shows it, if the overlay is still
+// about this person. The store is written either way: the download already
+// happened, and the next opening should not repeat it.
+func (m RootModel) handleAvatarReady(msg avatarReadyMsg) (RootModel, tea.Cmd) {
+	m.avatars.Add(msg.userID, msg.avatarID, msg.img)
+	if m.profile == nil || m.profile.UserID() != msg.userID {
+		return m, nil
+	}
+	m.profile.SetAvatar(msg.img)
+	return m, m.transmitAvatarCmd(msg.img)
+}
+
+// closeProfile tears down the overlay and, in Kitty mode, deletes the avatar's
+// placement from the terminal. The id is reused by every profile, so leaving
+// the placement alive lets the next person's placeholder cells resolve against
+// this one's geometry and draw the wrong face at the wrong size (#175).
+// It deliberately does not require the overlay to still be there: a key press
+// drops it the moment it is handled, and the close message arrives after, so
+// checking would skip the delete in the common case.
+func (m RootModel) closeProfile() (RootModel, tea.Cmd) {
+	m.profile = nil
+	cols, _ := components.AvatarBox()
+	if m.imageMode != media.ModeKitty || !m.kittyStore.Ready(components.ProfileAvatarImageKey, cols) {
+		return m, nil
+	}
+	id := m.kittyStore.IDFor(components.ProfileAvatarImageKey)
+	m.kittyStore.Untransmit(components.ProfileAvatarImageKey)
+	return m, func() tea.Msg { return tea.Raw(media.DeleteSeq(id))() }
 }
 
 // handleProfileRequest applies the overlay's own actions. The returned bool is
@@ -108,15 +210,19 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		return next, cmd, true
 
 	case components.CloseProfileMsg:
-		m.profile = nil
-		return m, nil, true
+		next, cmd := m.closeProfile()
+		return next, cmd, true
 
 	case profileLoadedMsg:
 		next, cmd := m.handleProfileLoaded(req)
 		return next, cmd, true
 
+	case avatarReadyMsg:
+		next, cmd := m.handleAvatarReady(req)
+		return next, cmd, true
+
 	case components.ProfileOpenChatRequest:
-		m.profile = nil
+		m, closeCmd := m.closeProfile()
 		// The peer is carried for the person with no dialog: the owner holds no
 		// chat for them, so nothing but a send can address it, and the chat
 		// opens empty and composable. This is the same path a search hit takes.
@@ -137,9 +243,9 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 				peer = domain.Peer{ID: userID, Type: domain.PeerUser}
 			}
 		}
-		return m, func() tea.Msg {
+		return m, tea.Batch(closeCmd, func() tea.Msg {
 			return screens.OpenChatMsg{ChatID: userID, Title: title, Peer: peer}
-		}, true
+		}), true
 
 	case components.ProfileMuteRequest:
 		if m.owner == nil {
@@ -156,8 +262,8 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		}, true
 
 	case components.ProfileCopyUsernameRequest:
-		m.profile = nil
-		return m, copyUsernameCmd(req.Username), true
+		next, closeCmd := m.closeProfile()
+		return next, tea.Batch(closeCmd, copyUsernameCmd(req.Username)), true
 	}
 	return m, nil, false
 }

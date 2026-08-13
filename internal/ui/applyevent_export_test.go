@@ -76,6 +76,17 @@ type testOwner struct {
 	mediaPaths  map[mediaPathKey]string
 	fetched     []mediaPathKey
 	invalidated []mediaPathKey
+	// The same three for avatars, named by a person and a picture rather than
+	// by a message slot (#223).
+	avatarPaths        map[avatarPathKey]string
+	avatarsFetched     []avatarPathKey
+	avatarsInvalidated []avatarPathKey
+}
+
+// avatarPathKey identifies one person's picture the way a client names it.
+type avatarPathKey struct {
+	userID   int64
+	avatarID int64
 }
 
 // storeReader lends a bare store the projection's fifth method. The real owner
@@ -86,7 +97,12 @@ type storeReader struct{ store.Store }
 func (storeReader) Outbox(int64) []domain.OutboxEntry { return nil }
 
 func newTestOwner(st store.Store) *testOwner {
-	o := &testOwner{state: state.New(st), reg: project.NewRegistry(storeReader{st}), mediaPaths: make(map[mediaPathKey]string)}
+	o := &testOwner{
+		state:       state.New(st),
+		reg:         project.NewRegistry(storeReader{st}),
+		mediaPaths:  make(map[mediaPathKey]string),
+		avatarPaths: make(map[avatarPathKey]string),
+	}
 	o.state.OnChange(func(chg state.Change) {
 		if chg.Kind == state.ChangeTyping {
 			o.typing = append(o.typing, core.Typing{ChatID: chg.ChatID, Label: chg.Typing.Label()})
@@ -230,6 +246,22 @@ func (o *testOwner) SaveMedia(_ context.Context, chatID int64, msgID int, slot d
 
 func (o *testOwner) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
 	o.invalidated = append(o.invalidated, mediaPathKey{chatID, msgID, slot})
+}
+
+// FetchAvatar serves avatarPaths and records the request, so a test can assert
+// which person's picture was asked for (#223).
+func (o *testOwner) FetchAvatar(_ context.Context, userID, avatarID int64) (string, error) {
+	key := avatarPathKey{userID, avatarID}
+	o.avatarsFetched = append(o.avatarsFetched, key)
+	p, ok := o.avatarPaths[key]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	return p, nil
+}
+
+func (o *testOwner) InvalidateAvatar(userID, avatarID int64) {
+	o.avatarsInvalidated = append(o.avatarsInvalidated, avatarPathKey{userID, avatarID})
 }
 
 func (o *testOwner) SetTyping(_ context.Context, _ int64, _ domain.TypingAction) error {

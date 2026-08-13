@@ -60,6 +60,12 @@ type ownerStub struct {
 	fetched     []mediaKey
 	invalidated []mediaKey
 
+	// The same three for avatars, which travel their own path: a person and a
+	// picture id rather than a message slot (#223).
+	avatarPaths        map[avatarKey]string
+	avatarsFetched     []avatarKey
+	avatarsInvalidated []avatarKey
+
 	// The durable send queue (#193): what the UI submitted, retried, discarded.
 	sent      []core.SendRequest
 	sentMedia []core.MediaSendRequest
@@ -74,6 +80,12 @@ type mediaKey struct {
 	chatID int64
 	msgID  int
 	slot   domain.MediaSlot
+}
+
+// avatarKey identifies one person's picture the way a client names it.
+type avatarKey struct {
+	userID   int64
+	avatarID int64
 }
 
 // cmdCall is one command the UI issued through the owner.
@@ -214,6 +226,22 @@ func (o *ownerStub) SaveMedia(_ context.Context, chatID int64, msgID int, slot d
 
 func (o *ownerStub) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
 	o.invalidated = append(o.invalidated, mediaKey{chatID, msgID, slot})
+}
+
+// FetchAvatar serves avatarPaths and records what was asked for, so a test can
+// assert that a picture was (or was not) requested for a person (#223).
+func (o *ownerStub) FetchAvatar(_ context.Context, userID, avatarID int64) (string, error) {
+	key := avatarKey{userID, avatarID}
+	o.avatarsFetched = append(o.avatarsFetched, key)
+	p, ok := o.avatarPaths[key]
+	if !ok {
+		return "", &telerr.Error{Kind: telerr.NotFound}
+	}
+	return p, nil
+}
+
+func (o *ownerStub) InvalidateAvatar(userID, avatarID int64) {
+	o.avatarsInvalidated = append(o.avatarsInvalidated, avatarKey{userID, avatarID})
 }
 
 func (o *ownerStub) SetTyping(_ context.Context, chatID int64, _ domain.TypingAction) error {

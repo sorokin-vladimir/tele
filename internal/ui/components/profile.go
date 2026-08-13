@@ -1,6 +1,7 @@
 package components
 
 import (
+	"image"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -42,6 +44,21 @@ const ProfileMinWidth = 30
 // reads as a panel over the app rather than as a replacement for it.
 const profileHMargin = 4
 
+// avatarCols is how wide the avatar block is, and avatarGap how much air stands
+// between it and the name. Eight cells is a picture you can recognise a face in
+// without the overlay turning into a photo viewer.
+const (
+	avatarCols = 8
+	avatarGap  = 1
+)
+
+// ProfileAvatarImageKey is the image id the profile's avatar is transmitted
+// under, in the same sentinel space as the photo and video modals' keys (-1001
+// and -1000). One stable key rather than one per person: only ever one profile
+// is open, and the placement is deleted when it closes, so the next person
+// cannot inherit this one's geometry (#175).
+const ProfileAvatarImageKey int64 = -1002
+
 // profileAction is one row of the overlay's action list.
 type profileAction struct {
 	label  string
@@ -63,6 +80,16 @@ type Profile struct {
 	// mute and the item is absent rather than guessed at.
 	hasDialog bool
 	muted     bool
+
+	// avatar is the person's picture, nil until (and unless) one arrives. The
+	// overlay draws a monogram meanwhile, and the two occupy the same cells, so
+	// a picture landing replaces the letters without moving anything (#223).
+	avatar image.Image
+	// renderer is set only where the terminal can draw an image, which is what
+	// makes it the test for "picture or monogram here". Block art is
+	// deliberately not an option: at eight cells it is a smear, and letters say
+	// more.
+	renderer media.Renderer
 
 	actions []profileAction
 	list    *ListView
@@ -108,6 +135,52 @@ func (p *Profile) SetUser(u domain.User) {
 // SetSize records the terminal size, so a resize while the overlay is open
 // re-wraps the bio instead of stamping a stale width.
 func (p *Profile) SetSize(w, h int) { p.width, p.height = w, h }
+
+// SetRenderer gives the overlay the image renderer, which is the same seam the
+// message list is handed. A nil renderer (a terminal without Kitty graphics) is
+// the ordinary case, not a degraded one: the monogram is a whole answer.
+func (p *Profile) SetRenderer(r media.Renderer) { p.renderer = r }
+
+// SetAvatar hands over the person's decoded picture.
+func (p *Profile) SetAvatar(img image.Image) { p.avatar = img }
+
+// Avatar is the picture the overlay is showing, nil when it is drawing a
+// monogram. The caller needs it to re-transmit the image when the terminal's
+// placements are reset under it.
+func (p *Profile) Avatar() image.Image { return p.avatar }
+
+// HasAvatar reports whether the overlay holds a picture, for tests.
+func (p *Profile) HasAvatar() bool { return p.avatar != nil }
+
+// AvatarBox is the cell box an avatar occupies: square on screen, which is why
+// the rows come from the terminal's real cell aspect rather than from a
+// constant. The caller transmits at exactly this size.
+func AvatarBox() (cols, rows int) {
+	return avatarCols, media.PhotoRows(1, 1, avatarCols, media.CellAspect())
+}
+
+// avatarFits reports whether the terminal has cells to spare for a picture.
+// Below this the avatar goes and the overlay stays: refusing to open a profile
+// that opens today would be a strange way to add a feature (#223).
+func (p *Profile) avatarFits() bool {
+	return p.width >= ProfileMinWidth+avatarCols+avatarGap
+}
+
+// avatarBlock renders the cols×rows block standing at the head of the overlay:
+// the picture where one can be drawn, and the monogram in every other case —
+// no renderer, no picture yet, or no picture at all.
+//
+// A renderer that answers with the wrong number of lines is treated as no
+// answer: the block's height is what the layout is built on, and a monogram of
+// the right size beats an image of the wrong one.
+func (p *Profile) avatarBlock(cols, rows int) []string {
+	if p.avatar != nil && p.renderer != nil {
+		if lines := p.renderer.Render(ProfileAvatarImageKey, p.avatar, cols); len(lines) == rows {
+			return lines
+		}
+	}
+	return monogramLines(p.user, cols, rows)
+}
 
 // rebuild recomputes the action list from the current user. An action that
 // cannot apply is absent rather than disabled: an item that refuses to do
@@ -194,13 +267,25 @@ func (p *Profile) infoLines(innerW int) []string {
 	dim := bg.Foreground(theme.T().TextDim)
 	online := bg.Foreground(theme.T().StatusOnline)
 
-	var lines []string
-	lines = append(lines, name.Render(truncate(p.user.DisplayName(), innerW)))
+	// The identity block sits beside the avatar, so it is written at the width
+	// left over rather than at the overlay's own.
+	textW := innerW
+	if p.avatarFits() {
+		textW = innerW - avatarCols - avatarGap
+	}
+
+	var identity []string
+	identity = append(identity, name.Render(truncate(p.user.DisplayName(), textW)))
 	if p.user.Username != "" {
-		lines = append(lines, dim.Render(truncate("@"+p.user.Username, innerW)))
+		identity = append(identity, dim.Render(truncate("@"+p.user.Username, textW)))
 	}
 	if p.user.Online {
-		lines = append(lines, online.Render("online"))
+		identity = append(identity, online.Render("online"))
+	}
+
+	lines := identity
+	if p.avatarFits() {
+		lines = p.headerLines(identity, bg)
 	}
 
 	var detail []string
@@ -220,6 +305,36 @@ func (p *Profile) infoLines(innerW int) []string {
 	if len(detail) > 0 {
 		lines = append(lines, bg.Render(""))
 		lines = append(lines, detail...)
+	}
+	return lines
+}
+
+// headerLines lays the avatar block beside the identity lines. Its height is
+// whichever of the two is taller, so a person with a long identity block is not
+// cut off and a short one does not cut the picture off.
+func (p *Profile) headerLines(identity []string, bg lipgloss.Style) []string {
+	cols, rows := AvatarBox()
+	block := p.avatarBlock(cols, rows)
+	// Both are painted by the style rather than assembled from spaces: an
+	// unpainted cell inside the panel reads as a hole (#227).
+	blank := bg.Width(cols).Render("")
+	gap := bg.Width(avatarGap).Render("")
+
+	height := len(block)
+	if len(identity) > height {
+		height = len(identity)
+	}
+	lines := make([]string, 0, height)
+	for i := 0; i < height; i++ {
+		left := blank
+		if i < len(block) {
+			left = block[i]
+		}
+		right := ""
+		if i < len(identity) {
+			right = identity[i]
+		}
+		lines = append(lines, left+gap+right)
 	}
 	return lines
 }
@@ -283,9 +398,15 @@ func (p *Profile) innerWidth() int {
 	if p.width < ProfileMinWidth || maxW < 1 {
 		return 0
 	}
+	// The identity block is measured with the avatar in front of it: those are
+	// the lines the picture shares a row with, and the phone and the actions
+	// below it start at the overlay's left edge either way.
 	want := lipgloss.Width(p.user.DisplayName())
 	if p.user.Username != "" {
 		want = maxInt(want, lipgloss.Width("@"+p.user.Username))
+	}
+	if p.avatarFits() {
+		want += avatarCols + avatarGap
 	}
 	if p.user.Phone != "" {
 		want = maxInt(want, lipgloss.Width(formatPhone(p.user.Phone)))

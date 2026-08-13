@@ -72,6 +72,13 @@ type Owner interface {
 	// InvalidateMedia drops a cached file that turned out to be undecodable, so
 	// the next fetch downloads it again instead of returning the same bytes.
 	InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot)
+
+	// FetchAvatar downloads a person's avatar, cached apart from chat media
+	// (#223, ADR 0007). avatarID is the one the owner handed over in
+	// domain.User: passing it back is what makes a changed picture a different
+	// file, so the client never has to notice the change itself.
+	FetchAvatar(ctx context.Context, userID, avatarID int64) (string, error)
+	InvalidateAvatar(userID, avatarID int64)
 }
 
 // refreshProjections is gone: every mutation the client makes now goes through

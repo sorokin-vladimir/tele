@@ -127,6 +127,30 @@ func TestDefaults_PhotosDiskCacheSize(t *testing.T) {
 	assert.Equal(t, int64(256*1024*1024), cfg.Photos.DiskCacheSize)
 }
 
+// Avatars have a budget of their own, so a busy chat cannot evict the faces of
+// the people in your chat list (#223, ADR 0007).
+func TestDefaults_AvatarsDiskCacheSize(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte("telegram:\n  api_id: 1\n  api_hash: x\n"), 0600))
+
+	cfg, err := config.Load(f, t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, int64(16*1024*1024), cfg.Avatars.DiskCacheSize)
+}
+
+func TestLoad_AvatarsDiskCacheSizeIsSetApartFromPhotos(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(f, []byte(
+		"telegram:\n  api_id: 1\n  api_hash: x\nphotos:\n  disk_cache_size: 1024\navatars:\n  disk_cache_size: 2048\n"), 0600))
+
+	cfg, err := config.Load(f, t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1024), cfg.Photos.DiskCacheSize)
+	assert.Equal(t, int64(2048), cfg.Avatars.DiskCacheSize)
+}
+
 func TestLoad_MissingFile(t *testing.T) {
 	_, err := config.Load("/nonexistent/config.yml", t.TempDir())
 	assert.Error(t, err)

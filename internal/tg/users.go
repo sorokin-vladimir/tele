@@ -44,6 +44,28 @@ func (a UserAddress) inputUser() (tg.InputUserClass, error) {
 	return nil, &telerr.Error{Kind: telerr.PeerNotFound, Op: "get user"}
 }
 
+// inputPeer builds the peer constructor for the address. It exists alongside
+// inputUser because a file location names a peer rather than a user: an avatar
+// is downloaded through inputPeerPhotoFileLocation, which takes an InputPeer
+// (#223). The two forms mirror inputUser's exactly, so a person met only in a
+// group is reachable here as well.
+func (a UserAddress) inputPeer() (tg.InputPeerClass, error) {
+	if a.UserID == 0 {
+		return nil, &telerr.Error{Kind: telerr.PeerNotFound, Op: "download avatar"}
+	}
+	if a.AccessHash != 0 {
+		return &tg.InputPeerUser{UserID: a.UserID, AccessHash: a.AccessHash}, nil
+	}
+	if a.FromMsgID != 0 && a.FromChat.ID != 0 {
+		return &tg.InputPeerUserFromMessage{
+			Peer:   peerToInput(a.FromChat),
+			MsgID:  a.FromMsgID,
+			UserID: a.UserID,
+		}, nil
+	}
+	return nil, &telerr.Error{Kind: telerr.PeerNotFound, Op: "download avatar"}
+}
+
 // GetUser fetches a user's full profile via users.getFullUser.
 //
 // The response carries the person twice: the short tg.User in Users holds the
@@ -101,6 +123,13 @@ func buildUser(userID int64, full *tg.UsersUserFull) domain.User {
 		// Telegram returns the phone on the short user, and only when privacy
 		// permits it. An empty string is the ordinary case, not a failure.
 		out.Phone = strings.TrimSpace(u.Phone)
+		// A person with no avatar, and one whose privacy settings withhold it,
+		// both arrive as userProfilePhotoEmpty (or no photo at all), which is
+		// why neither is distinguished here: there is nothing to download in
+		// either case, and the client draws the same monogram for both (#223).
+		if photo, ok := u.Photo.(*tg.UserProfilePhoto); ok {
+			out.AvatarID = photo.PhotoID
+		}
 		break
 	}
 	if about, ok := full.FullUser.GetAbout(); ok {

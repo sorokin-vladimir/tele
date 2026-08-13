@@ -414,6 +414,10 @@ photos:
   eager_full_quality: true # download full resolution in the background on chat open
   kitty_placement_cap: 16 # max inline images kept on the terminal at once
   max_long_side_px: 800 # cap a rendered image's long side; height also ≤ 2/3 pane
+  disk_cache_size: 268435456 # 256 MB of fetched chat media kept between runs
+
+avatars:
+  disk_cache_size: 16777216 # 16 MB of people's pictures, budgeted separately
 
 # keybindings: see "Customizing keybindings" below
 ```
@@ -443,6 +447,13 @@ automatically on first run - nothing is lost and you stay logged in.
 > (mirrors the desktop clients' fixed media size). The height is additionally
 > bounded to 2/3 of the chat pane so a tall photo never dominates the view.
 > Raise it for larger inline images, lower it for more compact ones.
+
+> **`avatars.disk_cache_size`** is a second budget, deliberately not part of
+> `photos.disk_cache_size`. An avatar is a few tens of kilobytes and is asked
+> for again every time you open that person's profile, while chat media is
+> unbounded and looked at once - sharing one budget would let a scrolling
+> session evict every face you have. Either key set to `0` means "keep nothing
+> between runs": that cache moves into a temp directory and is deleted on exit.
 
 ### Themes
 

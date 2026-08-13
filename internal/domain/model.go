@@ -87,6 +87,16 @@ type User struct {
 	IsContact       bool
 	IsMutualContact bool
 	IsDeleted       bool
+	// AvatarID names the person's current avatar, and is the whole of what makes
+	// a cached avatar stale: a person who changes their picture gets a new id,
+	// so nothing has to notice the change for the old file to stop being asked
+	// for. Zero means there is no avatar to fetch — a person who set none and a
+	// person whose privacy settings withhold it are the same answer here, and
+	// both are drawn as a monogram (#223).
+	//
+	// Only ever set from the full response, like Bio: the dialog list carries no
+	// avatar.
+	AvatarID int64
 }
 
 // DisplayName is the name to draw for a user: First + Last, falling back to the

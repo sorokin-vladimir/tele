@@ -11,6 +11,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- The profile overlay shows the person's avatar, fetched and cached apart from
+  chat media under its own budget (`avatars.disk_cache_size`, default 16 MB) so
+  a scrolling session cannot evict the faces of the people you talk to. A
+  changed picture is picked up because the cache key carries the avatar's id,
+  with nothing to subscribe to and nothing to expire. Where the terminal cannot
+  draw an image - and for a person with no avatar, or one their privacy settings
+  withhold - the overlay shows a monogram in the same colour that person's name
+  is drawn in elsewhere, in exactly the space a picture would occupy (#223).
+
 ## [1.11.0] - 2026-08-13
 
 ### Added

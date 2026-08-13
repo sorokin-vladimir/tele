@@ -88,6 +88,8 @@ func (m *RootModel) reconcileKittyCmd() tea.Cmd {
 		return nil
 	}
 
+	var cmds []tea.Cmd
+
 	var pre tea.Cmd
 	if m.kittyResetPending {
 		m.kittyResetPending = false
@@ -104,6 +106,13 @@ func (m *RootModel) reconcileKittyCmd() tea.Cmd {
 		m.kittyStore.Clear()
 		m.kittyLive = make(map[int64]bool)
 		m.kittyLRU = nil
+		// Clear() drops every readiness flag, the profile overlay's included.
+		// Its placement is not in the live set, so it was not deleted above and
+		// is still on the terminal — but the overlay would stop drawing it and
+		// fall back to a monogram mid-resize. Re-transmit instead (#223).
+		if m.profile != nil && m.profile.Avatar() != nil {
+			cmds = append(cmds, m.transmitAvatarCmd(m.profile.Avatar()))
+		}
 	}
 
 	visible := m.chat.VisiblePhotoIDs()
@@ -112,7 +121,6 @@ func (m *RootModel) reconcileKittyCmd() tea.Cmd {
 		visSet[id] = true
 	}
 
-	var cmds []tea.Cmd
 	for _, id := range visible {
 		if m.kittyLive[id] {
 			m.kittyLRU = touchID(m.kittyLRU, id)

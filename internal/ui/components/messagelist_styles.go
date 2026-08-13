@@ -1,6 +1,7 @@
 package components
 
 import (
+	"image/color"
 	"strconv"
 	"strings"
 
@@ -9,16 +10,29 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
+// senderPaletteColor is the colour this person is drawn in, picked from
+// sender_palette by id. It lives on its own so that everything answering "which
+// colour is this person" answers the same: a name in a chat and a monogram in
+// the profile overlay must not disagree about someone (#223). Reports false
+// when the theme sets no palette, which is a legal theme.
+func senderPaletteColor(userID int64) (color.Color, bool) {
 	pal := theme.T().SenderPalette
 	if len(pal) == 0 {
-		return theme.S().BodyBold
+		return nil, false
 	}
-	idx := senderID % int64(len(pal))
+	idx := userID % int64(len(pal))
 	if idx < 0 {
 		idx = -idx
 	}
-	return theme.NewStyle().Foreground(pal[idx]).Bold(true)
+	return pal[idx], true
+}
+
+func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
+	c, ok := senderPaletteColor(senderID)
+	if !ok {
+		return theme.S().BodyBold
+	}
+	return theme.NewStyle().Foreground(c).Bold(true)
 }
 
 func buildReactStr(reactions []domain.Reaction) string {

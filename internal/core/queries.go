@@ -71,6 +71,28 @@ func (o *Owner) GetUser(ctx context.Context, userID int64) (domain.User, error) 
 	return user, nil
 }
 
+// FetchAvatar downloads the person's avatar into the owner's cache if it is not
+// there already, and returns the path. Like FetchMedia, the client decodes the
+// file and the bytes never cross the owner boundary (#196).
+//
+// avatarID is the id the client was handed in domain.User. Passing it back is
+// what keeps a changed picture from being served forever: a new avatar is a new
+// id and therefore a different cache entry. Addressing stays here — the client
+// holds no access hash for someone met in a group (ADR 0006).
+func (o *Owner) FetchAvatar(ctx context.Context, userID, avatarID int64) (string, error) {
+	addr, err := o.userAddress(userID)
+	if err != nil {
+		return "", err
+	}
+	return o.avatars.Fetch(ctx, addr, avatarID)
+}
+
+// InvalidateAvatar drops a cached avatar a client could not decode, so the next
+// fetch downloads it again rather than handing back the same broken entry.
+func (o *Owner) InvalidateAvatar(userID, avatarID int64) {
+	o.avatars.Invalidate(userID, avatarID)
+}
+
 // userAddress works out how a user can be named to Telegram: by the access hash
 // of their dialog when one exists, and otherwise through a message they wrote,
 // which is the only address left for someone met in a group.

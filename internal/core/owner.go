@@ -72,6 +72,13 @@ type Owner struct {
 	// only holder of file references (#196).
 	media *mediaFetcher
 
+	// avatars downloads people's pictures and owns a cache of its own. Separate
+	// from media because the two agree on nothing but their shape: an avatar is
+	// small, long-lived, fetched over and over for the same handful of people,
+	// and must not compete for a budget sized for scrolled-past video
+	// thumbnails (#223, ADR 0007).
+	avatars *avatarFetcher
+
 	// outbox is the durable send queue. Sends are handed to it and drained by
 	// one worker; nothing about a send lives in a client's memory (#193).
 	outbox *outbox.Store
@@ -112,6 +119,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 	// send queue too, and the queue arrives later through SetOutbox (#193).
 	o.registry = project.NewRegistry(projectionReader{Store: st.Store(), owner: o})
 	o.media = newMediaFetcher(client, st, log)
+	o.avatars = newAvatarFetcher(client, log)
 	if client != nil {
 		o.events = client.Updates()
 	}
@@ -150,6 +158,11 @@ func (o *Owner) SetOutbox(s *outbox.Store) { o.outbox = s }
 // Start. The cache is account-scoped and process-owned: two processes evicting
 // independently in one directory would fight (#196).
 func (o *Owner) SetMediaCache(c *mediacache.Cache) { o.media.cache = c }
+
+// SetAvatarCache gives the owner the directory it caches avatars in. Call
+// before Start. It is a second cache with a second bound rather than a second
+// directory sharing one: see ADR 0007.
+func (o *Owner) SetAvatarCache(c *mediacache.Cache) { o.avatars.cache = c }
 
 // FetchMedia downloads the named media into the owner's cache if it is not
 // there already, and returns the path. The client decodes the file; the bytes

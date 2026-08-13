@@ -97,6 +97,10 @@ type RootModel struct {
 	// The on-disk media cache belongs to the owner (#196).
 	imageCache     *imagecache.Cache
 	fullImageCache *imagecache.Cache
+	// avatars remembers people's pictures between openings of the profile
+	// overlay. Kept apart from imageCache on purpose: a scrolled chat must not
+	// evict the faces of the people you talk to (#223).
+	avatars *avatarStore
 	// gifFrames caches decoded frames per document id for inline GIF looping.
 	gifFrames      map[int64][]image.Image
 	gifActiveID    int64 // document id currently animating (0 = none)
@@ -192,6 +196,7 @@ func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
 		verbose:        verbose,
 		imageCache:     imagecache.New(thumbCacheCap),
 		fullImageCache: imagecache.New(fullCacheCap),
+		avatars:        newAvatarStore(),
 		gifFrames:      make(map[int64][]image.Image),
 		mentionMembers: make(map[int64][]domain.ChatMember),
 		kittyStore:     media.NewKittyStore(),
@@ -485,7 +490,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.ProfileOpenChatRequest,
 		components.ProfileMuteRequest,
 		components.ProfileCopyUsernameRequest,
-		profileLoadedMsg:
+		profileLoadedMsg,
+		avatarReadyMsg:
 		next, cmd, _ := m.handleProfileRequest(msg)
 		return next, cmd
 	case components.CopyMsgRequest:

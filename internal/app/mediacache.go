@@ -17,6 +17,10 @@ import (
 // they land in the run's temp directory and go away with it.
 const tmpCacheBytes = 64 << 20
 
+// tmpAvatarCacheBytes is the same idea for avatars, and much smaller: a run
+// that keeps nothing between sessions still holds every face it drew.
+const tmpAvatarCacheBytes = 8 << 20
+
 // accountSegment is the per-account directory name inside the shared cache
 // directory: the first 12 hex digits of the SHA-256 of the state directory.
 // Stable across runs, filename-safe, and it names nothing about the account.
@@ -32,6 +36,17 @@ func mediaCacheDir(stateDir string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(base, "tele", accountSegment(stateDir), "media"), nil
+}
+
+// avatarCacheDir is where this account's avatar cache lives: a sibling of the
+// media directory, never inside it, so the two bounds are enforced over
+// disjoint sets of files (#223).
+func avatarCacheDir(stateDir string) (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "tele", accountSegment(stateDir), "avatars"), nil
 }
 
 // removeLegacyMediaCache deletes the pre-#196 cache directory, which was shared
@@ -61,4 +76,19 @@ func openMediaCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*mediac
 		return mediacache.New(filepath.Join(tmpDir, "media"), tmpCacheBytes)
 	}
 	return mediacache.New(dir, cfg.Photos.DiskCacheSize)
+}
+
+// openAvatarCache builds the account's avatar cache, following openMediaCache's
+// rules with its own budget: avatars.disk_cache_size == 0 means "keep nothing
+// between runs".
+func openAvatarCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*mediacache.Cache, error) {
+	if cfg.Avatars.DiskCacheSize <= 0 {
+		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)
+	}
+	dir, err := avatarCacheDir(cfg.StateDir)
+	if err != nil {
+		log.Warn("no user cache directory; caching avatars in the temp directory instead", zap.Error(err))
+		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)
+	}
+	return mediacache.New(dir, cfg.Avatars.DiskCacheSize)
 }

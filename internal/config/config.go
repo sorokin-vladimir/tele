@@ -69,10 +69,25 @@ type PhotosConfig struct {
 	DiskCacheSize int64 `mapstructure:"disk_cache_size"`
 }
 
+// AvatarsConfig controls people's pictures. It is separate from PhotosConfig
+// because an avatar and a photo in a chat share nothing but being an image: an
+// avatar is small, belongs to a person, and is fetched over and over for the
+// same handful of people, so it gets its own budget rather than competing with
+// scrolled-past video thumbnails (#223, ADR 0007).
+type AvatarsConfig struct {
+	// DiskCacheSize bounds the on-disk avatar cache in bytes. A small avatar is
+	// some tens of kilobytes, so the default holds far more people than a chat
+	// list ever shows. 0 means keep nothing between runs, exactly as in
+	// PhotosConfig: the cache moves into the process's temp directory under a
+	// fixed bound and is deleted on exit.
+	DiskCacheSize int64 `mapstructure:"disk_cache_size"`
+}
+
 type Config struct {
 	Telegram    TelegramConfig            `mapstructure:"telegram"`
 	UI          UIConfig                  `mapstructure:"ui"`
 	Photos      PhotosConfig              `mapstructure:"photos"`
+	Avatars     AvatarsConfig             `mapstructure:"avatars"`
 	Keybindings map[string]map[string]any `mapstructure:"keybindings"`
 
 	// StateDir holds one account's state: the session, the SQLite database and

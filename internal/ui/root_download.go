@@ -66,6 +66,30 @@ func fetchStickerCmd(ctx context.Context, o Owner, chatID int64, msgID int, docI
 	return fetchInlineImageCmd(ctx, o, chatID, msgID, domain.DocFull, docID, "sticker download", nil)
 }
 
+// fetchAvatarCmd fetches, decodes and hands over a person's avatar. It is a
+// separate path from the inline-image one and shares nothing with it but the
+// decode: an avatar is named by a person rather than by a message slot, and it
+// is cropped to a circle because that is what an avatar looks like everywhere
+// else in Telegram (#223).
+//
+// A failure leaves the monogram on screen and says nothing: the person opened a
+// profile to read a name and a bio, and a line about a picture that did not
+// arrive is noise. The background status carries it for anyone looking.
+func fetchAvatarCmd(ctx context.Context, o Owner, userID, avatarID int64) tea.Cmd {
+	return func() tea.Msg {
+		path, err := o.FetchAvatar(ctx, userID, avatarID)
+		if err != nil {
+			return errStatusBackground("avatar download", err)
+		}
+		img, derr := decodeImageFile(path)
+		if derr != nil {
+			o.InvalidateAvatar(userID, avatarID)
+			return nil
+		}
+		return avatarReadyMsg{userID: userID, avatarID: avatarID, img: media.CircleCrop(img)}
+	}
+}
+
 // fetchVoiceCmd fetches a voice note and hands its bytes to the player. Voice
 // notes are a few tens of kilobytes, so reading the whole file is fine.
 func fetchVoiceCmd(ctx context.Context, o Owner, chatID int64, msgID int, docID int64) tea.Cmd {

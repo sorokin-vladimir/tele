@@ -38,6 +38,40 @@ func (c *GotdClient) DownloadPhotoToFile(ctx context.Context, ref domain.PhotoRe
 	return nil
 }
 
+// DownloadUserAvatarToFile streams a person's avatar into dst at the small
+// size, which is the one an avatar is rendered at: a handful of cells wide.
+//
+// Unlike every other download here it carries no file reference. An avatar is
+// addressed by peer and photo id, both of which stay valid, so none of the
+// expiry-and-refresh machinery around message media applies (#223).
+func (c *GotdClient) DownloadUserAvatarToFile(ctx context.Context, addr UserAddress, avatarID int64, dst io.Writer) error {
+	if avatarID == 0 {
+		return &telerr.Error{Kind: telerr.NotFound, Op: "download avatar", Detail: "user has no avatar"}
+	}
+	api, err := c.acquireAPI()
+	if err != nil {
+		return err
+	}
+	peer, err := addr.inputPeer()
+	if err != nil {
+		return err
+	}
+
+	loc := &gotdtg.InputPeerPhotoFileLocation{
+		Peer:    peer,
+		PhotoID: avatarID,
+		// Big is deliberately left false: the big size is 640px for a picture
+		// that is drawn at roughly 80, and the small one is the whole point of
+		// keeping avatars apart from chat media.
+	}
+
+	d := downloader.NewDownloader()
+	if _, err := d.Download(api, loc).Stream(ctx, dst); err != nil {
+		return fmt.Errorf("download avatar %d of user %d: %w", avatarID, addr.UserID, err)
+	}
+	return nil
+}
+
 // DownloadDocumentToFile streams the full document into dst without buffering
 // the whole file in memory, so it stays bounded regardless of file size.
 func (c *GotdClient) DownloadDocumentToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error {

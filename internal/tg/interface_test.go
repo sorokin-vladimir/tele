@@ -99,6 +99,10 @@ func (m *mockClient) DownloadDocumentToFile(_ context.Context, _ domain.Document
 	return nil
 }
 
+func (m *mockClient) DownloadUserAvatarToFile(_ context.Context, _ internaltg.UserAddress, _ int64, _ io.Writer) error {
+	return nil
+}
+
 func (m *mockClient) DownloadDocumentThumbToFile(_ context.Context, _ domain.DocumentRef, _ io.Writer) error {
 	return nil
 }

@@ -29,6 +29,9 @@ ui:
 photos:
   eager_full_quality: true  # download full resolution in background on chat open
 
+avatars:
+  disk_cache_size: 16777216  # 16 MB; people's pictures, budgeted apart from chat media
+
 keybindings:
   chatlist:
     open: enter

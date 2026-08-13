@@ -145,6 +145,11 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 	} else {
 		owner.SetMediaCache(cache)
 	}
+	if cache, cerr := openAvatarCache(cfg, tmpDir, log); cerr != nil {
+		log.Warn("avatar cache unavailable; avatars will not be shown", zap.Error(cerr))
+	} else {
+		owner.SetAvatarCache(cache)
+	}
 
 	a := &App{
 		cfg:     cfg,

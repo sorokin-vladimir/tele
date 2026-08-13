@@ -1,7 +1,8 @@
 // Package media provides MIME detection and MIME-based classification helpers
-// shared by the outbound (upload) and, later, the download/open paths. It depends
-// only on the standard library and domain.MediaKind so both directions agree on how
-// MIME strings are normalized and mapped.
+// shared by the outbound (upload) and, later, the download/open paths. Beyond
+// domain.MediaKind it depends on the standard library and on the mimetype table
+// alone, so both directions agree on how MIME strings are normalized, mapped to
+// a kind and named with an extension.
 package media
 
 import (

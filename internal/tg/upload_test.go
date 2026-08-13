@@ -2,6 +2,8 @@ package tg
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -41,4 +43,29 @@ func TestProgressAdapter_ConcurrentChunksSerialized(t *testing.T) {
 	}
 	wg.Wait()
 	assert.Equal(t, int64(100), atomic.LoadInt64(&calls))
+}
+
+// statFile is the FileInfo the uploader would see for a file on disk, which is
+// where the fallback name comes from.
+func statFile(t *testing.T, name string) os.FileInfo {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	return info
+}
+
+func TestUploadFileName_UsesTheNameTheCallerAsked(t *testing.T) {
+	info := statFile(t, "0f3a9c")
+
+	assert.Equal(t, "0f3a9c.jpg", uploadFileName(UploadParams{Name: "0f3a9c.jpg"}, info))
+}
+
+// No name asked for is the old behaviour, and it is what the thumbnail upload
+// relies on: gotd named the file from the path, and so do we.
+func TestUploadFileName_FallsBackToTheNameOnDisk(t *testing.T) {
+	info := statFile(t, "frame.jpg")
+
+	assert.Equal(t, "frame.jpg", uploadFileName(UploadParams{}, info))
 }

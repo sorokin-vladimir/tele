@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/gotd/td/tg"
 
@@ -33,7 +34,11 @@ func (o *Owner) uploadPart(ctx context.Context, part domain.OutboxMediaPart, onP
 		kind = media.DefaultMediaType(mime)
 	}
 
-	f, err := o.client.UploadFile(ctx, internaltg.UploadParams{Path: part.Path, OnProgress: onProgress})
+	f, err := o.client.UploadFile(ctx, internaltg.UploadParams{
+		Path:       part.Path,
+		Name:       uploadName(part.Name, mime),
+		OnProgress: onProgress,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +51,31 @@ func (o *Owner) uploadPart(ctx context.Context, part domain.OutboxMediaPart, onP
 	default:
 		return internaltg.BuildInputMediaUploadedDocument(f, part.Name, mime), nil
 	}
+}
+
+// uploadName is the name the file is announced to Telegram under, which is not
+// the name it arrives under. Telegram validates the type against this name and
+// refuses a photo whose name carries no extension - a JPEG saved by a browser,
+// say - even though the bytes were never in question. Where the type was
+// detected and the name says nothing, the extension for that type is appended
+// (#230).
+//
+// The divergence from name is deliberate. name is what the person picked and
+// what the recipient sees, and rewriting it would rename their file on the
+// other end without being asked; this one is protocol detail whose only job is
+// letting Telegram identify what it was sent.
+//
+// A name that already carries an extension is believed, wrong or not: catching
+// a .png that is really a JPEG would mean sniffing every file instead of
+// trusting the name, for a case not observed and one Telegram re-encodes photos
+// past anyway. A type that was not recognized leaves nothing to append, and the
+// send goes as it would have.
+func uploadName(name, mime string) string {
+	if filepath.Ext(name) != "" {
+		return name
+	}
+	ext, _ := media.ExtensionFor(mime)
+	return name + ext
 }
 
 // buildVideo probes the source for duration and dimensions and extracts a

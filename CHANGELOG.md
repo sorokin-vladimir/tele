@@ -40,6 +40,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- A photo whose file name carries no extension now sends. Anything saved by a
+  browser or a downloader can arrive as bare bytes with a bare name, and
+  Telegram reads a file's type off the name it is uploaded under, so it refused
+  a perfectly good JPEG that tele had already recognized as one. The name the
+  file goes up under now carries the extension for the type that was detected,
+  while the name you picked - the one the recipient sees - is left exactly as it
+  is. A name that already has an extension is believed, wrong or not, and a file
+  whose type could not be detected goes as it always did (#230).
 - A refused send no longer stops the chat it was sent to. Only the head of a
   chat's queue is ever attempted, which is what keeps a conversation in order,
   and a failed send used to hold that position - so one photo Telegram would not

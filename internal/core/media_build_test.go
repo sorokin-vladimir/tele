@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gotd/td/tg"
@@ -100,6 +102,77 @@ func TestUploadPart_AFailedUploadIsReturned(t *testing.T) {
 	_, err := o.uploadPart(context.Background(), part, nil)
 
 	require.ErrorIs(t, err, errRefused)
+}
+
+// The reported case (#224, #230): a JPEG saved by a browser with no extension
+// in its name. The bytes are a photo, detection says so, and the send used to
+// go up under the bare name and come back PHOTO_EXT_INVALID.
+func TestUploadPart_AnExtensionlessImageGoesUpUnderARepairedName(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+	part := domain.OutboxMediaPart{Path: writeJPEG(t, "0f3a9c"), Name: "0f3a9c"}
+
+	got, err := o.uploadPart(context.Background(), part, nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &tg.InputMediaUploadedPhoto{}, got, "the bytes are a photo and it is sent as one")
+	assert.Equal(t, []string{"0f3a9c.jpg"}, c.uploadNames())
+	assert.Equal(t, "0f3a9c", part.Name, "the name the person picked is not ours to rewrite")
+}
+
+// The upload name is protocol detail. What the recipient sees is part.Name, and
+// the repair must not reach it.
+func TestUploadPart_TheRecipientKeepsTheNameWithoutTheExtension(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+	part := domain.OutboxMediaPart{
+		Path: writeJPEG(t, "0f3a9c"), Name: "0f3a9c", SendAs: domain.MediaFile,
+	}
+
+	got, err := o.uploadPart(context.Background(), part, nil)
+
+	require.NoError(t, err)
+	doc, ok := got.(*tg.InputMediaUploadedDocument)
+	require.True(t, ok, "got %T", got)
+	assert.Equal(t, "0f3a9c", documentFileName(t, doc))
+	assert.Equal(t, []string{"0f3a9c.jpg"}, c.uploadNames())
+}
+
+// A name that says something is believed. Sniffing every file to catch a
+// mislabelled one would change the whole send path for a case nobody has hit,
+// and Telegram re-encodes photos past it anyway.
+func TestUploadPart_AWrongExtensionIsLeftAlone(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+	part := domain.OutboxMediaPart{Path: writeJPEG(t, "a.png"), Name: "a.png"}
+
+	_, err := o.uploadPart(context.Background(), part, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a.png"}, c.uploadNames())
+}
+
+// Nothing detected means nothing to derive an extension from. The name goes as
+// it is, the file goes as a document, and a refusal is the net (#224).
+func TestUploadPart_AnUndetectableTypeKeepsItsName(t *testing.T) {
+	c := &stubClient{}
+	o, _ := newCmdOwner(t, c)
+	part := domain.OutboxMediaPart{Path: writeFile(t, "blob", 4), Name: "blob"}
+
+	got, err := o.uploadPart(context.Background(), part, nil)
+
+	require.NoError(t, err)
+	assert.IsType(t, &tg.InputMediaUploadedDocument{}, got)
+	assert.Equal(t, []string{"blob"}, c.uploadNames())
+}
+
+// writeJPEG writes a file whose first bytes are a JPEG's, so detection has
+// something real to read when the name tells it nothing.
+func writeJPEG(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}, 0o600))
+	return path
 }
 
 // documentFileName digs the file name out of a document's attributes, which is

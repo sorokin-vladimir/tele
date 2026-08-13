@@ -54,6 +54,7 @@ type stubClient struct {
 	// Media send bookkeeping (#195), under the same lock and for the same
 	// reason: the outbox worker calls these from its own goroutine.
 	uploadedPaths  []string
+	uploadedNames  []string
 	uploadMediaN   int
 	albumItems     int
 	albumRandomIDs []int64
@@ -104,6 +105,7 @@ func (s *stubClient) ReadMentions(_ context.Context, _ domain.Peer) error { retu
 func (s *stubClient) UploadFile(ctx context.Context, p internaltg.UploadParams) (tg.InputFileClass, error) {
 	s.sendMu.Lock()
 	s.uploadedPaths = append(s.uploadedPaths, p.Path)
+	s.uploadedNames = append(s.uploadedNames, p.Name)
 	block, err := s.uploadBlock, s.uploadErr
 	s.sendMu.Unlock()
 	if p.OnProgress != nil {
@@ -174,6 +176,14 @@ func (s *stubClient) uploads() []string {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 	return append([]string(nil), s.uploadedPaths...)
+}
+
+// uploadNames is the name each file was announced to Telegram under, which is
+// not always the name it was picked with (#230).
+func (s *stubClient) uploadNames() []string {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return append([]string(nil), s.uploadedNames...)
 }
 
 func (s *stubClient) uploadMediaCalls() int {

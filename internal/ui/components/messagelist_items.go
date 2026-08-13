@@ -100,11 +100,11 @@ func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 // outboxItems renders the send queue as list items. They always sit at the end,
 // so there is nothing to merge with the window.
 //
-// "At the end" no longer means "newest". A rejected send does not hold its chat,
+// "At the end" no longer means "newest". A failed send does not hold its chat,
 // so the sends composed after it go out and land in the window above it, while
-// it stays here waiting on a decision (ADR 0005). Below therefore reads as "not
-// in the conversation yet" rather than "most recent", which is the distinction
-// that matters to someone looking at it.
+// it stays here waiting on a decision (#224). Below therefore reads as "not in
+// the conversation yet" rather than "most recent", which is the distinction that
+// matters to someone looking at it.
 func (ml *MessageList) outboxItems() []listItem {
 	if len(ml.outbox) == 0 {
 		return nil

@@ -17,7 +17,13 @@ import (
 // which is why the question used to be asked only by a test, with black and
 // white written into it, about the built-ins and nothing else.
 //
-// Nothing here refuses anything. See docs/adr/0003-legibility-is-reported-not-enforced.md.
+// Nothing here refuses anything, and that is a decision rather than an
+// unfinished job. Contrast is computed from relative luminance and discards hue,
+// so it misjudges a saturated colour against a neutral one — see the comment on
+// minMark. Enforcing a threshold through a measure known to be blind to half the
+// reason something reads would refuse themes that are fine, and the author would
+// have no appeal. A warning can be tightened later; a refusal cannot be loosened
+// without having already broken files people wrote.
 
 // foregroundTokens are the tokens drawn straight onto the canvas, with nothing
 // painted behind them. Only these can be judged against it: a token that sits on

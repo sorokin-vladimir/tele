@@ -210,8 +210,15 @@ theme mine: 15 tokens and 7 sender_palette entries are unreadable on its canvas;
 None of this refuses anything. The theme loads and renders exactly as you wrote
 it - the floor is a guide, not a rule, and it is set at 3.0:1 rather than the
 4.5:1 meant for body text precisely so that tokens intended to be quiet may stay
-quiet. If you disagree with a finding, ignore it. See
-[ADR 0003](adr/0003-legibility-is-reported-not-enforced.md).
+quiet. If you disagree with a finding, ignore it.
+
+That is deliberate rather than unfinished. Contrast is computed from relative
+luminance and is blind to hue, so it misjudges a saturated colour against a
+neutral one - tele-dark's own accent measures 1.29:1 against the text it marks
+and reads perfectly well. Enforcing a chosen threshold through a measure known
+to be wrong in a specific way would refuse themes that are fine, with no appeal.
+A warning can be tightened later on evidence; a refusal cannot be loosened
+without having already broken files people wrote.
 
 Two things it does not check. A theme that leaves `background` unset gets no
 audit at all - the canvas is then your terminal's, and tele cannot see it; the

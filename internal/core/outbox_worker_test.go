@@ -126,7 +126,7 @@ func TestWorker_ARejectedEntryDoesNotParkItsChat(t *testing.T) {
 	})
 	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r2", ChatID: 1, Text: "typed after"}))
 
-	waitFor(t, "the send behind a rejected one never got its turn", func() bool {
+	waitFor(t, "the send behind a failed one never got its turn", func() bool {
 		e, ok := q.Get("r2")
 		return ok && e.State == domain.OutboxFailed
 	})

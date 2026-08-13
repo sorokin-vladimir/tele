@@ -201,14 +201,14 @@ func (s *Store) insert(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	return e, true, nil
 }
 
-// Requeue puts a rejected entry back at the end of its chat's queue: the row is
+// Requeue puts a failed entry back at the end of its chat's queue: the row is
 // rewritten, so it takes the next Seq rather than the one it held.
 //
-// That is the point rather than a side effect (ADR 0005). The sends that
-// overtook it while it sat rejected are already in the conversation ahead of it,
-// so restoring its old position would promise an order that exists nowhere but
-// this table — and would put it back at the head, where the next refusal would
-// stop the chat again.
+// That is the point rather than a side effect. The sends that overtook it while
+// it sat failed are already in the conversation ahead of it, so restoring its
+// old position would promise an order that exists nowhere but this table — and
+// would put it back at the head, where the next failure would stop the chat
+// again.
 //
 // Ref and RandomID survive untouched, so Telegram's deduplication is unaffected:
 // RandomID is derived from Ref, which is the entry's identity and does not

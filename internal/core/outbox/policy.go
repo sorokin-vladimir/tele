@@ -27,11 +27,18 @@ const maxBackoff = 5 * time.Minute
 // queue is ever eligible, so FIFO within a chat holds with no extra bookkeeping,
 // and a chat sitting in backoff delays nobody else.
 //
-// "Unresolved" is doing the work there, and it is what ADR 0005 decided. A
-// rejected entry is not a head: it will never be attempted again without a
-// person acting on it, so a position in the order it can never occupy is not an
-// order, it is a stop (#224). An entry waiting out a backoff is a head, because
-// it is going to happen and its place in the conversation is still its own.
+// "Unresolved" is doing the work there. A failed entry is not a head: it will
+// never be attempted again without a person acting on it, so a position in the
+// order it can never occupy is not an order, it is a stop (#224). That holds for
+// every failure and not only for a refusal — a send forbidden by the chat is as
+// immovable as one Telegram would not accept. An entry waiting out a backoff is
+// a head, because it is going to happen and its place in the conversation is
+// still its own.
+//
+// The alternative was to keep the ordering absolute and render the sends behind
+// a failed head as blocked rather than pending. It loses because it makes a
+// person do the work to recover something the queue could simply not break, and
+// because a failure nobody triages still leaves a chat that cannot be typed in.
 //
 // entries need not be sorted.
 func Next(entries []domain.OutboxEntry, now time.Time) (domain.OutboxEntry, bool) {
@@ -76,10 +83,10 @@ func EarliestDue(entries []domain.OutboxEntry, now time.Time) (time.Time, bool) 
 // chatHeads maps each chat to the lowest Seq it holds that is still going to
 // happen. Only a head is ever eligible, which is what keeps a chat in order.
 //
-// Rejected entries are skipped, so a chat whose oldest entry was refused is
-// headed by the next one instead. A chat holding nothing else has no entry in
-// the map at all, which is why the caller must not read a missing key as Seq 0 —
-// see eligible.
+// Failed entries are skipped, so a chat whose oldest entry failed is headed by
+// the next one instead. A chat holding nothing else has no entry in the map at
+// all, which is why the caller must not read a missing key as Seq 0 — see
+// eligible.
 func chatHeads(entries []domain.OutboxEntry) map[int64]int64 {
 	heads := make(map[int64]int64, len(entries))
 	for _, e := range entries {

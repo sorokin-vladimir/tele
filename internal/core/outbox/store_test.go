@@ -217,10 +217,10 @@ func TestNewStore_ResetsAnUploadingEntry(t *testing.T) {
 func TestRequeue_PutsTheEntryBehindWhatOvertookIt(t *testing.T) {
 	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
 	require.NoError(t, err)
-	rejected, _, err := s.Add(textEntry("a", 10, "the photo"))
+	failed, _, err := s.Add(textEntry("a", 10, "the photo"))
 	require.NoError(t, err)
-	rejected.State = domain.OutboxFailed
-	require.NoError(t, s.Update(rejected))
+	failed.State = domain.OutboxFailed
+	require.NoError(t, s.Update(failed))
 	overtook, _, err := s.Add(textEntry("b", 10, "typed after"))
 	require.NoError(t, err)
 

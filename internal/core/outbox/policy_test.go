@@ -60,7 +60,7 @@ func TestNext_KeepsFIFOWithinOneChat(t *testing.T) {
 // forever, because the head is the oldest entry whatever state it is in. Every
 // message typed afterwards sat queued behind a message that was never going to
 // move, and the only way out was deleting rows by hand.
-func TestNext_ARejectedSendDoesNotHoldItsChat(t *testing.T) {
+func TestNext_AFailedSendDoesNotHoldItsChat(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{
 		entry(1, 10, domain.OutboxFailed, time.Time{}),
@@ -90,7 +90,7 @@ func TestNext_ADeferredSendStillHoldsItsChat(t *testing.T) {
 	assert.Equal(t, int64(3), got.Seq, "a deferred head holds its chat, and nothing else")
 }
 
-func TestNext_ARejectedSendDoesNotHoldADifferentChatEither(t *testing.T) {
+func TestNext_AFailedSendDoesNotHoldADifferentChatEither(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{
 		entry(1, 10, domain.OutboxFailed, time.Time{}),
@@ -103,9 +103,9 @@ func TestNext_ARejectedSendDoesNotHoldADifferentChatEither(t *testing.T) {
 	assert.Equal(t, int64(2), got.Seq)
 }
 
-// A chat holding nothing but rejected sends has no head at all, which must read
+// A chat holding nothing but failed sends has no head at all, which must read
 // as "nothing to do" rather than accidentally matching the zero Seq.
-func TestNext_AChatOfOnlyRejectedSendsOffersNothing(t *testing.T) {
+func TestNext_AChatOfOnlyFailedSendsOffersNothing(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{
 		entry(1, 10, domain.OutboxFailed, time.Time{}),
@@ -117,7 +117,7 @@ func TestNext_AChatOfOnlyRejectedSendsOffersNothing(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestEarliestDue_LooksPastARejectedSend(t *testing.T) {
+func TestEarliestDue_LooksPastAFailedSend(t *testing.T) {
 	now := time.Unix(1000, 0)
 	entries := []domain.OutboxEntry{
 		entry(1, 10, domain.OutboxFailed, time.Time{}),
@@ -126,7 +126,7 @@ func TestEarliestDue_LooksPastARejectedSend(t *testing.T) {
 
 	at, ok := EarliestDue(entries, now)
 
-	require.True(t, ok, "the send behind a rejected one is the head now, and it is waiting on a clock")
+	require.True(t, ok, "the send behind a failed one is the head now, and it is waiting on a clock")
 	assert.Equal(t, now.Add(time.Minute), at)
 }
 

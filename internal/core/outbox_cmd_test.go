@@ -93,9 +93,9 @@ func TestRetryOutbox_RequeuesAndClearsTheFailure(t *testing.T) {
 	assert.True(t, got.NextAttemptAt.IsZero())
 }
 
-// A rejected send does not hold its chat, so by the time a person retries it the
+// A failed send does not hold its chat, so by the time a person retries it the
 // sends composed after it are already in the conversation. It rejoins behind
-// them rather than claiming a position that no longer exists (ADR 0005).
+// them rather than claiming a position that no longer exists (#224).
 func TestRetryOutbox_RejoinsBehindTheSendsThatOvertookIt(t *testing.T) {
 	o, _ := newCmdOwner(t, &stubClient{})
 	q := newOutboxStore(t)

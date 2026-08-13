@@ -76,10 +76,10 @@ func (o *Owner) Send(ctx context.Context, req SendRequest) error {
 // asking again is a new decision, not a continuation of the backoff curve.
 //
 // It goes to the back of its chat's queue rather than to the place it held. A
-// rejected entry does not hold its chat, so the sends composed after it have
+// failed entry does not hold its chat, so the sends composed after it have
 // already gone; putting it back where it was would claim an order that is no
-// longer true of the conversation, and would restore the block (ADR 0005). Its
-// ref and random_id are untouched, so this cannot produce a second message.
+// longer true of the conversation, and would restore the block (#224). Its ref
+// and random_id are untouched, so this cannot produce a second message.
 func (o *Owner) RetryOutbox(ref string) error {
 	if o.outbox == nil {
 		return &telerr.Error{Kind: telerr.Internal, Op: "outbox.retry", Detail: "no outbox configured"}

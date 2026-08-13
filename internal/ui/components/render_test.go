@@ -211,3 +211,39 @@ func TestRenderSelfMentionByUsername(t *testing.T) {
 		t.Fatal("self mention (by username) must render differently")
 	}
 }
+
+// A styled run that spans a newline used to be handed to lipgloss whole, and
+// Render block-aligns a multi-line string: every line is padded out to the
+// width of the widest one. The padding is real columns in the middle of the
+// text, so the span lands far right of the word before it and the wrap breaks
+// where the source never would (#232).
+func TestRenderEntities_MultiParagraph_AddsNoPadding(t *testing.T) {
+	text := "line one is quite long here\n\n🔻 нашла две уязвимости\nend"
+	// bold on "две уязвимости"
+	entities := []domain.MessageEntity{{Type: "bold", Offset: 38, Length: 14}}
+
+	out := components.RenderEntities(text, entities)
+
+	assert.Equal(t, text, stripANSI(out))
+}
+
+// The same guard over every entity type, since the padding came from the
+// styling and not from any one attribute.
+func TestRenderEntities_StrippedOutputIsTheInput(t *testing.T) {
+	text := "first paragraph\n\nsecond has a span\nand a third line"
+	for _, typ := range []string{
+		"bold", "italic", "code", "pre", "underline", "strike",
+		"text_url", "url", "mention", "hashtag",
+	} {
+		t.Run(typ, func(t *testing.T) {
+			// "a span" in the second paragraph.
+			entities := []domain.MessageEntity{
+				{Type: typ, Offset: 28, Length: 6, URL: "https://example.com"},
+			}
+
+			out := components.RenderEntities(text, entities)
+
+			assert.Equal(t, text, stripANSI(out))
+		})
+	}
+}

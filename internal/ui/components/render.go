@@ -157,14 +157,14 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		segment := string(runes[lo:hi])
 		switch {
 		case self:
-			segment = theme.S().SelfMention.Render(segment)
+			segment = renderPerLine(theme.S().SelfMention, segment)
 		case styled:
-			segment = style.Render(segment)
+			segment = renderPerLine(style, segment)
 		default:
 			// Plain message text. Rendered through the body style rather than
 			// emitted raw, so a theme that sets Text owns it; with Text unset
 			// this is byte-for-byte the raw segment.
-			segment = theme.S().Body.Render(segment)
+			segment = renderPerLine(theme.S().Body, segment)
 		}
 		if linkURL != "" {
 			segment = osc8(linkID, linkURL, segment)
@@ -172,6 +172,35 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		b.WriteString(segment)
 	}
 	return b.String()
+}
+
+// renderPerLine styles s one line at a time, because lipgloss.Style.Render
+// block-aligns a multi-line string: it pads every line out to the width of the
+// widest line in the block.
+//
+// A run here spans whatever lies between two entity boundaries, so every plain
+// run between two entities carries the paragraph breaks that sit between them.
+// Handing that to Render put real columns inside the message: the styled span
+// landed far to the right of the word before it, the wrapper broke lines where
+// the source never would, and the trailing spaces sat inside an SGR run where
+// the render path's TrimRight could not reach them. Styling line by line keeps
+// the run-by-run styling and removes the alignment entirely (#232).
+//
+// An empty line is left empty rather than styled: there is no cell to paint,
+// and the row it becomes is filled by the bubble renderer, which carries the
+// canvas itself.
+func renderPerLine(style lipgloss.Style, s string) string {
+	if !strings.Contains(s, "\n") {
+		return style.Render(s)
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if line == "" {
+			continue
+		}
+		lines[i] = style.Render(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // normalizeLinkTarget turns the visible text of a plain url/email entity into an

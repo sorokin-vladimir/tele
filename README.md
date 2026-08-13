@@ -22,6 +22,7 @@
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
   <a href="#why-tele">Why tele?</a> •
+  <a href="#compared-to-other-terminal-clients">vs other TUI clients</a> •
   <a href="#keybindings">Keybindings</a> •
   <a href="#roadmap">Roadmap</a>
 </p>
@@ -70,6 +71,46 @@ It also runs lean - typically ~50MB RSS at idle vs several hundred MB for deskto
 > messages or round videos (кружки) - and real-time voice/video calls - fall
 > outside that design and are not planned. You can still **send** an
 > already-recorded audio or video file from disk (see [attaching media](#keybindings)).
+
+---
+
+## Compared to other terminal clients
+
+Nearly every terminal Telegram client is built on TDLib, Telegram's C++ library -
+either linked directly or through a Python runtime. `tele` speaks MTProto itself
+via [gotd/td](https://github.com/gotd/td) and builds without cgo, so there is no
+C++ library to download or compile, no interpreter to keep on your machine, and
+no chain of optional helper programs to install before the app is fully usable.
+
+|                    | `tele`                                                                       | [tgt](https://github.com/FedericoBruzzone/tgt)                                                                    | [tg](https://github.com/paul-nameless/tg) · [tuigram](https://codeberg.org/Yehoslav/tuigram)                                          |
+| ------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Language           | Go                                                                           | Rust                                                                                                              | Python                                                                                                                               |
+| Telegram backend   | gotd/td - MTProto in pure Go                                                 | TDLib                                                                                                             | TDLib via `python-telegram`                                                                                                          |
+| What you install   | one static binary                                                            | `cargo install` plus TDLib downloaded or built; CMake to get voice notes; a system `chafa` to get inline images    | a Python 3.9+/3.10+ runtime plus TDLib; `ffmpeg`, `terminal-notifier`, `urlview`, `ranger`/`fzf` for the full feature set             |
+| Packaging          | brew, apt, dnf, zypper, apk, AUR, snap, nix, scoop, winget, signed deb/rpm    | crates.io, AUR, nix, Docker                                                                                       | PyPI, AUR, Docker                                                                                                                    |
+| Inline photos      | Kitty graphics protocol at full quality, ANSI block-art fallback              | `chafa` block art, behind an optional build feature                                                               | handed to an external viewer via mailcap                                                                                             |
+| Windows            | binary, Scoop, winget                                                        | supported                                                                                                         | not practical                                                                                                                        |
+| Release cadence    | weekly stable releases plus a separate beta channel                          | latest release is `v1.0.0-rc1`; most recent commits are dependency bumps                                          | `tg` ships in bursts months apart; `tuigram` is a fork of a fork                                                                      |
+
+Beyond packaging, `tele` covers parts of modern Telegram that none of the three
+list as supported: **reactions**, **chat folders**, **grouped album sending**,
+and inline previews for **video, round notes (кружки) and GIFs**. Voice notes
+play **inside** the app with a waveform and a moving playhead - no external
+player, and no CMake step to build an Opus decoder. Chats open instantly from a
+local SQLite history, themes come as eight built-in palettes that switch between
+a dark and a light one as your terminal background changes (with
+`--theme-check` to validate contrast), and every key is rebindable per context,
+chords included.
+
+Where they are ahead, honestly: `tg` and `tuigram` can **record** voice messages
+(via `ffmpeg`) and support **secret chats** - the first is out of scope for
+`tele` (see the footnote above), the second is on the
+[backlog](https://github.com/sorokin-vladimir/tele/issues/234). Full-text
+message search is also still ahead on the [roadmap](#roadmap).
+
+Fully abandoned projects are left out of the table: `TelegramTUI` (marked
+deprecated, last touched in 2022), `arigram` (archived), `tg-tui` (2018),
+`Telegram-TUI`, `tg9` and `ithil` (early prototypes).
 
 ---
 

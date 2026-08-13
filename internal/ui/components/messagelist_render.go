@@ -768,6 +768,12 @@ func (ml *MessageList) View() string {
 	// cursor is there (#193).
 	selectedRef := ml.SelectedOutboxRef()
 
+	// Whether the viewport sits where the scroll clamp calls the bottom. It
+	// decides both how a too-tall frame is trimmed and, below, whether the loop
+	// may stop early at all.
+	botIdx, botOff := ml.positionAtBottom()
+	atNaturalBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
+
 	var allLines []string
 	reachedEnd := true
 	selTopRaw, selHeight, selLeft, selWidth := 0, 0, 0, 0
@@ -807,7 +813,17 @@ func (ml *MessageList) View() string {
 		}
 
 		allLines = append(allLines, itemLines...)
-		if len(allLines) >= ml.viewHeight {
+		// Stopping as soon as the frame is full is what keeps this loop off the
+		// whole history - but only away from the bottom. At the bottom the frame
+		// has to reach the last item, because that is the item the trim below is
+		// asked to keep. Stopping short there left `reachedEnd` false while the
+		// clamp insisted the viewport was already at the bottom, and the trim
+		// resolved that contradiction by cutting the newest rows away: the last
+		// messages became unreachable, with every scroll key a no-op and nothing
+		// on screen to say there was more (#231). Rendering on costs the few
+		// items between here and the end, which is what positionAtBottom just
+		// walked to choose the start.
+		if len(allLines) >= ml.viewHeight && !atNaturalBottom {
 			reachedEnd = (i == len(ml.items)-1)
 			break
 		}
@@ -836,8 +852,6 @@ func (ml *MessageList) View() string {
 	// stays visible. When scrolling through history, trim from the bottom so the
 	// current scroll position is preserved.
 	if len(allLines) > ml.viewHeight {
-		botIdx, botOff := ml.positionAtBottom()
-		atNaturalBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 		if reachedEnd && atNaturalBottom {
 			cut := len(allLines) - ml.viewHeight
 			allLines = allLines[cut:]

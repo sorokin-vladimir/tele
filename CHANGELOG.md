@@ -40,6 +40,30 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- The newest messages in a chat can no longer become unreachable. In a chat
+  whose last screenful carried links or other formatting, the pane could stop at
+  an earlier message and refuse to go further: scrolling did nothing, nothing on
+  screen said there was more, and neither reopening the chat nor restarting
+  helped, because the arithmetic came out the same every time. Two things caused
+  it and both are fixed. The line count a message was budgeted was computed at a
+  different width than the one it was drawn at, so a bubble widened by a long
+  sender name, a row of reactions or a timestamp - or narrowed by a ragged wrap -
+  was measured as a bubble nobody draws. And when a frame ran out of room before
+  the last message while the scroll position insisted it was already at the
+  bottom, the rows dropped to fit were the newest ones; the frame now reaches the
+  last message and trims from the top instead. Both are held in place by tests
+  that compare every message's budgeted height against its drawn height across
+  terminal widths, and that sweep the newest message for reachability across
+  terminal sizes (#231).
+- Bold text, links and code in a message with more than one paragraph no longer
+  push the text around them. A formatted span was preceded by a long run of
+  spaces, landing far to the right of the word before it, and the rows carrying
+  one ended at the wrong column, so the bubble border came out ragged. The
+  styling was applied to whole stretches of text at a time, and a stretch
+  spanning a paragraph break was padded out to the width of its longest line
+  before anything wrapped it - real spaces in the middle of the message, which
+  then broke the lines in places the text itself never would. Formatting is now
+  applied a line at a time and adds nothing to the text (#232).
 - A photo whose file name carries no extension now sends. Anything saved by a
   browser or a downloader can arrive as bare bytes with a bare name, and
   Telegram reads a file's type off the name it is uploaded under, so it refused

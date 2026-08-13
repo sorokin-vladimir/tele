@@ -75,16 +75,6 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		}
 		return h
 	}
-	maxBubbleW := ml.viewWidth * 3 / 4
-	if maxBubbleW < 10 {
-		maxBubbleW = 10
-	}
-	// border(2)+padding(2) = 4 overhead
-	maxContentW := maxBubbleW - 4
-	if maxContentW < 4 {
-		maxContentW = 4
-	}
-
 	h := 0
 
 	if msg.Forward != nil {
@@ -134,7 +124,15 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 	}
 
 	if msg.Text != "" {
-		h += wrappedLineCount(msg.Text, msg.Entities, maxContentW)
+		// The width the renderer will actually wrap at, not the widest one it is
+		// allowed. A bubble is widened past its text by a long sender name, a row
+		// of reactions or the timestamp, and narrowed below the maximum whenever
+		// the text wraps ragged - so the body is laid out at measureBubble's
+		// actualW, and counting it at maxContentW here estimated a bubble nobody
+		// draws. Both directions are damaging: an over-count leaves the viewport
+		// anchored above content that is not there, an under-count puts the real
+		// bottom below where the scroll clamp will go (#231).
+		h += wrappedLineCount(msg.Text, msg.Entities, ml.measureBubble(msg).actualW)
 	}
 
 	if h == 0 {

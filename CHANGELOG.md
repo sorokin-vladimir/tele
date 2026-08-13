@@ -29,6 +29,29 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   being ignored the way one named after a built-in is. `tele-dark` and
   `tele-light` remain reserved: `base: tele-dark` has to mean the same colours on
   every machine (#217).
+- A send Telegram refused now says what was wrong with it, instead of reporting
+  an internal error and a protocol constant: "not a file Telegram accepts as a
+  photo", "message is too long", "image is too large or oddly shaped". The toast
+  raised the moment it happens and the status bar that reminds you when the
+  message is selected say the same phrase, and for a refusal the status bar now
+  points at discard rather than retry - sending the same content again gets the
+  same answer. The retry key still works; it is no longer what is recommended
+  (#224).
+
+### Fixed
+
+- A refused send no longer stops the chat it was sent to. Only the head of a
+  chat's queue is ever attempted, which is what keeps a conversation in order,
+  and a failed send used to hold that position - so one photo Telegram would not
+  take (a JPEG whose filename carried no usable extension, for instance) left
+  every message typed into that chat afterwards sitting in the queue
+  indefinitely, and getting past it meant finding and discarding the refused
+  message, or deleting rows from the local database by hand. A refusal is now
+  taken out of the ordering entirely: it will never be attempted again without
+  you, so it holds no place in the conversation. Messages composed after it go
+  out and land in the chat above it, while it stays below the window waiting on
+  your decision to retry or discard. A send waiting out a backoff still holds
+  its place, because it is still going to happen (#224).
 
 ## [1.10.1] - 2026-08-08
 

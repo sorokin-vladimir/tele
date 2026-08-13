@@ -60,6 +60,17 @@ func (ml *MessageList) SelectedMessageIsOut() bool {
 	return false
 }
 
+// SelectedMessageSenderID is who wrote the selected message, 0 when there is no
+// selection or the message names no sender. Outgoing messages report 0: the
+// author is the account itself, and a profile of yourself is not phase one
+// (#222).
+func (ml *MessageList) SelectedMessageSenderID() int64 {
+	if msg := ml.computeSelectedMsg(); msg != nil && !msg.IsOut {
+		return msg.SenderID
+	}
+	return 0
+}
+
 // SelectedMessageText returns the plain text of the selected message and whether
 // it carries any non-empty text. Media-only messages (no caption) report false.
 func (ml *MessageList) SelectedMessageText() (string, bool) {

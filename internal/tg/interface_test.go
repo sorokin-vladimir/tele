@@ -64,6 +64,10 @@ func (m *mockClient) GetParticipants(_ context.Context, _ domain.Peer) ([]domain
 	return nil, nil
 }
 
+func (m *mockClient) GetUser(_ context.Context, _ internaltg.UserAddress) (domain.User, error) {
+	return domain.User{}, nil
+}
+
 func (m *mockClient) UploadFile(_ context.Context, _ internaltg.UploadParams) (tg.InputFileClass, error) {
 	return &tg.InputFile{ID: 1, Parts: 1, Name: "a.jpg"}, nil
 }

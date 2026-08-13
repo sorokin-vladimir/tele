@@ -36,6 +36,10 @@ type Client interface {
 	SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error)
 	// GetParticipants returns mention candidates for a group/channel peer.
 	GetParticipants(ctx context.Context, peer domain.Peer) ([]domain.ChatMember, error)
+	// GetUser fetches a user's full profile. The address carries how the person
+	// is reachable — a stored access hash, or a message they wrote — because a
+	// user met only in a group has no hash anywhere on this account (#222).
+	GetUser(ctx context.Context, addr UserAddress) (domain.User, error)
 	// SendMedia sends a ready-made InputMediaClass via messages.sendMedia,
 	// returning the confirmed message ID. It is type-agnostic: the caller builds
 	// the InputMedia (photo/document/...); SendMedia knows nothing about MIME.

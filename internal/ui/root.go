@@ -122,6 +122,7 @@ type RootModel struct {
 	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
 	help              *components.HelpModal
+	profile           *components.Profile
 	openPicker        *components.OpenPicker
 	reactionTargetID  int
 	mentionPopup      *components.MentionPopup
@@ -327,6 +328,10 @@ func (m RootModel) ReactionPickerOpen() bool     { return m.reactionPicker != ni
 func (m RootModel) MentionPopupOpen() bool       { return m.mentionPopup != nil }
 func (m RootModel) OpenPickerOpen() bool         { return m.openPicker != nil }
 func (m RootModel) FilePickerOpen() bool         { return m.filePicker != nil }
+func (m RootModel) ProfileOpen() bool            { return m.profile != nil }
+
+// Profile is the open profile overlay, nil when none is. Tests read what it drew.
+func (m RootModel) Profile() *components.Profile { return m.profile }
 
 // SetLoginModel injects the login model after NewRootModel (called by app.go).
 func (m *RootModel) SetLoginModel(lm screens.LoginModel) {
@@ -470,6 +475,19 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusBar.SetStatus("Copied")
 		}
 		return m, nil
+	case usernameCopiedMsg:
+		if msg.ok {
+			m.statusBar.SetStatus("Copied " + msg.handle)
+		}
+		return m, nil
+	case components.OpenProfileRequest,
+		components.CloseProfileMsg,
+		components.ProfileOpenChatRequest,
+		components.ProfileMuteRequest,
+		components.ProfileCopyUsernameRequest,
+		profileLoadedMsg:
+		next, cmd, _ := m.handleProfileRequest(msg)
+		return next, cmd
 	case components.CopyMsgRequest:
 		if text, ok := m.chat.SelectedMessageText(); ok {
 			return m, copyToClipboardCmd(text)

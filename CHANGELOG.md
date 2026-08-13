@@ -13,6 +13,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- A profile overlay for a person: name, username, bio and phone, with open
+  chat, mute/unmute and copy username. `P` opens it on the author of the
+  selected message, on the person in a private chat, and on a private chat-list
+  row; both context menus grow a `Profile` entry. Opening the chat works for
+  someone you have never messaged, landing on an empty chat ready to take a
+  first message. Previously a name in tele led nowhere — every place that
+  already held a user id was a dead end (#222).
+
 - The eight ported palettes - Catppuccin Macchiato, Dracula, Gruvbox Dark, Nord,
   Tokyo Night (Night, Moon and Day) and Seoul256 Light - now ship inside the
   binary. `ui.theme: nord` works on a fresh install with no theme files at all,

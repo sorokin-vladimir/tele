@@ -52,6 +52,11 @@ const (
 	ActionDownloadFile    Action = "download_file"
 	ActionCopyMessage     Action = "copy_message"
 	ActionPasteImage      Action = "paste_image"
+	// Profile actions (#222). ActionShowProfile opens the overlay from wherever
+	// a user id is in hand; the rest are the overlay's own.
+	ActionShowProfile  Action = "show_profile"
+	ActionOpenChat     Action = "open_chat"
+	ActionCopyUsername Action = "copy_username"
 )
 
 type VimState struct {

@@ -21,6 +21,13 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help = newHelp
 		return m, nil
 	}
+	// The profile is exclusive too: it closed the menu it was opened from, and
+	// nothing draws over it but a toast.
+	if m.profile != nil {
+		newProfile, cmd := m.profile.Update(msg)
+		m.profile = newProfile
+		return m, cmd
+	}
 	if m.reactionPicker != nil {
 		newPicker, cmd := m.reactionPicker.Update(msg)
 		m.reactionPicker = newPicker
@@ -172,6 +179,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if res == keys.MatchPending {
 			return m, nil
 		}
+		if action == keys.ActionShowProfile {
+			return m.openProfile(m.profileTargetUserID())
+		}
 		if action == keys.ActionOpenContextMenu {
 			// The menu's actions address a peer, so it still needs the domain
 			// chat. TRANSITIONAL (#198): commands move to the owner API and the
@@ -284,10 +294,17 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				mediaKind, hasMedia := m.chat.SelectedMessageMediaKind()
 				_, hasText := m.chat.SelectedMessageText()
 				openTargets := m.chat.SelectedMessageOpenTargets()
-				m.contextMenu = components.NewContextMenu(msgID, isOut, replyToMsgID, mediaKind, hasMedia, hasText, openTargets, m.keyMap)
+				senderID := m.chat.SelectedMessageSenderID()
+				m.contextMenu = components.NewContextMenu(msgID, isOut, senderID, replyToMsgID, mediaKind, hasMedia, hasText, openTargets, m.keyMap)
 			}
 		}
 		return m, nil
+	}
+
+	// The author of the selected message, falling back to the person on the
+	// other side of a private chat when the selection names nobody else.
+	if action == keys.ActionShowProfile && m.focus == FocusChat {
+		return m.openProfile(m.profileTargetUserID())
 	}
 
 	if action == keys.ActionAttach && m.focus == FocusChat {

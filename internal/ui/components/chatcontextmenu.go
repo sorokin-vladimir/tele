@@ -89,6 +89,11 @@ func (cm *ChatContextMenu) mainItems() []menuItem {
 	} else {
 		items = append(items, menuItem{label: "Archive", action: keys.ActionArchive})
 	}
+	// A profile is a fact about a person, so the entry is there for a private
+	// chat and absent for a group or a channel (#222).
+	if cm.chat.Peer.IsUser() {
+		items = append(items, menuItem{label: "Profile", action: keys.ActionShowProfile})
+	}
 	return items
 }
 
@@ -195,6 +200,9 @@ func (cm *ChatContextMenu) execute() (*ChatContextMenu, tea.Cmd) {
 		return nil, func() tea.Msg { return ToggleArchiveRequest{Peer: peer, Archived: true} }
 	case keys.ActionUnarchive:
 		return nil, func() tea.Msg { return ToggleArchiveRequest{Peer: peer, Archived: false} }
+	case keys.ActionShowProfile:
+		userID := cm.chat.ID
+		return nil, func() tea.Msg { return OpenProfileRequest{UserID: userID} }
 	case keys.ActionCancel:
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 	}

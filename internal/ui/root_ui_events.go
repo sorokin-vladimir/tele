@@ -61,6 +61,11 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// The chat pane owns both the message list and the composer, so it is
 		// sized to the full pane content height (messages + composer).
 		m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
+		// An open profile re-wraps its bio to the new width instead of stamping
+		// the one it opened at.
+		if m.profile != nil {
+			m.profile.SetSize(msg.Width, msg.Height)
+		}
 		return m, m.retransmitOnColsChange()
 
 	case retransmitTickMsg:

@@ -19,6 +19,7 @@
 | `Ctrl+D` / `Ctrl+U` | Scroll half-page down / up |
 | `Enter`             | Open chat                  |
 | `/`                 | Search chats               |
+| `P`                 | Profile of the person (private chats only) |
 
 ## Chat (normal mode)
 
@@ -43,6 +44,7 @@
 | `o`       | Open / view media - photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
+| `P`       | Profile of the selected message's author, or of the person in a private chat |
 | `Space`   | Context menu                   |
 | `Enter`   | Retry a failed send (when one is selected) |
 
@@ -69,7 +71,22 @@ send.
 | `m`     | Mute / unmute           |
 | `f`     | Add to folder           |
 | `a`     | Archive / unarchive     |
+| `P`     | Profile (private chats only) |
 | `Esc`   | Close menu              |
+
+## Profile overlay (`P`, or `Profile` in either context menu)
+
+| Key     | Action                                      |
+| ------- | ------------------------------------------- |
+| `j`/`k` | Move between actions                        |
+| `o`     | Open the chat with this person               |
+| `m`     | Mute / unmute (only when a chat exists)     |
+| `y`     | Copy the username                            |
+| `Esc`   | Close                                       |
+
+The overlay opens on whatever is known at once and fills in the rest when
+Telegram answers. Mute is absent for someone you have never messaged: there is
+no chat to mute, and a guessed state would be worse than none.
 
 ## Configurable actions
 
@@ -121,6 +138,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `attach`            | Stage a file from disk to send           |
 | `cancel_upload`     | Cancel a staged upload / clear an active reply or edit |
 | `download_file`     | Download the selected file to the Downloads folder |
+| `show_profile`      | Show the profile of the message's author, or of the person in a private chat |
 
 ### Context menu - contexts `context_menu`, `delete_submenu`
 
@@ -134,6 +152,7 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `delete_revoke`    | Delete for everyone                   |
 | `delete_me`        | Delete only for me                    |
 | `jump_to_original` | Jump to the original (replied-to) message |
+| `show_profile`     | Show the message author's profile     |
 
 ### Composer - context `composer`
 
@@ -154,6 +173,16 @@ A chord is space-separated key tokens (`"g g"` = press `g` then `g`).
 | `add_to_folder` | Add the chat to a folder             |
 | `archive`       | Archive the selected chat            |
 | `unarchive`     | Unarchive the selected chat          |
+| `show_profile`  | Show the profile of a private chat's person |
+
+### Profile overlay - context `profile`
+
+| Action          | Description                            |
+| --------------- | -------------------------------------- |
+| `open_chat`     | Open the chat with this person         |
+| `mute`          | Mute or unmute the chat with them      |
+| `copy_username` | Copy the username to the clipboard     |
+| `cancel`        | Close the overlay                      |
 
 ### File picker - context `filepicker`
 

@@ -289,7 +289,17 @@ func (m *ChatModel) SelectedMessageOpenTargets() []components.OpenTarget {
 func (m *ChatModel) SelectedGroupMedia() []components.GroupMediaRef {
 	return m.msgList.SelectedGroupMedia()
 }
-func (m *ChatModel) SelectedMessageIsOut() bool       { return m.msgList.SelectedMessageIsOut() }
+func (m *ChatModel) SelectedMessageIsOut() bool     { return m.msgList.SelectedMessageIsOut() }
+func (m *ChatModel) SelectedMessageSenderID() int64 { return m.msgList.SelectedMessageSenderID() }
+
+// PeerUserID is the person on the other side of an open private chat, 0 for a
+// group, a channel or no chat. It is the chat-header entry point to a profile.
+func (m *ChatModel) PeerUserID() int64 {
+	if !m.header.IsUser {
+		return 0
+	}
+	return m.header.ChatID
+}
 func (m *ChatModel) SelectedMessageReplyToMsgID() int { return m.msgList.SelectedMessageReplyToMsgID() }
 func (m *ChatModel) SelectedMessagePhotoID() int64    { return m.msgList.SelectedMessagePhotoID() }
 func (m *ChatModel) SelectedMessageVideo() (domain.DocumentRef, bool) {

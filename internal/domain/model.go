@@ -3,7 +3,11 @@
 // can hold it without holding the store.
 package domain
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 type PeerType int
 
@@ -47,11 +51,52 @@ type MessageEntity struct {
 }
 
 // ChatMember is a group/channel participant offered by the @mention autocomplete.
+//
+// It is a membership rather than a lesser User: the same person is a member of
+// many chats or of none, and a role in one chat belongs here rather than on the
+// person (#222).
 type ChatMember struct {
 	UserID      int64
 	Username    string // without leading '@'; empty if the user has no public username
 	DisplayName string // First + Last, trimmed
 	AccessHash  int64
+}
+
+// User is a person the account has an address for. It holds facts about the
+// person and none about the conversation with them: a mute, an unread count and
+// a draft belong to the Chat.
+//
+// A User may be partial. What the owner knows locally arrives first and the
+// rest follows from users.getFullUser, so an empty Bio means "not known" as
+// readily as "not set" — the caller that cares tracks which (#222).
+type User struct {
+	ID        int64
+	Username  string // without leading '@'; empty if the user has no public username
+	FirstName string
+	LastName  string
+	// Bio is the user's "about" text. Only ever set from the full response.
+	Bio string
+	// Phone is set only when Telegram's privacy settings return one, which is
+	// mostly for mutual contacts. Empty otherwise.
+	Phone string
+	// Online is the coarse presence flag the dialog list already carries. It is
+	// a boolean because that is all the client reads today; the full range of
+	// last-seen states is #127.
+	Online          bool
+	IsBot           bool
+	IsContact       bool
+	IsMutualContact bool
+	IsDeleted       bool
+}
+
+// DisplayName is the name to draw for a user: First + Last, falling back to the
+// id when the person has neither, which is what a deleted account looks like.
+func (u User) DisplayName() string {
+	name := strings.TrimSpace(u.FirstName + " " + u.LastName)
+	if name == "" {
+		return "User " + strconv.FormatInt(u.ID, 10)
+	}
+	return name
 }
 
 type PhotoRef struct {

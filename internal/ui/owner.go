@@ -56,6 +56,14 @@ type Owner interface {
 	// Queries. One-off answers nobody subscribes to.
 	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
+	// KnownUser answers from what the owner already holds, without a round
+	// trip, so a profile draws the moment it opens. GetUser completes it.
+	//
+	// A profile is asked for by id alone: the client holds no access hash for
+	// the author of a message in a group, and resolving one is the owner's
+	// business (ADR 0006).
+	KnownUser(userID int64) (domain.User, bool)
+	GetUser(ctx context.Context, userID int64) (domain.User, error)
 
 	// Media. The owner downloads and caches; the client decodes. Paths cross
 	// the boundary, never bytes (#196).

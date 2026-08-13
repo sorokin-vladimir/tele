@@ -41,6 +41,16 @@ type ownerStub struct {
 	// participants is what the mention query answers with.
 	participants []domain.ChatMember
 
+	// knownUsers is what KnownUser answers from, fullUsers what GetUser
+	// completes with; userErr, when set, is what GetUser fails with instead.
+	// Split so a test can pin the gap between the two, which is the whole of
+	// the partial profile (#222).
+	knownUsers map[int64]domain.User
+	fullUsers  map[int64]domain.User
+	userErr    error
+	// gotUsers records the ids GetUser was asked for.
+	gotUsers []int64
+
 	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
 	// answers NotFound, standing in for a download failure. fetched records what
 	// the client asked for, invalidated what it asked to drop. mediaErr, when
@@ -142,6 +152,30 @@ func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]domain
 func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.ChatMember, error) {
 	o.calls = append(o.calls, cmdCall{name: "GetParticipants", chatID: chatID})
 	return o.participants, o.err
+}
+
+// KnownUser mirrors the real owner: it answers from the dialog when the test
+// has not seeded a user of its own, so a chat in the store is enough to open a
+// profile on.
+func (o *ownerStub) KnownUser(userID int64) (domain.User, bool) {
+	if u, ok := o.knownUsers[userID]; ok {
+		return u, true
+	}
+	if chat, ok := o.state.Store().GetChat(userID); ok && chat.Peer.IsUser() {
+		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true
+	}
+	return domain.User{}, false
+}
+
+func (o *ownerStub) GetUser(_ context.Context, userID int64) (domain.User, error) {
+	o.gotUsers = append(o.gotUsers, userID)
+	if o.userErr != nil {
+		return domain.User{}, o.userErr
+	}
+	if u, ok := o.fullUsers[userID]; ok {
+		return u, nil
+	}
+	return domain.User{ID: userID}, nil
 }
 
 func (o *ownerStub) FetchMedia(_ context.Context, chatID int64, msgID int, slot domain.MediaSlot) (string, error) {

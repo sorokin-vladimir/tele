@@ -86,6 +86,10 @@ var defaultLabels = map[Action]Label{
 	ActionArchive:     {Short: "archive"},
 	ActionUnarchive:   {Short: "unarchive"},
 	ActionAddToFolder: {Short: "folder", Long: "add to folder"},
+	// Profile actions (#222).
+	ActionShowProfile:  {Short: "profile", Long: "show the sender's profile"},
+	ActionOpenChat:     {Short: "open chat", Long: "open the chat with this person"},
+	ActionCopyUsername: {Short: "copy @", Long: "copy the username to the clipboard"},
 }
 
 // contextLabels holds per-context overrides. down carries the navigation-pair
@@ -124,6 +128,9 @@ var contextLabels = map[Context]map[Action]Label{
 		ActionDown: {Short: "move"},
 	},
 	ContextFolderSubMenu: {
+		ActionDown: {Short: "move"},
+	},
+	ContextProfile: {
 		ActionDown: {Short: "move"},
 	},
 }

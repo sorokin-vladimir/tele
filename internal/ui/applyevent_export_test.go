@@ -39,6 +39,13 @@ type testOwner struct {
 	moves []project.Window
 	// cmdErr is what every command answers with, standing in for a refusal.
 	cmdErr error
+	// knownUsers is what KnownUser answers from, fullUsers what GetUser
+	// completes with, userErr what GetUser fails with instead. Split so a test
+	// can pin the gap between the two, which is the partial profile (#222).
+	knownUsers map[int64]domain.User
+	fullUsers  map[int64]domain.User
+	userErr    error
+	gotUsers   []int64
 	// reactionsRead and mentionsRead count the badge-clearing commands, which
 	// used to be counted on the mock tg.Client before they became owner
 	// commands (#198).
@@ -160,6 +167,30 @@ func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]domain
 
 func (o *testOwner) GetParticipants(_ context.Context, _ int64) ([]domain.ChatMember, error) {
 	return o.participants, o.cmdErr
+}
+
+// KnownUser answers from the dialog, like the real owner, so a chat in the
+// store is enough for a test to open a profile on. knownUsers overrides it for
+// a person the store holds no chat for.
+func (o *testOwner) KnownUser(userID int64) (domain.User, bool) {
+	if u, ok := o.knownUsers[userID]; ok {
+		return u, true
+	}
+	if chat, ok := o.state.Store().GetChat(userID); ok && chat.Peer.IsUser() {
+		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true
+	}
+	return domain.User{}, false
+}
+
+func (o *testOwner) GetUser(_ context.Context, userID int64) (domain.User, error) {
+	o.gotUsers = append(o.gotUsers, userID)
+	if o.userErr != nil {
+		return domain.User{}, o.userErr
+	}
+	if u, ok := o.fullUsers[userID]; ok {
+		return u, nil
+	}
+	return domain.User{ID: userID}, nil
 }
 
 // mediaPathKey identifies one piece of media the way a client names it.

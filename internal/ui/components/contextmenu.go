@@ -91,11 +91,15 @@ type menuItem struct {
 
 // ContextMenu is a keyboard-navigable context menu overlaid on the chat view.
 type ContextMenu struct {
-	items        []menuItem
-	list         *ListView
-	state        menuState
-	msgID        int
-	isOut        bool
+	items []menuItem
+	list  *ListView
+	state menuState
+	msgID int
+	isOut bool
+	// senderID is who wrote the message, 0 when the menu has no author to
+	// offer a profile for (an outgoing message, or a sender the message does
+	// not name).
+	senderID     int64
 	replyToMsgID int
 	mediaKind    domain.MediaKind
 	hasMedia     bool
@@ -113,10 +117,12 @@ type ContextMenu struct {
 // hasText reports whether the message has copyable text (drives the Copy entry).
 // openTargets are the message's openable items (media plus links); they drive the
 // single unified "Open" entry.
-func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget, km keys.KeyMap) *ContextMenu {
+// senderID is the message's author, and drives the Profile entry; 0 leaves it out.
+func NewContextMenu(msgID int, isOut bool, senderID int64, replyToMsgID int, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget, km keys.KeyMap) *ContextMenu {
 	cm := &ContextMenu{
 		msgID:        msgID,
 		isOut:        isOut,
+		senderID:     senderID,
 		replyToMsgID: replyToMsgID,
 		mediaKind:    mediaKind,
 		hasMedia:     hasMedia,
@@ -125,7 +131,7 @@ func NewContextMenu(msgID int, isOut bool, replyToMsgID int, mediaKind domain.Me
 		keyMap:       km,
 		list:         NewListView(true),
 	}
-	cm.setItems(mainItems(isOut, replyToMsgID != 0, mediaKind, hasMedia, hasText, openTargets))
+	cm.setItems(mainItems(isOut, senderID != 0, replyToMsgID != 0, mediaKind, hasMedia, hasText, openTargets))
 	return cm
 }
 
@@ -165,7 +171,7 @@ func (cm *ContextMenu) setItems(items []menuItem) {
 
 func (cm *ContextMenu) Cursor() int { return cm.list.Cursor() }
 
-func mainItems(isOut bool, isReply bool, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget) []menuItem {
+func mainItems(isOut bool, hasSender bool, isReply bool, mediaKind domain.MediaKind, hasMedia bool, hasText bool, openTargets []OpenTarget) []menuItem {
 	var items []menuItem
 	if isReply {
 		items = append(items, menuItem{label: "Jump to original", action: keys.ActionJumpToOriginal})
@@ -186,6 +192,12 @@ func mainItems(isOut bool, isReply bool, mediaKind domain.MediaKind, hasMedia bo
 	}
 	if hasMedia {
 		items = append(items, mediaItems(mediaKind)...)
+	}
+	// Profile goes below the message actions and above Delete: it is about the
+	// author rather than the message, and putting it first would move every
+	// familiar row down by one.
+	if hasSender {
+		items = append(items, menuItem{label: "Profile", action: keys.ActionShowProfile})
 	}
 	items = append(items, menuItem{label: "Delete", action: keys.ActionDelete})
 	return items
@@ -279,7 +291,7 @@ func (cm *ContextMenu) Update(msg tea.Msg) (*ContextMenu, tea.Cmd) {
 	case keys.ActionCancel:
 		if cm.state == stateDeleteSub {
 			cm.state = stateMain
-			cm.setItems(mainItems(cm.isOut, cm.replyToMsgID != 0, cm.mediaKind, cm.hasMedia, cm.hasText, cm.openTargets))
+			cm.setItems(mainItems(cm.isOut, cm.senderID != 0, cm.replyToMsgID != 0, cm.mediaKind, cm.hasMedia, cm.hasText, cm.openTargets))
 			return cm, nil
 		}
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
@@ -343,6 +355,9 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 		return nil, func() tea.Msg { return CopyMsgRequest{} }
 	case keys.ActionPlayVoice:
 		return nil, func() tea.Msg { return PlayVoiceRequest{} }
+	case keys.ActionShowProfile:
+		senderID := cm.senderID
+		return nil, func() tea.Msg { return OpenProfileRequest{UserID: senderID} }
 	}
 	return cm, nil
 }

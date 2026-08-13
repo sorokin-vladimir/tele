@@ -14,6 +14,7 @@ const (
 	ContextChatMenu      Context = "chat_menu"
 	ContextFolderSubMenu Context = "folder_submenu"
 	ContextFilePicker    Context = "filepicker"
+	ContextProfile       Context = "profile"
 )
 
 const (
@@ -73,6 +74,7 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+d": ActionScrollHalfDown,
 			"ctrl+u": ActionScrollHalfUp,
 			"space":  ActionOpenContextMenu,
+			"P":      ActionShowProfile,
 		},
 		// ContextChat is the live source for chat-pane keys, resolved through
 		// the Matcher. "g g" is a chord (space-separated key tokens).
@@ -104,6 +106,7 @@ func DefaultKeyMap() KeyMap {
 			"x":      ActionCancelUpload,
 			"s":      ActionDownloadFile,
 			"y":      ActionCopyMessage,
+			"P":      ActionShowProfile,
 		},
 		ContextComposer: {
 			"enter":  ActionConfirm,
@@ -130,6 +133,7 @@ func DefaultKeyMap() KeyMap {
 			"p":     ActionPlayVoice,
 			"s":     ActionDownloadFile,
 			"y":     ActionCopyMessage,
+			"P":     ActionShowProfile,
 		},
 		ContextDeleteSubMenu: {
 			"j":     ActionDown,
@@ -154,6 +158,7 @@ func DefaultKeyMap() KeyMap {
 			"m":     ActionMute,
 			"f":     ActionAddToFolder,
 			"a":     ActionArchive,
+			"P":     ActionShowProfile,
 		},
 		ContextFolderSubMenu: {
 			"j":     ActionDown,
@@ -170,6 +175,20 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+j": ActionDown,
 			"up":     ActionUp,
 			"ctrl+k": ActionUp,
+		},
+		// ContextProfile is the profile overlay's own context. It borrows the
+		// menus' letters where the action is the same one: m mutes, y copies.
+		ContextProfile: {
+			"j":     ActionDown,
+			"down":  ActionDown,
+			"k":     ActionUp,
+			"up":    ActionUp,
+			"enter": ActionConfirm,
+			"space": ActionCancel,
+			"esc":   ActionCancel,
+			"o":     ActionOpenChat,
+			"m":     ActionMute,
+			"y":     ActionCopyUsername,
 		},
 		ContextFilePicker: {
 			"esc":    ActionCancel,

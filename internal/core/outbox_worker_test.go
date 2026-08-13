@@ -30,12 +30,21 @@ func waitFor(t *testing.T, msg string, cond func() bool) {
 	t.Fatalf("condition not met within the deadline: %s", msg)
 }
 
-// runWorker starts the drain loop and stops it when the test ends.
+// runWorker starts the drain loop and stops it when the test ends. Cleanup
+// waits for the goroutine to be gone: it writes to the outbox DB under
+// t.TempDir(), and an attempt still in flight races the directory removal.
 func runWorker(t *testing.T, o *Owner) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	go o.RunOutbox(ctx)
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	go func() {
+		defer close(done)
+		o.RunOutbox(ctx)
+	}()
 	return ctx
 }
 

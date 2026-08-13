@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-08-13
+
 ### Added
 
 - A profile overlay for a person: name, username, bio and phone, with open

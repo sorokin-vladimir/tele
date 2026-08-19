@@ -8,7 +8,6 @@ telegram:
 # state_dir: ~/.local/state/tele
 
 ui:
-  date_format: "15:04"
   history_limit: 50
   notification_preview: true  # set false to omit message text from desktop notifications
 

@@ -180,7 +180,6 @@ const defaultConfigHead = `telegram:
   api_hash: ""
 
 ui:
-  date_format: "15:04"
   history_limit: 50
   # Themes follow the terminal background: a dark one and a light one, each
   # named here. Leave this out for the built-in tele-dark and tele-light. See

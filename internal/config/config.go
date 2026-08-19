@@ -141,10 +141,12 @@ func Load(path, defaultStateDir string) (*Config, error) {
 	if err := v.ReadInConfig(); err != nil {
 		return nil, err
 	}
+	repairs := repairIllegal(v)
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
+	cfg.Warnings = append(cfg.Warnings, repairs...)
 	cfg.resolveState(defaultStateDir)
 	cfg.ThemesDir = filepath.Join(filepath.Dir(path), themesDirName)
 	cfg.resolveTheme()

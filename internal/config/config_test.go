@@ -40,7 +40,10 @@ func TestLoad_Defaults(t *testing.T) {
 	cfg, err := config.Load(f, t.TempDir())
 	require.NoError(t, err)
 	assert.Equal(t, 50, cfg.UI.HistoryLimit)
-	assert.Equal(t, "15:04", cfg.UI.DateFormat)
+	// ui.date_format has no default on purpose: nothing reads it, so a default
+	// would be a promise the app does not keep. #238 implements it and gives it
+	// one back.
+	assert.Empty(t, cfg.UI.DateFormat)
 	assert.Equal(t, config.ThemeSlots{}, cfg.UI.ThemeSlots, "no ui.theme leaves both slots built-in")
 	assert.Empty(t, cfg.Warnings)
 }

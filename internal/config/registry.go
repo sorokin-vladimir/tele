@@ -61,14 +61,6 @@ var registry = []settings.Entry{
 		ReadOnly: true,
 	},
 	{
-		Key:     "ui.theme",
-		Group:   "ui",
-		Label:   "Theme",
-		Help:    "The theme to use. A name uses that theme against either terminal background; a dark/light pair uses one per background. Written the way you wrote it: naming one theme stays one row, naming a pair stays two.",
-		Widget:  settings.Text,
-		Applies: settings.Immediate,
-	},
-	{
 		Key:     "ui.history_limit",
 		Group:   "ui",
 		Label:   "History limit",
@@ -85,6 +77,16 @@ var registry = []settings.Entry{
 		Label:   "Notification preview",
 		Help:    "Whether a desktop notification carries the message text. Off sends the sender's name and nothing else.",
 		Widget:  settings.Toggle,
+		Applies: settings.Immediate,
+	},
+	{
+		// Last of the ui keys, where every template tele has ever written puts
+		// it, so the overlay and the file read in the same order.
+		Key:     "ui.theme",
+		Group:   "ui",
+		Label:   "Theme",
+		Help:    "The theme to use. A name uses that theme against either terminal background; a dark/light pair uses one per background. Kept in the spelling you wrote: naming one theme stays one row, naming a pair stays two.",
+		Widget:  settings.Text,
 		Applies: settings.Immediate,
 	},
 	{

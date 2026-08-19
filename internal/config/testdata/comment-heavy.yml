@@ -1,0 +1,36 @@
+# tele configuration.
+# Written on first launch; yours to edit.
+
+telegram:
+  api_id: 12345
+  api_hash: "deadbeef"
+
+# Where this account's state lives: the session, the local database, and the
+# lock that keeps a second instance out. Defaults to $XDG_STATE_HOME/tele.
+# state_dir: ~/.local/state/tele
+
+ui:
+  history_limit: 50   # messages fetched when a chat is opened
+
+  # Themes follow the terminal background: a dark one and a light one, each
+  # named here. Leave this out for the built-in tele-dark and tele-light. See
+  # docs/themes.md.
+  theme:
+    dark: gruvbox-dark
+    light: seoul256-light
+
+photos:
+  eager_full_quality: true  # download full resolution in background on chat open
+
+# Something a future version of tele knows about and this one does not.
+experimental:
+  telepathy: true
+
+# Keybindings - every action with its current default keys.
+# Uncomment a line and change its key(s) to override that action in that context.
+keybindings:
+  chatlist:
+    open: enter
+    search: /
+  chat:
+    reply: r

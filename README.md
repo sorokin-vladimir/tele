@@ -162,7 +162,8 @@ Single static Go binary with fast startup and low memory usage.
 
 ### ⚙ Simple configuration
 
-YAML-based config with sensible defaults.
+YAML-based config with sensible defaults, and a settings overlay on `,` that
+edits the same file - comments and all.
 
 ---
 
@@ -391,6 +392,8 @@ Then prompts for:
 | `/`                 | Search chats                                      |
 | `space`             | Message context menu                              |
 | `0` / `1` / `2`     | Focus panes                                       |
+| `,`                 | Settings                                          |
+| `?`                 | Keyboard shortcuts                                |
 | `q`                 | Quit                                              |
 
 Full reference: [docs/keybindings.md](docs/keybindings.md)
@@ -398,6 +401,23 @@ Full reference: [docs/keybindings.md](docs/keybindings.md)
 ---
 
 ## Configuration
+
+Press `,` for the settings overlay: every setting tele has, grouped and ordered
+the way the config file is, so a row you see there is found in the file at the
+same path. It shows what each one is worth now, marks the ones nobody has chosen
+(`[default]`), and says when a change takes hold - at once, `[next]` time tele
+does that thing, or after a `[restart]`. Keybindings are listed there too, with
+what your config changed and what it changed from.
+
+Changes made there are written straight into `config.yml`, keeping your
+comments, blank lines and anything in the file tele does not know about. Editing
+the file in an editor and editing it in the overlay are the same act: both end
+with the file being read again, so the two can never disagree. `enter` changes
+the setting under the cursor, `r` puts it back to its default, and `esc` closes.
+
+Four settings are shown but not changed there - which account this is, and where
+its state lives. Changing those means moving files and reopening a session, so
+they are a deliberate edit to the file rather than a keystroke.
 
 ```yaml
 # state_dir: ~/.local/state/tele # session, local database and instance lock

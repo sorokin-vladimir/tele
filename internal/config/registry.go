@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/spf13/viper"
 
@@ -88,6 +89,7 @@ var registry = []settings.Entry{
 		Help:    "The theme to use. A name uses that theme against either terminal background; a dark/light pair uses one per background. Kept in the spelling you wrote: naming one theme stays one row, naming a pair stays two.",
 		Widget:  settings.Text,
 		Applies: settings.Immediate,
+		Slots:   []string{"dark", "light"},
 	},
 	{
 		Key:     "ui.toasts.error_zone",
@@ -266,4 +268,23 @@ func Setting(key string) (settings.Entry, bool) {
 		return settings.Entry{}, false
 	}
 	return registry[i], true
+}
+
+// settingFor returns the declaration a key is judged by: its own, or - for a
+// slot of a setting written as a mapping, like ui.theme.dark - its parent's. A
+// slot has no declaration of its own because it has no field of its own, so the
+// setting it belongs to is what says whether it is legal.
+func settingFor(key string) (settings.Entry, bool) {
+	if e, ok := Setting(key); ok {
+		return e, true
+	}
+	cut := strings.LastIndex(key, ".")
+	if cut < 0 {
+		return settings.Entry{}, false
+	}
+	e, ok := Setting(key[:cut])
+	if !ok || !slices.Contains(e.Slots, key[cut+1:]) {
+		return settings.Entry{}, false
+	}
+	return e, true
 }

@@ -18,11 +18,18 @@ import (
 
 // settingsOverlay builds the overlay over a real config file, because what is
 // being tested is what a person sees for a config they actually have.
-func settingsOverlay(t *testing.T, body string, km keys.KeyMap) (*components.SettingsModal, string) {
+// writeConfig puts a config file with the given body in a fresh directory.
+func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yml")
 	require.NoError(t, os.WriteFile(path, []byte(
 		"telegram:\n  api_id: 12345\n  api_hash: \"deadbeef\"\n"+body), 0600))
+	return path
+}
+
+func settingsOverlay(t *testing.T, body string, km keys.KeyMap) (*components.SettingsModal, string) {
+	t.Helper()
+	path := writeConfig(t, body)
 	store, err := config.NewStore(path, t.TempDir())
 	require.NoError(t, err)
 	if km == nil {
@@ -233,14 +240,14 @@ func TestSettings_ScrollsAndCloses(t *testing.T) {
 	require.Greater(t, len(m.LinesForTest()), 20, "there is more here than fits")
 
 	before := m.View()
-	m, open := m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	require.True(t, open)
-	assert.NotEqual(t, before, m.View(), "scrolled")
+	m, res := m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
+	require.True(t, res.Open)
+	assert.NotEqual(t, before, m.View(), "the cursor moved")
 
-	_, open = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	assert.False(t, open)
+	_, res = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	assert.False(t, res.Open)
 
 	m2, _ := settingsOverlay(t, "", nil)
-	_, open = m2.Update(tea.KeyPressMsg{Code: ',', Text: ","})
-	assert.False(t, open, "the key that opens it closes it")
+	_, res = m2.Update(tea.KeyPressMsg{Code: ',', Text: ","})
+	assert.False(t, res.Open, "the key that opens it closes it")
 }

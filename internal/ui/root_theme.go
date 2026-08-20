@@ -43,30 +43,16 @@ func (m RootModel) WithSettingsStore(store settings.Store) RootModel {
 // background is kept, so reloading at noon does not snap the app to the dark
 // slot.
 func (m RootModel) reloadFromDisk() (RootModel, tea.Cmd) {
-	cfg := m.cfg
-	if m.reloadConfig != nil {
-		reloaded, err := m.reloadConfig()
-		if err != nil {
-			// The file is still whatever it was, and so is the app: a config
-			// that stopped parsing is a reason to say so, not a reason to lose
-			// the settings that were working.
-			return m, m.retiringToast(components.ToastError, "config not reloaded: "+err.Error())
-		}
-		cfg = reloaded
-		m = m.applyConfig(cfg)
+	m, loaded, warnings, err := m.applyFromDisk()
+	if err != nil {
+		// The file is still whatever it was, and so is the app: a config that
+		// stopped parsing is a reason to say so, not a reason to lose the
+		// settings that were working.
+		return m, m.retiringToast(components.ToastError, "config not reloaded: "+err.Error())
 	}
-	if cfg == nil {
+	if loaded == nil {
 		return m, nil
 	}
-
-	loaded := theme.LoadSlots(cfg.ThemesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
-	theme.SetSlots(loaded.Slots())
-
-	warnings := make([]string, 0, len(cfg.Warnings)+len(loaded.Warnings))
-	for _, w := range cfg.Warnings {
-		warnings = append(warnings, w.Text)
-	}
-	warnings = append(warnings, loaded.Warnings...)
 
 	kind, text := components.ToastInfo, fmt.Sprintf("reloaded: %s / %s",
 		loaded.Dark.Theme.Name, loaded.Light.Theme.Name)
@@ -88,6 +74,51 @@ func (m RootModel) reloadFromDisk() (RootModel, tea.Cmd) {
 		}
 	}
 	return m, m.retiringToast(kind, text)
+}
+
+// applyFromDisk is the whole of "make what is on disk current": re-read the
+// config, hand it to everything that holds one, apply it here, and reinstall the
+// themes it names. It returns what it loaded and everything that was wrong with
+// it, and says nothing on screen - what to say depends on who asked.
+//
+// A reload says what it found, because somebody pressed a key and is waiting for
+// an answer. A setting changed in the overlay says nothing, because the answer
+// is the value on the row in front of them.
+func (m RootModel) applyFromDisk() (RootModel, *theme.Loaded, []string, error) {
+	cfg := m.cfg
+	if m.reloadConfig != nil {
+		reloaded, err := m.reloadConfig()
+		if err != nil {
+			return m, nil, nil, err
+		}
+		cfg = reloaded
+		m = m.applyConfig(cfg)
+	}
+	if cfg == nil {
+		return m, nil, nil, nil
+	}
+
+	loaded := theme.LoadSlots(cfg.ThemesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
+	theme.SetSlots(loaded.Slots())
+
+	warnings := make([]string, 0, len(cfg.Warnings)+len(loaded.Warnings))
+	for _, w := range cfg.Warnings {
+		warnings = append(warnings, w.Text)
+	}
+	warnings = append(warnings, loaded.Warnings...)
+	return m, &loaded, warnings, nil
+}
+
+// applySettingChange makes the running app agree with a setting the overlay has
+// just written. It is quiet on success: the person is looking at the row they
+// changed, and a toast telling them they changed it would be the app talking
+// about itself.
+func (m RootModel) applySettingChange() (RootModel, tea.Cmd) {
+	m, _, _, err := m.applyFromDisk()
+	if err != nil {
+		return m, m.retiringToast(components.ToastError, "setting saved but not applied: "+err.Error())
+	}
+	return m, nil
 }
 
 // retiringToast shows a toast and returns the timer that takes it away again.

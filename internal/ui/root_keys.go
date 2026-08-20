@@ -24,12 +24,18 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// The settings overlay owns all keys while it is open, like the help modal:
 	// both are references you scroll and close.
 	if m.settings != nil {
-		newSettings, open := m.settings.Update(msg)
-		if !open {
+		newSettings, res := m.settings.Update(msg)
+		if !res.Open {
 			m.settings = nil
 			return m, nil
 		}
 		m.settings = newSettings
+		if res.Changed {
+			// The overlay wrote to the file and refreshed itself. Making the
+			// running app agree is this side's job, and it is the same path a
+			// reload takes.
+			return m.applySettingChange()
+		}
 		return m, nil
 	}
 	// The profile is exclusive too: it closed the menu it was opened from, and

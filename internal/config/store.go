@@ -98,7 +98,7 @@ func (s *Store) IsDefault(key string) bool {
 // write finishes before this returns, which is why the file store never reports
 // Saving.
 func (s *Store) Set(key string, v any) error {
-	e, ok := Setting(key)
+	e, ok := settingFor(key)
 	if !ok {
 		return fmt.Errorf("%s is not a setting", key)
 	}

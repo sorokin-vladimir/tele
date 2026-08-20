@@ -156,6 +156,15 @@ type Entry struct {
 	Unit string
 	// Choices are the values a Choice accepts, in the order they are offered.
 	Choices []string
+	// Slots are the keys this setting's value may hold when it is written as a
+	// mapping rather than as a single value. ui.theme is the case: a name means
+	// "this theme against either background", a dark/light pair means one per
+	// background, and the two spellings mean different things.
+	//
+	// A slot is part of its setting rather than a setting of its own: it has no
+	// field of its own on Config, so nothing could declare it, and it is legal
+	// only where its parent says so.
+	Slots []string
 	// Min and Max bound a Number or Bytes. Max at or below Min means no upper
 	// bound, which is what a cache size wants.
 	Min, Max int64

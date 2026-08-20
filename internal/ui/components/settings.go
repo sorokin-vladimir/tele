@@ -6,49 +6,74 @@ import (
 	"sort"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/settings"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
-	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // SettingsModal shows everything tele can be configured with, in the order the
 // config file has it, so that a row on screen is findable in the file by the
-// same path.
+// same path - and changes what can be changed.
 //
-// It shows and does not edit. What is on screen is what the app is running on,
-// which is the same thing the file says, because the file is the only way a
-// setting gets set (ADR 0009).
+// Every change goes to the file and comes back: the overlay writes through the
+// store and the running app is reloaded from the file, so editing here and
+// editing in an editor are the same act rather than two acts that agree (ADR
+// 0009).
 type SettingsModal struct {
 	width, height int
 	offset        int
-	lines         []string
-	// labelCol is the width the labels are padded to, so values line up down the
-	// whole overlay rather than per section.
-	labelCol int
+	cursor        int
+	labelCol      int
+
+	store    settings.Store
+	km       keys.KeyMap
+	defaults keys.KeyMap
+
+	items []settingsItem
+	// editing is the buffer for a value being typed. Numbers and text are
+	// committed on confirm rather than per keystroke: a per-keystroke write
+	// would put 1, 12 and 128 through the file in turn and apply each of them.
+	editing *editState
+	// status is what the overlay says about the last thing that happened - a
+	// refusal, most usefully. It is shown where the hint is, and cleared by the
+	// next key.
+	status string
+}
+
+type editState struct {
+	item   int
+	buffer string
+	// fresh means nothing has been typed yet, so the value that was already
+	// there is still selected in the sense that typing replaces it. Changing 50
+	// to 120 is typing 120, not backspacing twice first; correcting 120 to 125
+	// is backspacing once, which is what clears fresh.
+	fresh bool
 }
 
 const settingsMargin = 2
 
 // settingsMaxWidth is wider than the help modal: these rows carry a label, a
-// value and a marker, where a shortcut row carries a key and a phrase.
+// value and its notes, where a shortcut row carries a key and a phrase.
 const settingsMaxWidth = 64
 
-// NewSettingsModal builds the overlay from a store and the keymap in force.
-//
-// The store is asked for its entries and values rather than the config being
-// read directly, because a second store - the Telegram account - is what this
-// overlay is shaped for (ADR 0010).
-func NewSettingsModal(store settings.Store, km, defaults keys.KeyMap, width, height int) *SettingsModal {
-	s := &SettingsModal{width: width, height: height}
-	s.build(store, km, defaults)
-	return s
+// settingsItem is one line of the overlay. Headings and blanks are items too, so
+// that scrolling and cursor movement work on one list rather than on a rendering
+// and a model that have to be kept in step.
+type settingsItem struct {
+	heading string
+	blank   bool
+	row     settingsRow
+
+	// entry is the setting a row is about, when it is about one. Keybinding
+	// rows and the legend have none.
+	entry *settings.Entry
+	// slot names which part of a setting written as a mapping this row is - the
+	// dark half of a theme pair. Empty for everything else.
+	slot string
 }
 
-// settingsRow is one line of the overlay before it is padded and styled.
+// settingsRow is a row's content before it is padded and styled.
 type settingsRow struct {
 	label string
 	value string
@@ -63,135 +88,99 @@ type settingsRow struct {
 	muted bool
 }
 
-func (s *SettingsModal) build(store settings.Store, km, defaults keys.KeyMap) {
-	type section struct {
-		title string
-		rows  []settingsRow
+// key is what this row writes to, which is the setting's key or - for one half
+// of a mapping - the slot under it.
+func (i settingsItem) key() string {
+	if i.entry == nil {
+		return ""
 	}
-	var sections []section
-	current := ""
-	first := true
+	if i.slot != "" {
+		return i.entry.Key + "." + i.slot
+	}
+	return i.entry.Key
+}
 
-	defaulting, _ := store.(settings.Defaulting)
+// selectable reports whether the cursor stops here. Read-only settings are
+// included: being unable to change one is worth saying when somebody tries,
+// rather than by silently refusing to be reached.
+func (i settingsItem) selectable() bool { return i.entry != nil }
 
-	for _, e := range store.Entries() {
-		if first || e.Group != current {
-			sections = append(sections, section{title: groupTitle(e.Group, store.Origin())})
-			current, first = e.Group, false
+// NewSettingsModal builds the overlay from a store and the keymap in force.
+//
+// The store is asked for its entries and values rather than the config being
+// read directly, because a second store - the Telegram account - is what this
+// overlay is shaped for (ADR 0010).
+func NewSettingsModal(store settings.Store, km, defaults keys.KeyMap, width, height int) *SettingsModal {
+	s := &SettingsModal{width: width, height: height, store: store, km: km, defaults: defaults}
+	s.build()
+	s.cursor = s.nextSelectable(-1, 1)
+	return s
+}
+
+// Refresh rebuilds the rows from the store, keeping where the person was
+// looking. Called after a write, because the value that changed is on screen.
+func (s *SettingsModal) Refresh() {
+	cursor, offset := s.cursor, s.offset
+	s.build()
+	s.cursor, s.offset = cursor, offset
+	s.clampCursor()
+	s.clampOffset()
+}
+
+func (s *SettingsModal) build() {
+	defaulting, _ := s.store.(settings.Defaulting)
+
+	var items []settingsItem
+	group, first := "", true
+	for _, e := range s.store.Entries() {
+		if first || e.Group != group {
+			if !first {
+				items = append(items, settingsItem{blank: true})
+			}
+			items = append(items, settingsItem{heading: groupTitle(e.Group, s.store.Origin())})
+			group, first = e.Group, false
 		}
-		value, status := store.Value(e.Key)
-		for _, row := range settingRows(e, value, status, defaulting) {
-			last := len(sections) - 1
-			sections[last].rows = append(sections[last].rows, row)
-		}
+		value, status := s.store.Value(e.Key)
+		items = append(items, settingRows(e, value, status, defaulting)...)
 	}
 
 	// One section per context, named the way the file nests them, so that a row
 	// here is found in the file at keybindings.<context>.<action>.
 	for _, ctx := range keybindingContexts {
-		rows := keybindingRows(ctx, km, defaults)
+		rows := keybindingRows(ctx, s.km, s.defaults)
 		if len(rows) == 0 {
 			continue
 		}
-		sections = append(sections, section{title: "keybindings." + string(ctx), rows: rows})
+		items = append(items, settingsItem{blank: true},
+			settingsItem{heading: "keybindings." + string(ctx)})
+		for _, r := range rows {
+			items = append(items, settingsItem{row: r})
+		}
 	}
 
-	s.labelCol = 0
-	for _, sec := range sections {
-		for _, r := range sec.rows {
-			if len(r.label) > s.labelCol {
-				s.labelCol = len(r.label)
-			}
-		}
-	}
-	if s.labelCol > 26 {
-		s.labelCol = 26
-	}
-
-	var lines []string
-	for i, sec := range sections {
-		if i > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, theme.S().HelpSection.Render(sec.title))
-		for _, r := range sec.rows {
-			lines = append(lines, s.renderRow(r))
-		}
-	}
-	lines = append(lines, "", theme.S().HelpSection.Render("what the marks mean"))
+	items = append(items, settingsItem{blank: true},
+		settingsItem{heading: "what the marks mean"})
 	for _, l := range markerLegend() {
 		mark, meaning, _ := strings.Cut(l, "|")
-		// canvas:ok rendered through HelpBg below, so the gap carries the modal
-		// surface rather than the canvas behind it.
-		gap := strings.Repeat(" ", max(1, 12-len(mark)))
-		lines = append(lines, theme.S().HelpBg.Render("  ")+theme.S().HelpFaint.Render("["+mark+"]")+
-			theme.S().HelpBg.Render(gap)+theme.S().HelpDesc.Render(meaning))
+		items = append(items, settingsItem{row: settingsRow{label: "[" + mark + "]", value: meaning}})
 	}
-	const editedIn = "edited in "
-	origin := fitValue(shortenPath(store.Origin()), s.innerWidth()-2-len(editedIn))
-	lines = append(lines, "", theme.S().HelpBg.Render("  ")+
-		theme.S().HelpDesc.Render(editedIn)+theme.S().HelpKey.Render(origin))
 
-	s.lines = lines
-	s.clampOffset()
-}
+	// Standing at the bottom rather than only appearing when a read-only row is
+	// pressed: the file is where all of this is kept, and somebody who wants to
+	// edit it in an editor should not have to press something to be told where.
+	items = append(items, settingsItem{blank: true},
+		settingsItem{row: settingsRow{label: "edited in", value: shortenPath(s.store.Origin())}})
 
-func (s *SettingsModal) renderRow(r settingsRow) string {
-	label := r.label
-	if len(label) > s.labelCol {
-		label = label[:s.labelCol]
+	s.items = items
+	s.labelCol = 0
+	for _, it := range items {
+		if it.heading != "" || it.blank {
+			continue
+		}
+		if n := len(it.row.label); n > s.labelCol && n <= 26 {
+			s.labelCol = n
+		}
 	}
-	// canvas:ok these spaces are rendered through HelpBg, so they carry the
-	// modal surface rather than the canvas behind it.
-	pad := strings.Repeat(" ", s.labelCol-len(label))
-
-	// A row is one line. A value too long for what is left of it - a state
-	// directory buried under a temp path - is shortened rather than wrapped:
-	// wrapping puts the label on a line of its own and the column disappears.
-	room := s.innerWidth() - 2 - s.labelCol - 2
-	for _, note := range r.notes {
-		room -= len(note) + 3 // the note, its brackets and the space before it
-	}
-	value := fitValue(r.value, room)
-
-	valueStyle := theme.S().HelpKey
-	if r.muted {
-		valueStyle = theme.S().HelpDesc
-	}
-	line := theme.S().HelpBg.Render("  ") + theme.S().HelpDesc.Render(label) +
-		theme.S().HelpBg.Render(pad+"  ") + valueStyle.Render(value)
-	for _, note := range r.notes {
-		// Bracketed as well as coloured. A note is about the value beside it,
-		// not more of it, and colour alone does not carry that on a low-contrast
-		// theme or a terminal rendering the panel flat.
-		line += theme.S().HelpBg.Render(" ") + theme.S().HelpFaint.Render("["+note+"]")
-	}
-	return line
-}
-
-// fitValue shortens a value to the room it has. A path loses its middle rather
-// than its end: the last part is what names the thing, and the first part is
-// what says where it lives, so the part worth dropping is between them.
-func fitValue(value string, room int) string {
-	if room < 8 || xansi.StringWidth(value) <= room {
-		return value
-	}
-	if !strings.ContainsAny(value, "/\\") {
-		return xansi.Truncate(value, room, "…")
-	}
-	head := room/2 - 1
-	tail := room - head - 1
-	return xansi.Truncate(value, head, "") + "…" + value[len(value)-tail:]
-}
-
-// shortenPath writes a path the way a person says it, so that the interesting
-// part of it is what survives being shortened.
-func shortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || !strings.HasPrefix(path, home) {
-		return path
-	}
-	return "~" + path[len(home):]
 }
 
 // groupTitle names a section on screen. The file's root has no section name, so
@@ -211,13 +200,13 @@ func groupTitle(group, origin string) string {
 
 // settingRows renders one setting. Usually one row - except a theme written as a
 // dark/light pair, which is two, because that spelling means something different
-// from a single name and the overlay has no business flattening it (#221).
-func settingRows(e settings.Entry, value any, status settings.Status, defaulting settings.Defaulting) []settingsRow {
+// from a single name and the overlay has no business flattening it.
+func settingRows(e settings.Entry, value any, status settings.Status, defaulting settings.Defaulting) []settingsItem {
 	isDefault := defaulting != nil && defaulting.IsDefault(e.Key)
 
 	var notes []string
 	// A read-only setting is not anybody's choice to have made here, so saying
-	// it is at its default would be answering a question nobody asked.
+	// it is at its default would answer a question nobody asked.
 	if isDefault && !e.ReadOnly {
 		notes = append(notes, "default")
 	}
@@ -225,27 +214,36 @@ func settingRows(e settings.Entry, value any, status settings.Status, defaulting
 		notes = append(notes, marker)
 	}
 
-	if pair, ok := value.(map[string]any); ok && e.Widget == settings.Text {
-		var rows []settingsRow
-		for _, slot := range []string{"dark", "light"} {
-			if v, ok := pair[slot]; ok {
-				rows = append(rows, settingsRow{
+	if pair, ok := value.(map[string]any); ok && len(e.Slots) > 0 {
+		var items []settingsItem
+		for _, slot := range e.Slots {
+			v, present := pair[slot]
+			if !present {
+				continue
+			}
+			items = append(items, settingsItem{
+				entry: &e,
+				slot:  slot,
+				row: settingsRow{
 					label: e.Label + " (" + slot + ")",
 					value: renderValue(e, v, status),
 					notes: notes,
 					muted: isDefault,
-				})
-			}
+				},
+			})
 		}
-		if len(rows) > 0 {
-			return rows
+		if len(items) > 0 {
+			return items
 		}
 	}
-	return []settingsRow{{
-		label: e.Label,
-		value: renderValue(e, value, status),
-		notes: notes,
-		muted: isDefault,
+	return []settingsItem{{
+		entry: &e,
+		row: settingsRow{
+			label: e.Label,
+			value: renderValue(e, value, status),
+			notes: notes,
+			muted: isDefault,
+		},
 	}}
 }
 
@@ -315,13 +313,8 @@ func renderValue(e settings.Entry, value any, status settings.Status) string {
 // humanBytes shows a cache bound in the unit a person picks it in. Zero is a
 // real answer and says what it means rather than showing "0 MB".
 func humanBytes(value any) string {
-	var n int64
-	switch v := value.(type) {
-	case int64:
-		n = v
-	case int:
-		n = int64(v)
-	default:
+	n, ok := asInt64(value)
+	if !ok {
 		return fmt.Sprintf("%v", value)
 	}
 	switch {
@@ -335,6 +328,16 @@ func humanBytes(value any) string {
 		return fmt.Sprintf("%d KB", n/(1<<10))
 	}
 	return fmt.Sprintf("%d B", n)
+}
+
+func asInt64(value any) (int64, bool) {
+	switch v := value.(type) {
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	}
+	return 0, false
 }
 
 // keybindingContexts is the top-to-bottom order the bindings are listed in.
@@ -409,100 +412,27 @@ func equalKeys(a, b []string) bool {
 	return true
 }
 
-// viewportH is the number of body rows visible inside the box.
-func (s *SettingsModal) viewportH() int {
-	vh := s.height - 2*settingsMargin - 2 /*borders*/ - 1 /*bottom hint*/
-	if vh < 1 {
-		vh = 1
+// fitValue shortens a value to the room it has. A path loses its middle rather
+// than its end: the last part is what names the thing, and the first part is
+// what says where it lives, so the part worth dropping is between them.
+func fitValue(value string, room int) string {
+	if room < 8 || xansi.StringWidth(value) <= room {
+		return value
 	}
-	return vh
+	if !strings.ContainsAny(value, "/\\") {
+		return xansi.Truncate(value, room, "…")
+	}
+	head := room/2 - 1
+	tail := room - head - 1
+	return xansi.Truncate(value, head, "") + "…" + value[len(value)-tail:]
 }
 
-func (s *SettingsModal) clampOffset() {
-	max := len(s.lines) - s.viewportH()
-	if max < 0 {
-		max = 0
+// shortenPath writes a path the way a person says it, so that the interesting
+// part of it is what survives being shortened.
+func shortenPath(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || !strings.HasPrefix(path, home) {
+		return path
 	}
-	if s.offset > max {
-		s.offset = max
-	}
-	if s.offset < 0 {
-		s.offset = 0
-	}
+	return "~" + path[len(home):]
 }
-
-// Update handles scroll and close keys. It returns (self, stayOpen), the same
-// shape the help modal uses, because an overlay that only reads has the same
-// job.
-func (s *SettingsModal) Update(msg tea.KeyPressMsg) (*SettingsModal, bool) {
-	switch keys.NormalizeKey(msg.String()) {
-	case "esc", ",":
-		return s, false
-	case "j", "down", "ctrl+j":
-		s.offset++
-		s.clampOffset()
-	case "k", "up", "ctrl+k":
-		s.offset--
-		s.clampOffset()
-	case "ctrl+d", "pgdown":
-		s.offset += s.viewportH() / 2
-		s.clampOffset()
-	case "ctrl+u", "pgup":
-		s.offset -= s.viewportH() / 2
-		s.clampOffset()
-	case "g":
-		s.offset = 0
-	case "G":
-		s.offset = len(s.lines)
-		s.clampOffset()
-	}
-	return s, true
-}
-
-// innerWidth is the room inside the box, which both the rows and the box itself
-// are built to.
-func (s *SettingsModal) innerWidth() int {
-	w := s.width - 2*settingsMargin - 2
-	if w > settingsMaxWidth {
-		w = settingsMaxWidth
-	}
-	if w < 20 {
-		w = 20
-	}
-	return w
-}
-
-func (s *SettingsModal) View() string {
-	vh := s.viewportH()
-	innerW := s.innerWidth()
-
-	end := s.offset + vh
-	if end > len(s.lines) {
-		end = len(s.lines)
-	}
-	visible := make([]string, 0, vh)
-	for i := s.offset; i < end; i++ {
-		visible = append(visible, theme.S().HelpBg.Width(innerW).MaxWidth(innerW).Render(s.lines[i]))
-	}
-	for len(visible) < vh {
-		visible = append(visible, theme.S().HelpBg.Width(innerW).Render(""))
-	}
-
-	scrollNote := ""
-	if len(s.lines) > vh {
-		scrollNote = theme.S().HelpDesc.Render(fmt.Sprintf(" %d-%d/%d", s.offset+1, end, len(s.lines)))
-	}
-	hint := OverlayHint([][2]string{{"j/k", "scroll"}, {"esc", "close"}}, theme.T().SurfaceHelp) + scrollNote
-
-	box := RenderBox(strings.Join(visible, "\n"), theme.S().HelpTitle.Render("Settings"), "", hint, "",
-		lipgloss.RoundedBorder(), theme.T().BorderOverlay, innerW+2, vh+2)
-	boxLines := strings.Split(box, "\n")
-	for i, l := range boxLines {
-		boxLines[i] = theme.S().HelpBg.Render(l)
-	}
-	return strings.Join(boxLines, "\n")
-}
-
-// LinesForTest exposes the rendered rows so a test can read what is on screen
-// without parsing a box.
-func (s *SettingsModal) LinesForTest() []string { return s.lines }

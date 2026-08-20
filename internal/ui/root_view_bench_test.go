@@ -32,7 +32,7 @@ const benchMessages = 200
 
 // newPopulatedRoot builds a main-screen model with a populated chat list and an
 // open chat, sized to w x h. It is the state the app spends its time in, which
-// makes it both what a benchmark should measure and what a seam test should
+// makes it both what a benchmark should measure and what a canvas scan should
 // look at.
 func newPopulatedRoot(b testing.TB, w, h int) ui.RootModel {
 	b.Helper()

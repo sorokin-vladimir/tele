@@ -14,9 +14,12 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-// A seam is a cell the canvas did not reach. The failure mode of #214 is that
-// seams are visible only to whoever happens to be looking at the right screen
-// state, so they are checked here instead of by looking.
+// A seam is the join between two painted runs, where one run's reset ends the
+// colour and the next starts it again. Seams are ordinary — every coloured run
+// in a line makes two — and a hole is what one left unpainted: a cell the
+// canvas never reached, which falls through to the terminal. The failure mode
+// of #214 is that a hole is visible only to whoever happens to be looking at
+// the right screen state, so they are counted here instead of looked for.
 //
 // The check runs on the cell grid rather than on the string: bubbletea renders
 // by parsing the view with uv.NewStyledString and diffing the cells that come
@@ -29,17 +32,17 @@ import (
 // checking the wrong thing. A hole is a cell that carries no background and
 // therefore falls through to the terminal.
 
-// seam is one unpainted cell, located.
-type seam struct {
+// hole is one unpainted cell, located.
+type hole struct {
 	row, col int
 	content  string
 }
 
-func (s seam) String() string {
-	return fmt.Sprintf("row %d, col %d: %q", s.row, s.col, s.content)
+func (h hole) String() string {
+	return fmt.Sprintf("row %d, col %d: %q", h.row, h.col, h.content)
 }
 
-// seams returns every cell of a w x h terminal that the view left without a
+// holes returns every cell of a w x h terminal that the view left without a
 // background.
 //
 // The view is drawn into a cell buffer rather than split on newlines, which is
@@ -49,12 +52,12 @@ func (s seam) String() string {
 // wrote to at all is examined too. Those are the holes that a check over the
 // emitted lines cannot see, and the ones a short row or a missing bottom line
 // leaves behind.
-func seams(content string, w, h int) []seam {
+func holes(content string, w, h int) []hole {
 	buf := uv.NewScreenBuffer(w, h)
 	buf.Method = ansi.GraphemeWidth
 	uv.NewStyledString(content).Draw(buf, uv.Rect(0, 0, w, h))
 
-	var out []seam
+	var out []hole
 	for row := range h {
 		// A grapheme wider than one column occupies the columns after it with
 		// placeholder cells that carry no style of their own. The terminal
@@ -78,15 +81,15 @@ func seams(content string, w, h int) []seam {
 			if cell != nil {
 				content = cell.Content
 			}
-			out = append(out, seam{row: row, col: col, content: content})
+			out = append(out, hole{row: row, col: col, content: content})
 		}
 	}
 	return out
 }
 
-// report renders the first few seams; a broken frame produces thousands, and
+// report renders the first few holes; a broken frame produces thousands, and
 // the first handful say where to look as well as all of them would.
-func report(found []seam) string {
+func report(found []hole) string {
 	const show = 12
 	s := fmt.Sprintf("%d cells carry no background\n", len(found))
 	for i, f := range found {
@@ -110,7 +113,7 @@ func paintedSlots(t *testing.T) {
 	require.NoError(t, err)
 
 	painted := theme.TeleDark
-	painted.Name = "seam-test"
+	painted.Name = "canvas-test"
 	painted.Background, painted.Text = bg, fg
 
 	t.Cleanup(func() { theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight}) })
@@ -122,7 +125,7 @@ func paintedSlots(t *testing.T) {
 // the floor; 41 columns is narrow enough that the panes hit their minimum
 // widths, which is where the arithmetic that makes them sum has to be trusted;
 // odd widths and heights catch a split that rounds a column away.
-var seamSizes = []struct{ w, h int }{
+var scanSizes = []struct{ w, h int }{
 	{80, 24},
 	{81, 25},
 	{41, 12},
@@ -130,26 +133,26 @@ var seamSizes = []struct{ w, h int }{
 	{201, 61},
 }
 
-func TestCanvas_MainScreenHasNoSeams(t *testing.T) {
+func TestCanvas_MainScreenHasNoHoles(t *testing.T) {
 	paintedSlots(t)
 
-	for _, size := range seamSizes {
+	for _, size := range scanSizes {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := newPopulatedRoot(t, size.w, size.h)
-			found := seams(m.View().Content, size.w, size.h)
+			found := holes(m.View().Content, size.w, size.h)
 			require.Empty(t, found, report(found))
 		})
 	}
 }
 
-// Overlays are where seams live: each one is stamped into the composed screen by
-// hand, and the stamping pads the base row out to meet it.
+// Overlays are where the seams are: each one is stamped into the composed screen
+// by hand, and the stamping pads the base row out to meet it.
 //
 // The list is the one the issue audited for selection fills that stop short of
 // the row edge. A fill that ends early used to blend into the terminal and was
 // invisible; over a canvas it reads as a ragged highlight, so each is opened
 // here rather than reasoned about.
-func TestCanvas_OverlaysHaveNoSeams(t *testing.T) {
+func TestCanvas_OverlaysHaveNoHoles(t *testing.T) {
 	paintedSlots(t)
 
 	for _, tc := range []struct {
@@ -170,7 +173,7 @@ func TestCanvas_OverlaysHaveNoSeams(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := tc.open(t, newPopulatedRoot(t, 120, 40))
-			found := seams(m.View().Content, 120, 40)
+			found := holes(m.View().Content, 120, 40)
 			require.Empty(t, found, report(found))
 		})
 	}
@@ -179,13 +182,13 @@ func TestCanvas_OverlaysHaveNoSeams(t *testing.T) {
 // A selected message is drawn differently from every other: the bubble carries
 // an indicator bar in the margin beside it, spliced into the row rather than
 // appended to it. That splice used to assume the margin was plain spaces.
-func TestCanvas_SelectedMessageHasNoSeams(t *testing.T) {
+func TestCanvas_SelectedMessageHasNoHoles(t *testing.T) {
 	paintedSlots(t)
 
-	for _, size := range seamSizes {
+	for _, size := range scanSizes {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := focusChat(t, newPopulatedRoot(t, size.w, size.h))
-			found := seams(m.View().Content, size.w, size.h)
+			found := holes(m.View().Content, size.w, size.h)
 			require.Empty(t, found, report(found))
 		})
 	}
@@ -194,13 +197,13 @@ func TestCanvas_SelectedMessageHasNoSeams(t *testing.T) {
 // The folder bar only exists when the account has folders, so the three-pane
 // layout it produces is a different split of the screen from the one every other
 // test here renders.
-func TestCanvas_FolderBarHasNoSeams(t *testing.T) {
+func TestCanvas_FolderBarHasNoHoles(t *testing.T) {
 	paintedSlots(t)
 
-	for _, size := range seamSizes {
+	for _, size := range scanSizes {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := withFolders(t, newPopulatedRoot(t, size.w, size.h))
-			found := seams(m.View().Content, size.w, size.h)
+			found := holes(m.View().Content, size.w, size.h)
 			require.Empty(t, found, report(found))
 		})
 	}
@@ -236,14 +239,14 @@ func withFolders(t testing.TB, m ui.RootModel) ui.RootModel {
 
 // The login screen is almost entirely whitespace around a centred block, which
 // is emitted by lipgloss.Place rather than by anything the app padded itself.
-func TestCanvas_LoginScreenHasNoSeams(t *testing.T) {
+func TestCanvas_LoginScreenHasNoHoles(t *testing.T) {
 	paintedSlots(t)
 
 	m := newRoot(nil, 50, false)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = next.(ui.RootModel)
 
-	found := seams(m.View().Content, 100, 30)
+	found := holes(m.View().Content, 100, 30)
 	require.Empty(t, found, report(found))
 }
 
@@ -257,7 +260,7 @@ func TestCanvas_UnsetLeavesEveryCellBare(t *testing.T) {
 	const w, h = 120, 40
 	m := newPopulatedRoot(t, w, h)
 
-	bare := len(seams(m.View().Content, w, h))
+	bare := len(holes(m.View().Content, w, h))
 	// The status bar is a surface the built-ins do paint, so not every cell is
 	// bare. What this pins is that the canvas machinery painted nothing: the
 	// field around the surfaces is still the terminal's, as it always was.

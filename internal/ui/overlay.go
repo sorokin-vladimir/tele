@@ -25,7 +25,7 @@ import (
 func dimBackground(content string) string {
 	// Stripping the ANSI takes the canvas off with everything else, so the dim
 	// style has to put it back — otherwise the whole area behind a modal falls
-	// through to the terminal, which is the largest seam a canvas could have.
+	// through to the terminal, which is the largest hole a canvas could have.
 	dim := theme.NewStyle().Foreground(theme.T().OverlayDim)
 
 	lines := strings.Split(content, "\n")

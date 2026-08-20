@@ -89,7 +89,7 @@ func padSGR(t Theme) (prefix, suffix string) {
 	i := strings.Index(out, probe)
 	if i < 0 {
 		// Unreachable unless lipgloss stops emitting what it was given. Padding
-		// without the canvas is a visible seam; padding of the wrong width is a
+		// without the canvas is a visible hole; padding of the wrong width is a
 		// broken layout, so this fails towards the lesser one.
 		return "", ""
 	}

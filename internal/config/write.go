@@ -99,9 +99,15 @@ func documentRoot(doc *yaml.Node) *yaml.Node {
 	return root
 }
 
-// source is the file as lines, edited in place.
+// source is the file as lines, edited in place. The lines carry no line ending
+// of their own: newline holds the one the file uses, and it is put back when the
+// text is assembled again.
 type source struct {
 	lines []string
+	// newline is how this file spells a line break - "\r\n" for a config
+	// written on Windows. A line written below joins the file in the file's own
+	// spelling rather than leaving one LF in the middle of a CRLF file.
+	newline string
 	// endsWithNewline records whether the file ended in one, so that writing a
 	// setting does not silently add or remove the last byte.
 	endsWithNewline bool
@@ -109,18 +115,31 @@ type source struct {
 
 func newSource(raw []byte) *source {
 	text := string(raw)
-	s := &source{endsWithNewline: strings.HasSuffix(text, "\n")}
+	s := &source{newline: "\n", endsWithNewline: strings.HasSuffix(text, "\n")}
 	if text == "" {
 		return s
 	}
 	s.lines = strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+
+	// The carriage returns come off here and go back on in text(), so that no
+	// line built below has to remember them - and so that a value replaced on a
+	// line does not lose the one that was at the end of it. A file that mixes
+	// both endings settles on the one its first line uses; that is a file an
+	// earlier tele could leave behind, and there is no third answer that is
+	// closer to what is already there.
+	if strings.HasSuffix(s.lines[0], "\r") {
+		s.newline = "\r\n"
+	}
+	for i, line := range s.lines {
+		s.lines[i] = strings.TrimSuffix(line, "\r")
+	}
 	return s
 }
 
 func (s *source) text() string {
-	out := strings.Join(s.lines, "\n")
+	out := strings.Join(s.lines, s.newline)
 	if s.endsWithNewline || out == "" {
-		out += "\n"
+		out += s.newline
 	}
 	return out
 }

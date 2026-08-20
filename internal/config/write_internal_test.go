@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -215,6 +216,13 @@ func TestEditFile_WritesIntoAnEmptyFile(t *testing.T) {
 // The file holds an API hash. An edit must not be the moment it becomes
 // world-readable, and the temporary file must not be either.
 func TestEditFile_KeepsTheFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX mode to keep: Chmod there sets the read-only
+		// bit and nothing else, and Perm reads back 0666 for any file that is
+		// writable. There is nothing here for the assertion to mean.
+		t.Skip("file modes are POSIX")
+	}
+
 	path := fixture(t)
 	require.NoError(t, os.Chmod(path, 0600))
 
@@ -243,6 +251,35 @@ func TestEditFile_KeepsQuotingStyle(t *testing.T) {
 	require.NoError(t, editFile(path, "ui.history_limit", 200))
 
 	assert.Contains(t, read(t, path), `api_hash: "deadbeef"`)
+}
+
+// A config written on Windows is CRLF throughout, and an edit is not the moment
+// part of it stops being: neither the line whose value changed nor the line
+// inserted beside it may come back with a bare LF.
+func TestEditFile_KeepsCRLFLineEndings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte("ui:\r\n"+
+		"  history_limit: 50\r\n"+
+		"\r\n"+
+		"  theme:\r\n"+
+		"    dark: nord\r\n"), 0600))
+
+	require.NoError(t, editFile(path, "ui.history_limit", 200))
+	require.NoError(t, editFile(path, "ui.notification_preview", false))
+	after := read(t, path)
+
+	assert.Contains(t, after, "  history_limit: 200\r\n", "the line that changed")
+	assert.Contains(t, after, "  notification_preview: false\r\n", "the line that was written")
+	assert.NotContains(t, strings.ReplaceAll(after, "\r\n", ""), "\n", "and no line ends in a bare LF")
+}
+
+// The other half of the same promise: a file that uses LF does not pick up
+// carriage returns from the platform the edit happens to run on.
+func TestEditFile_KeepsLFLineEndings(t *testing.T) {
+	path := fixture(t)
+	require.NoError(t, editFile(path, "ui.notification_preview", false))
+
+	assert.NotContains(t, read(t, path), "\r")
 }
 
 func TestSiblingOrder(t *testing.T) {

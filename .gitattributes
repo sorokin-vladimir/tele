@@ -1,4 +1,16 @@
-# Golden files are data a test compares byte for byte. A Windows checkout that
-# rewrote their line endings would fail the comparison over how the working copy
-# spells a line break rather than over what the file records.
+# Every file checks out with LF, on every platform. Nothing here needs CRLF, and
+# a Windows checkout that rewrote line endings would fail every test that
+# compares a file byte for byte - a golden file, a config fixture - over how the
+# working copy spells a line break rather than over what the file records.
+* text=auto eol=lf
+
+# Golden files are data. Not converting them at all is stronger than converting
+# them to LF: whatever bytes they record are the bytes the test compares.
 *.golden -text
+
+# The same, said outright for the media the tests decode. text=auto would leave
+# these alone on its own, by noticing they are binary - saying so is not relying
+# on it noticing.
+*.webp binary
+*.png binary
+*.gif binary

@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-08-20
+
 ### Added
 
 - The profile overlay shows the person's avatar, fetched and cached apart from

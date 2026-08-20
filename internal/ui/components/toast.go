@@ -118,6 +118,40 @@ func NewToastStack(width, height, maxVisible int, errorZone, notifyZone ToastZon
 
 func (s *ToastStack) SetSize(w, h int) { s.width, s.height = w, h }
 
+// SetZones moves the stack to different corners, taking the toasts already on
+// screen with it.
+//
+// The stack is changed rather than rebuilt because rebuilding it would drop
+// whatever is currently being read, and the timers that retire those toasts are
+// already in flight with serials only this stack knows. Toasts already added
+// are re-homed for the same reason the setting is immediate at all: leaving them
+// where they were would draw the stack in two corners at once until they
+// expired, which reads as a bug rather than as a setting taking effect.
+func (s *ToastStack) SetZones(errorZone, notifyZone ToastZone) {
+	s.zoneFor = map[ToastKind]ToastZone{
+		ToastInfo:    errorZone,
+		ToastWarning: errorZone,
+		ToastError:   errorZone,
+		ToastNotify:  notifyZone,
+	}
+	for i := range s.toasts {
+		s.toasts[i].zone = s.zoneFor[s.toasts[i].kind]
+	}
+}
+
+// SetMaxVisible changes how many toasts a zone shows at once. Lowering it does
+// not discard the rest: they stop being drawn and start being counted, which is
+// what the overflow line already says.
+func (s *ToastStack) SetMaxVisible(n int) { s.maxVisible = n }
+
+// MaxVisible is how many toasts a zone shows at once.
+func (s *ToastStack) MaxVisible() int { return s.maxVisible }
+
+// ZoneOf is the corner a toast of this kind is currently sent to. It exists so
+// that a config change can be checked to have reached the stack, rather than
+// only to have reached the config.
+func (s *ToastStack) ZoneOf(kind ToastKind) ToastZone { return s.zoneFor[kind] }
+
 // SetBottomInset reserves rows above the status bar that bottom-anchored toasts
 // must not cover — the composer. A warning about what you are typing is useless
 // if it lands on top of the field you are typing into (#126).

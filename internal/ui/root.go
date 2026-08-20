@@ -82,6 +82,10 @@ type RootModel struct {
 	verbose       bool
 	log           *zap.Logger
 	cfg           *config.Config
+	// reloadConfig re-reads the config file and hands the result to everything
+	// else holding one. Supplied by the app; nil in tests and wherever nothing
+	// can be reloaded, in which case the reload action reloads themes alone.
+	reloadConfig func() (*config.Config, error)
 	// configWarnings are the non-fatal config notices, shown as toasts once the
 	// TUI is up. They are also logged and printed to stderr, but stderr is wiped
 	// by the alt-screen a moment later, so on their own those two amount to
@@ -254,14 +258,21 @@ func (m RootModel) debug(msg string, fields ...zap.Field) {
 	}
 }
 
+// WithConfig installs the config at startup. It does the two things that can
+// only be done once - choosing the image renderer and building the toast stack -
+// and then hands over to applyConfig, which is the same path a reload takes.
+//
+// Splitting it this way is what keeps "which settings are live" honest. There is
+// one place where a config becomes running state, so a setting is live because
+// applyConfig touches it, not because somebody remembered to say so.
 func (m RootModel) WithConfig(cfg *config.Config) RootModel {
-	m.cfg = cfg
+	// photos.mode is a startup setting: the renderer and everything already
+	// transmitted to the terminal are chosen from it, so it is read here and
+	// nowhere else.
 	m.imageMode = media.DetectMode(cfg.Photos.Mode, os.Getenv)
 	if m.imageMode == media.ModeKitty {
 		m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	}
-	m.kittyCap = cfg.Photos.KittyPlacementCap
-	m.chat.SetMaxMediaPx(cfg.Photos.MaxLongSidePx)
 	m.chat.SetImageMode(m.imageMode)
 	w, h := m.width, m.height
 	if w == 0 {
@@ -270,6 +281,30 @@ func (m RootModel) WithConfig(cfg *config.Config) RootModel {
 	m.toasts = components.NewToastStack(w, h, cfg.UI.Toasts.MaxVisible,
 		parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
 	m.configWarnings = cfg.Warnings
+	return m.applyConfig(cfg)
+}
+
+// applyConfig makes a config the one the model is running on. Called at startup
+// and again on every reload, whether the change was made in the overlay or in an
+// editor.
+//
+// Components are changed rather than rebuilt. Rebuilding the toast stack would
+// throw away whatever is on screen, and the timers retiring those toasts are
+// already in flight with serials only that stack knows - a setting taking effect
+// must not cost the person the notification they were reading.
+func (m RootModel) applyConfig(cfg *config.Config) RootModel {
+	m.cfg = cfg
+
+	// Immediate.
+	m.toasts.SetZones(parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
+	m.toasts.SetMaxVisible(cfg.UI.Toasts.MaxVisible)
+
+	// Next-use: what is drawn stays as it was drawn, and the new value is what
+	// the next fetch asks for and the next image is drawn at.
+	m.historyLimit = cfg.UI.HistoryLimit
+	m.kittyCap = cfg.Photos.KittyPlacementCap
+	m.chat.SetMaxMediaPx(cfg.Photos.MaxLongSidePx)
+
 	return m
 }
 
@@ -302,14 +337,15 @@ func (m RootModel) configWarningCmds() []tea.Cmd {
 	return cmds
 }
 
-// parseToastZone maps a config zone string to a ToastZone, defaulting unknown
-// values to the bottom-right corner.
+// parseToastZone translates a zone name into a ToastZone. It decides nothing:
+// which names are legal is declared once, in the settings registry, and a name
+// that is not one of them is repaired and reported when the config is loaded.
+// What is left here is the empty string - a config that named no zone at all -
+// and the corner it falls to.
 func parseToastZone(s string) components.ToastZone {
 	switch s {
 	case "top-right":
 		return components.ZoneTopRight
-	case "bottom-left":
-		return components.ZoneBottomLeft
 	default:
 		return components.ZoneBottomRight
 	}

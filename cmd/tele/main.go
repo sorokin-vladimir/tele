@@ -56,11 +56,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(*cfgPath, defaultState)
+	// The store rather than a bare config: it holds the file's path, which is
+	// what a reload needs and what the settings overlay writes to.
+	cfgStore, err := config.NewStore(*cfgPath, defaultState)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
+	cfg := cfgStore.Current()
 
 	// Themes are resolved here, before the TUI exists, so a bad theme file is an
 	// ordinary config warning rather than something the interface has to cope
@@ -162,7 +165,7 @@ func main() {
 		}
 	}
 
-	a, err := app.New(cfg, log, *verbose, *trace)
+	a, err := app.New(cfgStore, log, *verbose, *trace)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		os.Exit(1)

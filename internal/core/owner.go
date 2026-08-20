@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 
@@ -30,7 +31,12 @@ type Connection interface {
 // path, the update loop and the notification decision. Clients attach to it; in
 // this release the only client is the TUI in the same process.
 type Owner struct {
-	cfg      *config.Config
+	// cfg is the config the owner is running on, swapped whole when the file is
+	// reloaded. A pointer rather than a copy of the values that matter: a value
+	// copied at construction is a value that quietly ignores every reload, and
+	// which settings are live should not depend on how each reader was written
+	// (#239).
+	cfg      atomic.Pointer[config.Config]
 	log      *zap.Logger
 	state    *state.State
 	client   Connection
@@ -49,9 +55,6 @@ type Owner struct {
 	registry      *project.Registry
 	readyCh       chan struct{}
 	onAuthFn      func(userID int64, username string)
-
-	// historyLimit is how many messages one backfill fetches, from config.
-	historyLimit int
 
 	// ctx bounds the owner's background work (history backfill). It is stored
 	// rather than passed because that work is started by a subscription, which
@@ -95,7 +98,6 @@ type Owner struct {
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
 	o := &Owner{
-		cfg:           cfg,
 		log:           log,
 		state:         st,
 		client:        client,
@@ -108,13 +110,13 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		progress:      make(chan Progress, 32),
 		notifications: make(chan Notification, 32),
 		readyCh:       make(chan struct{}),
-		historyLimit:  cfg.UI.HistoryLimit,
 		ctx:           context.Background(),
 		fetching:      make(map[project.SubID]bool),
 		focus:         newFocusRegistry(),
 		outboxWake:    make(chan struct{}, 1),
 		uploadCancels: make(map[string]context.CancelFunc),
 	}
+	o.cfg.Store(cfg)
 	// Built from the owner, not from the store alone: the projection reads the
 	// send queue too, and the queue arrives later through SetOutbox (#193).
 	o.registry = project.NewRegistry(projectionReader{Store: st.Store(), owner: o})
@@ -131,6 +133,15 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 
 // SetContext bounds the owner's background work. Call before Start.
 func (o *Owner) SetContext(ctx context.Context) { o.ctx = ctx }
+
+// Config is the config the owner is running on. Read it where it is used rather
+// than copying a value out of it, so that a setting follows a reload without
+// anybody having to remember to re-copy it.
+func (o *Owner) Config() *config.Config { return o.cfg.Load() }
+
+// SetConfig installs a reloaded config. One store at the root, the way a theme
+// is installed: no reader can see half of a change.
+func (o *Owner) SetConfig(cfg *config.Config) { o.cfg.Store(cfg) }
 
 // AuthFlow is the login conversation the client drives on the owner's behalf.
 func (o *Owner) AuthFlow() *internaltg.AuthFlow { return o.authFlow }

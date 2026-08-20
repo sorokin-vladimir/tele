@@ -96,7 +96,10 @@ var registry = []settings.Entry{
 		Help:    "The corner errors appear in.",
 		Widget:  settings.Choice,
 		Applies: settings.Immediate,
-		Choices: []string{"bottom-right", "top-right", "bottom-left"},
+		// The bottom-left corner is spoken for: it is where the demo mode's
+		// key-press visualiser goes (#83). Offering it here would let a person
+		// send their toasts to a corner nothing draws them in.
+		Choices: []string{"bottom-right", "top-right"},
 	},
 	{
 		Key:     "ui.toasts.notify_zone",
@@ -105,7 +108,7 @@ var registry = []settings.Entry{
 		Help:    "The corner notifications appear in. The same corner as errors is allowed; they then stack together.",
 		Widget:  settings.Choice,
 		Applies: settings.Immediate,
-		Choices: []string{"bottom-right", "top-right", "bottom-left"},
+		Choices: []string{"bottom-right", "top-right"},
 	},
 	{
 		Key:     "ui.toasts.max_visible",

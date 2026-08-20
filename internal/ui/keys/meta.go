@@ -57,7 +57,8 @@ var defaultLabels = map[Action]Label{
 	ActionQuit:          {Short: "quit"},
 	ActionDismissToast:  {Short: "dismiss", Long: "dismiss toast"},
 	ActionShowHelp:      {Short: "help", Long: "keyboard shortcuts"},
-	ActionReloadThemes:  {Short: "reload themes", Long: "re-read the theme files"},
+	ActionReloadConfig:  {Short: "reload", Long: "re-read the config and theme files"},
+	ActionReloadThemes:  {Short: "reload", Long: "re-read the config and theme files"},
 	// Chat / message actions.
 	ActionSearch:          {Short: "search"},
 	ActionOpenContextMenu: {Short: "menu"},

@@ -26,10 +26,16 @@ const (
 	ActionQuit          Action = "quit"
 	ActionDismissToast  Action = "dismiss_toast"
 	ActionShowHelp      Action = "show_help"
-	// ActionReloadThemes re-reads the theme files and reapplies them. It ships
-	// with no default binding: it exists for the few minutes someone spends
-	// writing a theme, and does not deserve a key the rest of the time. Bind it
-	// from the config when you need it.
+	// ActionReloadConfig re-reads the config file and the theme files and
+	// applies both. It ships with no default binding: it exists for the minutes
+	// someone spends writing a theme or editing the config in another window,
+	// and does not deserve a key the rest of the time. Bind it from the config
+	// when you need it.
+	ActionReloadConfig Action = "reload_config"
+	// ActionReloadThemes is what this action used to be called, when it read
+	// only the theme files. It does the same thing as ActionReloadConfig and is
+	// kept because people have it bound in their configs; a rename is not a
+	// reason to take somebody's key away.
 	ActionReloadThemes Action = "reload_themes"
 )
 

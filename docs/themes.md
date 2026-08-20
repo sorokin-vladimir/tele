@@ -228,15 +228,26 @@ they have to be judged against that surface, not against the canvas.
 
 ## Editing a theme while tele runs
 
-The `reload_themes` action re-reads the files and reapplies them, without a
-restart. It ships with **no key bound**, because it is only useful while writing
-a theme. Bind it when you need it:
+The `reload_config` action re-reads the theme files and the config file and
+applies both, without a restart. It ships with **no key bound**, because it is
+only useful while you are editing something in another window - most often while
+writing a theme, where a restart costs a reconnect for every colour you try.
+Bind it when you need it:
 
 ```yaml
 keybindings:
   global:
-    reload_themes: ctrl+t
+    reload_config: ctrl+t
 ```
+
+`reload_themes` is the name this action had when it read only the theme files.
+It still works and does the same thing, so a config that already binds it needs
+no change.
+
+A reload reports what it found: the resolved theme in each slot, or the first
+problem and how many others are in the log. Anything wrong in the config file -
+a value tele will not accept, a theme that is not there - is reported the same
+way.
 
 ## Tokens
 

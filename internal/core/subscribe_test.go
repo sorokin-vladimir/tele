@@ -45,8 +45,9 @@ func (s *stubConn) GetHistory(_ context.Context, _ domain.Peer, _ int, _ int) ([
 func newOwnerWithClient(t *testing.T, c Connection) (*Owner, *state.State) {
 	t.Helper()
 	s := state.New(store.NewMemory())
-	o := New(&config.Config{}, zap.NewNop(), s, c, nopNotifier{})
-	o.historyLimit = 20
+	cfg := &config.Config{}
+	cfg.UI.HistoryLimit = 20
+	o := New(cfg, zap.NewNop(), s, c, nopNotifier{})
 	return o, s
 }
 

@@ -66,11 +66,11 @@ func TestLoad_WrongTypeIsRepairedAndReported(t *testing.T) {
 // Repair touches the key that is wrong and nothing else. A file with one bad
 // value is not a file to be reset.
 func TestLoad_RepairLeavesTheRestOfTheFileAlone(t *testing.T) {
-	cfg := loadWith(t, "ui:\n  history_limit: 0\n  notification_preview: false\n  toasts:\n    notify_zone: bottom-left\n")
+	cfg := loadWith(t, "ui:\n  history_limit: 0\n  notification_preview: false\n  toasts:\n    notify_zone: bottom-right\n")
 
 	assert.Equal(t, 50, cfg.UI.HistoryLimit, "repaired")
 	assert.False(t, cfg.UI.NotificationPreview, "kept")
-	assert.Equal(t, "bottom-left", cfg.UI.Toasts.NotifyZone, "kept")
+	assert.Equal(t, "bottom-right", cfg.UI.Toasts.NotifyZone, "kept")
 	require.Len(t, cfg.Warnings, 1)
 }
 

@@ -182,6 +182,10 @@ func (ml *MessageList) SetMaxMediaPx(px int) {
 	ml.maxMediaPx = px
 }
 
+// MaxMediaPx is the cap currently in force. It exists so that a reload can be
+// checked to have reached the list, rather than only to have reached the config.
+func (ml *MessageList) MaxMediaPx() int { return ml.maxMediaPx }
+
 // PhotoBox exposes the capped photo cell box to callers (Kitty transmit,
 // retransmit sizing) so they match the rendered grid.
 func (ml *MessageList) PhotoBox(imgW, imgH int) (int, int) {

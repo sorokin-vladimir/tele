@@ -33,14 +33,14 @@ func TestRoot_ReloadThemes_PicksUpAnEdit(t *testing.T) {
 	require.NoError(t, os.WriteFile(file, []byte("accent: \"#111111\"\n"), 0600))
 
 	m := reloadModel(t, dir, "mine")
-	m, _ = m.reloadThemes()
+	m, _ = m.reloadFromDisk()
 	theme.Apply(true)
 	first, err := theme.ParseColor("#111111")
 	require.NoError(t, err)
 	require.Equal(t, first, theme.T().Accent)
 
 	require.NoError(t, os.WriteFile(file, []byte("accent: \"#222222\"\n"), 0600))
-	m.reloadThemes()
+	m.reloadFromDisk()
 	theme.Apply(true)
 
 	second, err := theme.ParseColor("#222222")
@@ -54,7 +54,7 @@ func TestRoot_ReloadThemes_KeepsTheAppliedBackground(t *testing.T) {
 	m := reloadModel(t, t.TempDir(), "")
 
 	theme.Apply(false)
-	m.reloadThemes()
+	m.reloadFromDisk()
 
 	assert.Equal(t, "tele-light", theme.T().Name)
 }
@@ -65,7 +65,7 @@ func TestRoot_ReloadThemes_WarnsOnABadFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "mine.yml"), []byte("accent: notacolor\n"), 0600))
 
 	m := reloadModel(t, dir, "mine")
-	m, cmd := m.reloadThemes()
+	m, cmd := m.reloadFromDisk()
 	require.NotNil(t, cmd)
 	m.SettleToastsForTest()
 
@@ -86,7 +86,7 @@ func TestRoot_ReloadThemes_SaysHowManyProblemsItIsNotShowing(t *testing.T) {
 		"sparkle: \"#ffffff\"\nbackground: \"#ffffff\"\ntext: \"#000000\"\n"), 0600))
 
 	m := reloadModel(t, dir, "mine")
-	m, _ = m.reloadThemes()
+	m, _ = m.reloadFromDisk()
 	m.SettleToastsForTest()
 
 	zones := m.toasts.Zones()

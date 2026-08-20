@@ -29,10 +29,13 @@ import (
 )
 
 type App struct {
-	cfg   *config.Config
-	log   *zap.Logger
-	st    store.Store
-	owner *core.Owner
+	// cfgStore is the config file and the config the app is running on. The app
+	// asks it rather than holding a Config of its own, so that a reload reaches
+	// everything through one place.
+	cfgStore *config.Store
+	log      *zap.Logger
+	st       store.Store
+	owner    *core.Owner
 	// sqlite is the same object as st, kept concretely because notice
 	// seen-state needs the database handle and store.Store does not expose it.
 	sqlite *store.SQLiteStore
@@ -93,13 +96,13 @@ func (a *App) pendingNotices() []notices.Notice {
 			ID:    "state-dir-moved-v1.10",
 			Title: "Your data moved",
 			Delay: delay,
-			Body: "The session and local database now live in " + a.cfg.StateDir +
+			Body: "The session and local database now live in " + a.cfg().StateDir +
 				", instead of next to the config file. They were moved for you and " +
 				"nothing was lost: you are still logged in. The old location is now empty " +
 				"and can be ignored.",
 		})
 	}
-	if a.cfg.SessionPinned {
+	if a.cfg().SessionPinned {
 		out = append(out, notices.Notice{
 			ID:    "session-file-deprecated-v1.10",
 			Title: "session_file is going away",
@@ -113,7 +116,25 @@ func (a *App) pendingNotices() []notices.Notice {
 	return out
 }
 
-func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, error) {
+// cfg is the config the app is running on. Asked for rather than held, so that
+// a reload is seen by whoever asks next.
+func (a *App) cfg() *config.Config { return a.cfgStore.Current() }
+
+// reloadConfig re-reads the config file and hands the result to everything that
+// holds one, before returning it to the UI to apply to itself. This is the whole
+// of "apply what is on disk": one function, called whether the change was made
+// in the settings overlay or in an editor (ADR 0009).
+func (a *App) reloadConfig() (*config.Config, error) {
+	if err := a.cfgStore.Reload(); err != nil {
+		return nil, err
+	}
+	cfg := a.cfg()
+	a.owner.SetConfig(cfg)
+	return cfg, nil
+}
+
+func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*App, error) {
+	cfg := cfgStore.Current()
 	statePath := filepath.Join(cfg.StateDir, "state.db")
 	sqliteStore, err := store.NewSQLite(statePath, log)
 	if err != nil {
@@ -152,13 +173,13 @@ func New(cfg *config.Config, log *zap.Logger, verbose bool, trace bool) (*App, e
 	}
 
 	a := &App{
-		cfg:     cfg,
-		log:     log,
-		st:      sqliteStore,
-		sqlite:  sqliteStore,
-		owner:   owner,
-		tmpDir:  tmpDir,
-		verbose: verbose,
+		cfgStore: cfgStore,
+		log:      log,
+		st:       sqliteStore,
+		sqlite:   sqliteStore,
+		owner:    owner,
+		tmpDir:   tmpDir,
+		verbose:  verbose,
 	}
 	// Registered after the App exists: the account identity is needed both by
 	// the message list (own messages) and by the farewell banner on exit.
@@ -189,7 +210,7 @@ func (a *App) Run() error {
 	go a.owner.RunOutbox(ctx)
 
 	// Build bubbletea model
-	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg.KeybindingOverrides())
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), a.cfg().KeybindingOverrides())
 	for _, w := range warns {
 		a.log.Warn("keybindings: " + w)
 	}
@@ -198,8 +219,9 @@ func (a *App) Run() error {
 	att := a.owner.Attach()
 	defer att.Detach()
 
-	root := ui.NewRootModel(a.st, a.cfg.UI.HistoryLimit, a.verbose)
-	root = root.WithContext(ctx).WithConfig(a.cfg).WithKeyMap(km).WithOwner(att).WithLogger(a.log)
+	root := ui.NewRootModel(a.st, a.cfg().UI.HistoryLimit, a.verbose)
+	root = root.WithContext(ctx).WithConfig(a.cfg()).WithKeyMap(km).WithOwner(att).WithLogger(a.log).
+		WithConfigReload(a.reloadConfig)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetTmpDir(a.tmpDir)
 

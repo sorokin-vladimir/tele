@@ -195,12 +195,16 @@ func TestNotification_ClickOpensChat(t *testing.T) {
 // internal/core/notify_test.go, against the real policy rather than a copy of
 // it (#192).
 
+// The two corners toasts are sent to. The bottom-left corner is not one of
+// them: it is held for the demo mode's key-press visualiser (#83), so a toast
+// there would be drawn by nobody. The settings registry declares the same two,
+// which is what stops a config from naming a third.
 func TestParseToastZone(t *testing.T) {
 	if parseToastZone("top-right") != components.ZoneTopRight {
 		t.Fatal("top-right")
 	}
-	if parseToastZone("bottom-left") != components.ZoneBottomLeft {
-		t.Fatal("bottom-left")
+	if parseToastZone("bottom-right") != components.ZoneBottomRight {
+		t.Fatal("bottom-right")
 	}
 	if parseToastZone("garbage") != components.ZoneBottomRight {
 		t.Fatal("unknown must default to bottom-right")

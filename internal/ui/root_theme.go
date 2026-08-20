@@ -6,45 +6,85 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-// reloadThemes re-reads the theme files and installs them. It is cheap and safe
-// mid-session: no component caches a style, and the one cache there is holds
-// line counts, which a color cannot change. The applied background is kept, so
-// reloading at noon does not snap the app to the dark slot.
+// WithConfigReload installs what the reload action does. The app supplies it
+// because reloading is wider than the UI: the file is re-read, and everything
+// holding a config - the owner included - is handed the new one before the UI
+// applies it to itself.
+func (m RootModel) WithConfigReload(reload func() (*config.Config, error)) RootModel {
+	m.reloadConfig = reload
+	return m
+}
+
+// reloadFromDisk makes what is on disk current: the config file and the theme
+// files, read again and applied together.
 //
-// Its reason to exist is the authoring loop. Writing a theme means changing one
-// of sixty tokens and looking; through a restart each look costs a reconnect.
-func (m RootModel) reloadThemes() (RootModel, tea.Cmd) {
-	if m.cfg == nil {
+// One action rather than two, because "apply what I have written" is one thought
+// and the two files are not separable in practice - a theme named in the config
+// is only meaningful with the theme file it names. It is also the only way a
+// change reaches a running tele, whether it was made in the settings overlay or
+// in an editor, which is what keeps those two from drifting (ADR 0009).
+//
+// It is cheap and safe mid-session: no component caches a style, and the one
+// cache there is holds line counts, which a colour cannot change. The applied
+// background is kept, so reloading at noon does not snap the app to the dark
+// slot.
+func (m RootModel) reloadFromDisk() (RootModel, tea.Cmd) {
+	cfg := m.cfg
+	if m.reloadConfig != nil {
+		reloaded, err := m.reloadConfig()
+		if err != nil {
+			// The file is still whatever it was, and so is the app: a config
+			// that stopped parsing is a reason to say so, not a reason to lose
+			// the settings that were working.
+			return m, m.retiringToast(components.ToastError, "config not reloaded: "+err.Error())
+		}
+		cfg = reloaded
+		m = m.applyConfig(cfg)
+	}
+	if cfg == nil {
 		return m, nil
 	}
-	loaded := theme.LoadSlots(m.cfg.ThemesDir, m.cfg.UI.ThemeSlots.Dark, m.cfg.UI.ThemeSlots.Light)
+
+	loaded := theme.LoadSlots(cfg.ThemesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
 	theme.SetSlots(loaded.Slots())
 
-	kind, text := components.ToastInfo, fmt.Sprintf("themes reloaded: %s / %s",
+	warnings := make([]string, 0, len(cfg.Warnings)+len(loaded.Warnings))
+	for _, w := range cfg.Warnings {
+		warnings = append(warnings, w.Text)
+	}
+	warnings = append(warnings, loaded.Warnings...)
+
+	kind, text := components.ToastInfo, fmt.Sprintf("reloaded: %s / %s",
 		loaded.Dark.Theme.Name, loaded.Light.Theme.Name)
-	if len(loaded.Warnings) > 0 {
+	if len(warnings) > 0 {
 		// The first problem is the one worth reading; the rest are in the log,
 		// and a reload is something you repeat until it is clean anyway. The
 		// count still has to be said: without it the toast reads as "one thing
-		// is wrong", and the one thing it happens to show is whichever the
-		// loader found first — a stray key can hide the legibility audit
-		// entirely, in the authoring loop this exists for.
-		kind, text = components.ToastWarning, loaded.Warnings[0]
-		if rest := len(loaded.Warnings) - 1; rest > 0 {
+		// is wrong", and the one thing it happens to show is whichever was
+		// found first — a stray key can hide the legibility audit entirely, in
+		// the authoring loop this exists for.
+		kind, text = components.ToastWarning, warnings[0]
+		if rest := len(warnings) - 1; rest > 0 {
 			text = fmt.Sprintf("%s (+%d more, see the log)", text, rest)
 		}
 		if m.log != nil {
-			for _, w := range loaded.Warnings {
-				m.log.Warn("theme: " + w)
+			for _, w := range warnings {
+				m.log.Warn("reload: " + w)
 			}
 		}
 	}
+	return m, m.retiringToast(kind, text)
+}
+
+// retiringToast shows a toast and returns the timer that takes it away again.
+func (m RootModel) retiringToast(kind components.ToastKind, text string) tea.Cmd {
 	serial := m.toasts.Add(kind, text)
-	return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg {
+	return tea.Tick(5*time.Second, func(time.Time) tea.Msg {
 		return ClearStatusErrMsg{Serial: serial}
 	})
 }

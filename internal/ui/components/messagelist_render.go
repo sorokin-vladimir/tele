@@ -762,6 +762,11 @@ func (ml *MessageList) View() string {
 		return strings.Repeat("\n", ml.viewHeight-1)
 	}
 
+	// The top padding below is for a history shorter than the pane, not for an
+	// anchor that a mutation left too low. Repair the anchor first so the two
+	// cases stay distinguishable (#225).
+	ml.reanchorIfUnderfilled()
+
 	selectedID := ml.computeSelectedMsgID()
 	// A queued send has no message id, so it has to be recognised by its ref —
 	// otherwise the selection indicator is never drawn beside it even though the

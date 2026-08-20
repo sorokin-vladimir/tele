@@ -150,6 +150,10 @@ func (ml *MessageList) SetSize(width, height int) {
 	}
 	ml.viewWidth = width
 	ml.viewHeight = height
+	// A taller pane (the composer collapsing back after a multi-line draft, or a
+	// terminal resize) frees rows above the anchor that nothing else would fill:
+	// the position keeps pointing where the smaller viewport left it (#225).
+	ml.reanchorIfUnderfilled()
 }
 
 func (ml *MessageList) Count() int {

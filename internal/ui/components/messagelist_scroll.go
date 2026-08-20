@@ -3,7 +3,11 @@ package components
 // ScrollInfo reports the message list's scroll position in rendered lines,
 // measured over the currently loaded window. Total grows as older history is
 // prepended; the viewport is top-anchored so visible content does not jump.
+// The root builds the pane's scrollbar before it renders the pane, so the
+// anchor is repaired here too: otherwise the thumb spends a frame describing a
+// position the very next View() throws away.
 func (ml *MessageList) ScrollInfo() ScrollInfo {
+	ml.reanchorIfUnderfilled()
 	total := 0
 	for i := range ml.items {
 		total += ml.itemHeight(i)
@@ -210,6 +214,39 @@ func (ml *MessageList) positionAtBottom() (int, int) {
 		lineCount += h
 	}
 	return 0, 0
+}
+
+// reanchorIfUnderfilled restores the invariant that a frame running to the last
+// item never leaves blank rows at the top while older content sits above the
+// viewport. View pads such a frame from the top, which is only right when the
+// whole history is shorter than the pane. Every mutation that shrinks the
+// content below the anchor breaks that: older messages prepended above
+// viewStart (PrependMessages deliberately keeps the visual position), a
+// collapsing composer growing viewHeight through SetSize, an image dropped from
+// the cache turning a tall bubble back into a placeholder. The padding then
+// freezes a blank band that only a scroll key clears, because scrollUpLine is
+// the first thing to recompute the position (#225).
+//
+// Re-anchoring at the bottom fills those rows with history that is already
+// loaded. The cursor is left alone: the bottom position keeps the same last
+// line and only extends the frame upward, so whatever was on screen still is.
+// Callers are the reads that depend on the anchor; it is idempotent and stops
+// as soon as the viewport is proven full, so calling it per frame is cheap.
+func (ml *MessageList) reanchorIfUnderfilled() {
+	if ml.viewHeight <= 0 || len(ml.items) == 0 {
+		return
+	}
+	if ml.viewStart <= 0 && ml.lineOffset <= 0 {
+		return // nothing above the viewport: a short history pads legitimately
+	}
+	lines := -ml.lineOffset
+	for i := ml.viewStart; i < len(ml.items); i++ {
+		lines += ml.itemHeight(i)
+		if lines >= ml.viewHeight {
+			return
+		}
+	}
+	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 }
 
 func (ml *MessageList) ScrollToMessage(id int) bool {

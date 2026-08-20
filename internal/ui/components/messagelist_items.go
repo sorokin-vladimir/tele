@@ -94,26 +94,87 @@ func (ml *MessageList) buildItems(msgs []domain.Message) []listItem {
 		}
 		items = append(items, listItem{kind: itemMessage, msg: anchor, parts: g})
 	}
-	return append(items, ml.outboxItems()...)
+	return append(items, ml.outboxItems(items)...)
 }
 
-// outboxItems renders the send queue as list items. They always sit at the end,
-// so there is nothing to merge with the window.
+// outboxItems renders the send queue as list items, minus the entries whose
+// message is already in the window. They always sit at the end, so there is
+// nothing to merge with the window.
 //
 // "At the end" no longer means "newest". A failed send does not hold its chat,
 // so the sends composed after it go out and land in the window above it, while
 // it stays here waiting on a decision (#224). Below therefore reads as "not in
 // the conversation yet" rather than "most recent", which is the distinction that
 // matters to someone looking at it.
-func (ml *MessageList) outboxItems() []listItem {
+//
+// Dropping the delivered ones is what makes the swap unobservable. An entry and
+// its message carry the same text, so a frame holding both draws it twice, one
+// bubble taller, and shifts everything above it — then the next frame shifts it
+// back. That frame is not hypothetical: one recompute yields ChatAppend and
+// ChatOutbox as separate deltas, and the client consumes one per tea.Msg, so it
+// always renders between them (#226). SentMsgIDs is the correlation, set
+// between a successful request and the moment the entry goes.
+//
+// One landed id is enough, where the owner's own clearSentOutbox waits for all
+// of an album's parts: it is deciding when the durable row may go, this is
+// deciding what to draw, and an album whose parts arrive one apply at a time
+// should fill in bubble by bubble rather than double the parts already there.
+func (ml *MessageList) outboxItems(window []listItem) []listItem {
 	if len(ml.outbox) == 0 {
 		return nil
 	}
+	inWindow := ml.landedIDs(window)
 	out := make([]listItem, 0, len(ml.outbox))
 	for _, e := range ml.outbox {
+		if id := deliveredID(e, inWindow); id != 0 {
+			// The cursor was parked on this entry when it was submitted, so it
+			// has to follow the send into the window — otherwise the selection
+			// indicator blinks out for exactly the frames this guard covers.
+			if ml.cursorOutboxRef == e.Ref {
+				ml.setCursor(id, "")
+			}
+			continue
+		}
 		out = append(out, listItem{kind: itemOutbox, entry: e, msg: ml.outboxBubble(e)})
 	}
 	return out
+}
+
+// landedIDs collects the message ids the window holds, and only when some entry
+// claims one: SentMsgIDs is empty for the whole life of an ordinary queued send,
+// and the queue is rebuilt on every upload progress frame.
+func (ml *MessageList) landedIDs(window []listItem) map[int]struct{} {
+	claimed := false
+	for _, e := range ml.outbox {
+		if len(e.SentMsgIDs) > 0 {
+			claimed = true
+			break
+		}
+	}
+	if !claimed {
+		return nil
+	}
+	ids := make(map[int]struct{}, len(window))
+	for _, it := range window {
+		if it.kind != itemMessage {
+			continue
+		}
+		for _, p := range it.parts {
+			ids[p.ID] = struct{}{}
+		}
+	}
+	return ids
+}
+
+// deliveredID returns the id of the first message this entry produced that is
+// already in the window, or 0 when none is.
+func deliveredID(e domain.OutboxEntry, inWindow map[int]struct{}) int {
+	for _, id := range e.SentMsgIDs {
+		if _, ok := inWindow[id]; ok {
+			return id
+		}
+	}
+	return 0
 }
 
 // outboxBubble is how a queued send is drawn: an ordinary outgoing bubble.
@@ -285,7 +346,7 @@ func (ml *MessageList) redrawOutbox() {
 	for len(kept) > 0 && kept[len(kept)-1].kind == itemOutbox {
 		kept = kept[:len(kept)-1]
 	}
-	ml.items = append(kept, ml.outboxItems()...)
+	ml.items = append(kept, ml.outboxItems(kept)...)
 	ml.invalidateHeights()
 }
 

@@ -5,19 +5,26 @@ package components
 // it survives item rebuilds (prepend/edit). The viewport follows the cursor and
 // keeps it vertically centered, clamped at the top and natural bottom.
 
-// placeCursor puts the cursor on one item, whichever kind it is. It is the only
-// writer of cursorMsgID and cursorOutboxRef: the invariant that at most one of
-// them is set lives nowhere else (#193).
+// setCursor writes the mutually exclusive pair. The invariant that at most one
+// of cursorMsgID and cursorOutboxRef is set lives here and nowhere else (#193),
+// so every move goes through it — by item index via placeCursor, or by message
+// id where the item does not exist yet (outboxItems following a delivered send
+// into the window, #226).
+func (ml *MessageList) setCursor(msgID int, ref string) {
+	ml.cursorMsgID, ml.cursorOutboxRef = msgID, ref
+}
+
+// placeCursor puts the cursor on one item, whichever kind it is.
 func (ml *MessageList) placeCursor(i int) {
 	if i < 0 || i >= len(ml.items) {
-		ml.cursorMsgID, ml.cursorOutboxRef = 0, ""
+		ml.setCursor(0, "")
 		return
 	}
 	if ml.items[i].kind == itemOutbox {
-		ml.cursorMsgID, ml.cursorOutboxRef = 0, ml.items[i].entry.Ref
+		ml.setCursor(0, ml.items[i].entry.Ref)
 		return
 	}
-	ml.cursorMsgID, ml.cursorOutboxRef = ml.items[i].msg.ID, ""
+	ml.setCursor(ml.items[i].msg.ID, "")
 }
 
 // selectable reports whether the cursor may rest on an item: messages and

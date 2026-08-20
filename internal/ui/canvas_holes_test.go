@@ -2,6 +2,7 @@ package ui_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -87,11 +88,79 @@ func holes(content string, w, h int) []hole {
 	return out
 }
 
+// unowned returns every cell holding a visible glyph that the theme set no
+// foreground for.
+//
+// It is the other half of the same defect. A theme that claims the canvas is
+// refused unless it also sets text, because a claimed background under a
+// foreground the app does not own is unreadable by accident — that is what the
+// token dependency exists to prevent. A cell drawn from a bare literal escapes
+// the dependency the same way it escapes the canvas: it has no colour of ours
+// at all, so the terminal's own foreground lands on our background.
+//
+// Blank cells are not counted. A space has no glyph to read, so padding owes a
+// background and nothing else.
+//
+// Box-drawing glyphs are not counted either, and that is a boundary rather than
+// an oversight. An unfocused pane is drawn by passing a nil border colour to
+// RenderBox (root_view.go: only the focused pane gets activeFg), so "inactive"
+// is expressed by declining to colour the frame at all — around 300 cells in
+// every frame, plain ones included, and the same before this scan existed as
+// after. Whether a claimed canvas may leave its frame to the terminal is a real
+// question and a separate one; counting it here would bury the forty-odd cells
+// this issue is about.
+func unowned(content string, w, h int) []hole {
+	buf := uv.NewScreenBuffer(w, h)
+	buf.Method = ansi.GraphemeWidth
+	uv.NewStyledString(content).Draw(buf, uv.Rect(0, 0, w, h))
+
+	var out []hole
+	for row := range h {
+		span := 0
+		for col := range w {
+			cell := buf.CellAt(col, row)
+			if span > 0 {
+				span--
+				continue
+			}
+			if cell == nil {
+				continue
+			}
+			if cell.Width > 1 {
+				span = cell.Width - 1
+			}
+			if strings.TrimSpace(cell.Content) == "" || cell.Style.Fg != nil {
+				continue
+			}
+			if isBoxDrawing(cell.Content) {
+				continue
+			}
+			out = append(out, hole{row: row, col: col, content: cell.Content})
+		}
+	}
+	return out
+}
+
+// isBoxDrawing reports whether a cell holds nothing but box-drawing and block
+// glyphs, which is how a pane frame and a scrollbar are told from text.
+func isBoxDrawing(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x2500 || r > 0x259F {
+			return false
+		}
+	}
+	return true
+}
+
 // report renders the first few holes; a broken frame produces thousands, and
-// the first handful say where to look as well as all of them would.
-func report(found []hole) string {
+// the first handful say where to look as well as all of them would. what names
+// what the cells are missing, since the same shape reports both halves.
+func report(found []hole, what string) string {
 	const show = 12
-	s := fmt.Sprintf("%d cells carry no background\n", len(found))
+	s := fmt.Sprintf("%d cells carry no %s\n", len(found), what)
 	for i, f := range found {
 		if i == show {
 			s += fmt.Sprintf("  ... and %d more\n", len(found)-show)
@@ -140,7 +209,7 @@ func TestCanvas_MainScreenHasNoHoles(t *testing.T) {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := newPopulatedRoot(t, size.w, size.h)
 			found := holes(m.View().Content, size.w, size.h)
-			require.Empty(t, found, report(found))
+			require.Empty(t, found, report(found, "background"))
 		})
 	}
 }
@@ -174,7 +243,7 @@ func TestCanvas_OverlaysHaveNoHoles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := tc.open(t, newPopulatedRoot(t, 120, 40))
 			found := holes(m.View().Content, 120, 40)
-			require.Empty(t, found, report(found))
+			require.Empty(t, found, report(found, "background"))
 		})
 	}
 }
@@ -189,7 +258,7 @@ func TestCanvas_SelectedMessageHasNoHoles(t *testing.T) {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := focusChat(t, newPopulatedRoot(t, size.w, size.h))
 			found := holes(m.View().Content, size.w, size.h)
-			require.Empty(t, found, report(found))
+			require.Empty(t, found, report(found, "background"))
 		})
 	}
 }
@@ -204,7 +273,7 @@ func TestCanvas_FolderBarHasNoHoles(t *testing.T) {
 		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 			m := withFolders(t, newPopulatedRoot(t, size.w, size.h))
 			found := holes(m.View().Content, size.w, size.h)
-			require.Empty(t, found, report(found))
+			require.Empty(t, found, report(found, "background"))
 		})
 	}
 }
@@ -247,7 +316,7 @@ func TestCanvas_LoginScreenHasNoHoles(t *testing.T) {
 	m = next.(ui.RootModel)
 
 	found := holes(m.View().Content, 100, 30)
-	require.Empty(t, found, report(found))
+	require.Empty(t, found, report(found, "background"))
 }
 
 // With no canvas nothing is painted, and that has to stay true: the built-ins
@@ -268,4 +337,116 @@ func TestCanvas_UnsetLeavesEveryCellBare(t *testing.T) {
 		"with no canvas most of the screen must still fall through to the terminal")
 	require.Less(t, bare, w*h,
 		"the built-ins paint the status bar, so some cells carry a surface")
+}
+
+// scanShape draws msgs in a group chat at every scan size and reports what the
+// canvas did not reach. Each shape gets its own short chat rather than a place
+// in one long one: the message list renders from the bottom, so at 41x12 a
+// crowded chat shows only its last rows and the shape under test is scrolled
+// out of the frame that is supposedly checking it.
+func scanShape(t *testing.T, msgs []domain.Message) {
+	t.Helper()
+	for _, size := range scanSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+			view := richChat(t, size.w, size.h, msgs).View().Content
+			found := holes(view, size.w, size.h)
+			require.Empty(t, found, report(found, "background"))
+			bare := unowned(view, size.w, size.h)
+			require.Empty(t, bare, report(bare, "foreground"))
+		})
+	}
+}
+
+// Every media kind draws a placeholder until art is available, and the label is
+// a bare literal at its source. The loop is bounded by the enum rather than by a
+// list, so a kind added to domain is scanned here without anyone remembering.
+func TestCanvas_MediaPlaceholdersHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	for kind := domain.MediaPhoto; kind < domain.MediaKindCount; kind++ {
+		t.Run(fmt.Sprintf("kind%d", int(kind)), func(t *testing.T) {
+			scanShape(t, []domain.Message{
+				incoming(1, "look at this"),
+				mediaOf(incoming(2, ""), kind),
+				outgoing(3, "nice"),
+			})
+		})
+	}
+}
+
+// An album is drawn as one item with a badge line per part, which is a second
+// producer of the same labels and does not go through labelLine.
+func TestCanvas_AlbumHasNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	msgs := []domain.Message{incoming(1, "sending a few")}
+	msgs = append(msgs, album(2, 4)...)
+	scanShape(t, msgs)
+}
+
+// Entities are the runs inside a bubble that carry their own style, so each one
+// is a pair of seams. code and pre also paint surface_code, which is the one
+// legitimate light patch in a painted frame and the reason a screenshot cannot
+// triage this on its own.
+func TestCanvas_EntitiesHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	for _, kind := range entityTypes {
+		t.Run(kind, func(t *testing.T) {
+			scanShape(t, []domain.Message{
+				incoming(1, "plain"),
+				withEntity(incoming(2, "marked up text"), kind),
+				outgoing(3, "plain"),
+			})
+		})
+	}
+}
+
+// The two separators are drawn from a label and the dashes flanking it, and the
+// spaces between them belonged to neither run.
+func TestCanvas_SeparatorsHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	scanShape(t, []domain.Message{
+		yesterday(incoming(1, "before midnight")),
+		incoming(2, "the next day"),
+		incoming(3, "and unread"),
+	})
+}
+
+// An edited message carries a marker before its timestamp, and reactions hang
+// under the bubble. Both sit on the bottom border, between runs that each end in
+// a reset.
+func TestCanvas_EditedAndReactedHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	scanShape(t, []domain.Message{
+		reacted(incoming(1, "reacted to")),
+		edited(outgoing(2, "edited afterwards")),
+		edited(reacted(incoming(3, "both at once"))),
+	})
+}
+
+// A selected message is drawn with an indicator bar in the margin beside it, and
+// the margin is on the other side for an incoming bubble than for an outgoing
+// one. TestCanvas_SelectedMessageHasNoHoles only ever selected an outgoing
+// message, so one of the two branches of alignBubbleLines was never drawn (#227).
+func TestCanvas_SelectedIncomingHasNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	msgs := []domain.Message{
+		outgoing(1, "mine"),
+		incoming(2, "theirs"),
+		outgoing(3, "mine again"),
+	}
+	for _, size := range scanSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+			m := focusChat(t, richChat(t, size.w, size.h, msgs))
+			// Focus selects the last message, which is outgoing. One step up is
+			// the incoming one, which is the branch that was never scanned.
+			m = pressKey('k')(t, m)
+			found := holes(m.View().Content, size.w, size.h)
+			require.Empty(t, found, report(found, "background"))
+		})
+	}
 }

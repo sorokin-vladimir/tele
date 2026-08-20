@@ -147,6 +147,12 @@ const (
 	MediaFile
 	MediaLocation
 	MediaOther // generic fallback (contact, poll, dice, …)
+
+	// MediaKindCount is not a kind. It bounds the enum so the canvas scan can
+	// walk every one of them, which is what keeps a kind added above this line
+	// from shipping a placeholder nobody ever rendered under a painted theme
+	// (#227). Keep it last.
+	MediaKindCount
 )
 
 // IsVideo reports whether the kind is a playable video (regular or round note),

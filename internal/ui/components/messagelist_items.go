@@ -237,14 +237,14 @@ func localMediaFor(e domain.OutboxEntry, p uploadProgress) *domain.LocalMedia {
 func outboxStatusGlyph(e domain.OutboxEntry) string {
 	switch e.State {
 	case domain.OutboxSending:
-		return " " + theme.S().TickOutbox.Render("↑")
+		return theme.Pad(1) + theme.S().TickOutbox.Render("↑")
 	case domain.OutboxFailed:
-		return " " + theme.S().TickFailed.Render("✕")
+		return theme.Pad(1) + theme.S().TickFailed.Render("✕")
 	default:
 		if d := time.Until(e.NextAttemptAt); d > 0 {
-			return " " + theme.S().TickOutbox.Render("↻ "+d.Round(time.Second).String())
+			return theme.Pad(1) + theme.S().TickOutbox.Render("↻ "+d.Round(time.Second).String())
 		}
-		return " " + theme.S().TickOutbox.Render("⋯")
+		return theme.Pad(1) + theme.S().TickOutbox.Render("⋯")
 	}
 }
 

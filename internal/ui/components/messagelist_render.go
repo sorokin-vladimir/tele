@@ -216,6 +216,9 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		if name == "" {
 			name = "?"
 		}
+		// canvas:ok measured, never drawn — this asks how wide the title will be
+		// so innerW can be widened to hold it. The line itself is composed below
+		// with theme.Pad, which is the same width.
 		titleW := lipgloss.Width(" " + ml.senderNameStyle(msg.SenderID).Render(name) + " ")
 		if innerW < titleW+1 {
 			innerW = titleW + 1

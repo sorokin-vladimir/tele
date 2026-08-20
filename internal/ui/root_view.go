@@ -21,6 +21,8 @@ func (m RootModel) View() tea.View {
 		// whitespace carries no background at all.
 		fill := lipgloss.WithWhitespaceStyle(theme.NewStyle())
 		if m.login.CurrentStep() < 0 {
+			// canvas:ok a newline occupies no cell, so there is nothing on it to
+			// leave unpainted; the text beside it goes through Body.
 			combined := joinCentred(logoView, "\n"+theme.S().Body.Render("connecting..."))
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		} else {

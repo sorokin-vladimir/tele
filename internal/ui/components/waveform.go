@@ -33,9 +33,13 @@ func voiceLabel(m *domain.MediaRef) string {
 func voicePlayingLabel(m *domain.MediaRef, progress float64, posSecs int) string {
 	bars := renderWaveformProgress(decodeWaveform(m.Waveform), maxWaveformBars, progress)
 	if bars == "" {
-		return "🎤 voice " + formatDuration(posSecs)
+		return theme.S().Body.Render("🎤 voice " + formatDuration(posSecs))
 	}
-	return "🎤 " + bars + " " + formatDuration(posSecs)
+	// Painted here rather than by the line that lays it out: bars holds a reset
+	// between the played run and the rest, so the glyphs either side of it have
+	// to carry the canvas themselves.
+	return theme.S().Body.Render("🎤 ") + bars +
+		theme.S().Body.Render(" "+formatDuration(posSecs))
 }
 
 // audioLabel renders an audio (music) message as performer/title or filename,
@@ -97,13 +101,17 @@ func renderWaveformProgress(samples []byte, width int, progress float64) string 
 	}
 	played := int(float64(len(bars))*progress + 0.5)
 	if played <= 0 {
-		return string(bars)
+		return theme.S().Body.Render(string(bars))
 	}
 	if played > len(bars) {
 		played = len(bars)
 	}
-	// The already-played portion is coloured; the rest stays plain.
-	return theme.S().WaveformPlayed.Render(string(bars[:played])) + string(bars[played:])
+	// The already-played portion takes its own colour; the rest takes the body
+	// style rather than staying plain. Both runs are painted here because the
+	// result carries a reset between them, and a line holding one cannot be
+	// painted by wrapping it (#227).
+	return theme.S().WaveformPlayed.Render(string(bars[:played])) +
+		theme.S().Body.Render(string(bars[played:]))
 }
 
 // renderWaveform draws amplitude samples as a Unicode block sparkline of the

@@ -374,6 +374,40 @@ func TestCanvas_MediaPlaceholdersHaveNoHoles(t *testing.T) {
 	}
 }
 
+// A voice message that is playing draws a waveform with a played run in its own
+// colour, which makes it the one label that reaches the line already holding a
+// reset. It cannot be painted by wrapping, so it paints its own runs — and it is
+// only drawn while something is playing, which is why nothing scanned it.
+func TestCanvas_PlayingVoiceHasNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	voice := mediaOf(incoming(2, ""), domain.MediaVoice)
+	voice.Media.Waveform = []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+	voice.Document = &domain.DocumentRef{ID: 4242}
+	msgs := []domain.Message{incoming(1, "listen"), voice, outgoing(3, "will do")}
+
+	for _, progress := range []float64{0, 0.5, 1} {
+		t.Run(fmt.Sprintf("progress%.0f", progress*100), func(t *testing.T) {
+			for _, size := range scanSizes {
+				t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+					m := richChat(t, size.w, size.h, msgs)
+					m.Chat().SetVoicePlayback(4242, progress, 12)
+					view := m.View().Content
+					// The live position is drawn only on the playing branch, so
+					// this is what keeps the scan below from passing because the
+					// waveform was never on screen at all.
+					require.Contains(t, ansi.Strip(view), "0:12",
+						"the playing waveform is not in the frame")
+					found := holes(view, size.w, size.h)
+					require.Empty(t, found, report(found, "background"))
+					bare := unowned(view, size.w, size.h)
+					require.Empty(t, bare, report(bare, "foreground"))
+				})
+			}
+		})
+	}
+}
+
 // An album is drawn as one item with a badge line per part, which is a second
 // producer of the same labels and does not go through labelLine.
 func TestCanvas_AlbumHasNoHoles(t *testing.T) {

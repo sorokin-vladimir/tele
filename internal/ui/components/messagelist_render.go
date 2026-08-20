@@ -190,7 +190,9 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	}
 	editMark := ""
 	if msg.EditDate != nil {
-		editMark = theme.S().Timestamp.Render("edited") + " · "
+		// The separator belongs to the run it follows: rendered with it, the
+		// glyph carries both the canvas and a colour the theme owns.
+		editMark = theme.S().Timestamp.Render("edited · ")
 	}
 	// The spaces framing the stamp sit on the bubble's bottom border, between
 	// runs that each end in a reset, so they carry the canvas themselves.
@@ -251,7 +253,9 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 		}
 		var titleStr string
 		if senderStyled != "" {
-			titleStr = " " + senderStyled + " "
+			// The spaces frame the name on the bubble's top border, between runs
+			// that each end in a reset, so they carry the canvas themselves.
+			titleStr = theme.Pad(1) + senderStyled + theme.Pad(1)
 		}
 		titleW := lipgloss.Width(titleStr)
 		rightFill := m.innerW - titleW - 1 // 1 fill char on the left
@@ -354,7 +358,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
 			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
-			sideLines = append(sideLines, labelLine(label, actualW, b, bs))
+			sideLines = append(sideLines, paintedLabelLine(label, lipgloss.Width(label), actualW, b, bs))
 		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}
@@ -427,7 +431,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 			bubbleW := lipgloss.Width(allLines[0])
 			available := ml.viewWidth - bubbleW
 			if available >= 2 {
-				bar := " " + theme.S().Indicator.Render(indicatorChar)
+				bar := theme.Pad(1) + theme.S().Indicator.Render(indicatorChar)
 				for i := 1; i < len(allLines)-1; i++ {
 					allLines[i] = allLines[i] + bar
 				}
@@ -461,7 +465,9 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 	}
 	editMark := ""
 	if msg.EditDate != nil {
-		editMark = theme.S().Timestamp.Render("edited") + " · "
+		// The separator belongs to the run it follows: rendered with it, the
+		// glyph carries both the canvas and a colour the theme owns.
+		editMark = theme.S().Timestamp.Render("edited · ")
 	}
 	tsStr := editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr
 	reactStr := strings.TrimSpace(buildReactStr(msg.Reactions))
@@ -525,22 +531,22 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		if leftPad < 0 {
 			leftPad = 0
 		}
-		pad := theme.Pad(leftPad)
-		for i := range lines {
-			lines[i] = pad + lines[i]
-		}
-		// leftPad bytes are ASCII spaces, so byte-slicing is safe.
+		// The margin is composed rather than spliced: with a canvas the pad opens
+		// with an escape sequence, so the byte offsets this used to slice at
+		// stopped being cell offsets and cut that sequence in half. Same reason
+		// alignBubbleLines builds its indicated margin whole (#227).
+		margin := theme.Pad(leftPad)
 		if selected && ml.showIndicator && leftPad >= 2 {
-			bar := " " + theme.S().Indicator.Render(indicatorChar)
-			for i := range lines {
-				lines[i] = lines[i][:leftPad-2] + bar + lines[i][leftPad:]
-			}
+			margin = theme.Pad(leftPad-1) + theme.S().Indicator.Render(indicatorChar)
+		}
+		for i := range lines {
+			lines[i] = margin + lines[i]
 		}
 		return lines
 	}
 	if selected && ml.showIndicator {
 		if available := ml.viewWidth - blockW; available >= 2 {
-			bar := " " + theme.S().Indicator.Render(indicatorChar)
+			bar := theme.Pad(1) + theme.S().Indicator.Render(indicatorChar)
 			for i := range lines {
 				lines[i] = lines[i] + bar
 			}
@@ -559,7 +565,10 @@ func (ml *MessageList) renderSeparator(label string) []string {
 	if rightFill < 0 {
 		rightFill = 0
 	}
-	line := theme.S().Separator.Render(strings.Repeat("─", fill)) + " " + label + " " + theme.S().Separator.Render(strings.Repeat("─", rightFill))
+	// One run rather than three: the label and the spaces flanking it used to sit
+	// between the rendered halves, owning neither a colour nor the canvas. Drawn
+	// with the rules there is no seam left to lose them at (#227).
+	line := theme.S().Separator.Render(strings.Repeat("─", fill) + " " + label + " " + strings.Repeat("─", rightFill))
 	return []string{"", line, ""}
 }
 
@@ -574,7 +583,7 @@ func (ml *MessageList) renderUnreadSeparator() []string {
 	if rightFill < 0 {
 		rightFill = 0
 	}
-	line := theme.S().UnreadSeparator.Render(strings.Repeat("─", fill)) + " " + theme.S().UnreadSeparator.Render(label) + " " + theme.S().UnreadSeparator.Render(strings.Repeat("─", rightFill))
+	line := theme.S().UnreadSeparator.Render(strings.Repeat("─", fill) + " " + label + " " + strings.Repeat("─", rightFill))
 	return []string{"", line, ""}
 }
 
@@ -724,10 +733,15 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 // remaining image cells.
 func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 	labelW := lipgloss.Width(label)
+	// Both callers hand over a plain badge — albumBadgeLabel and the space the
+	// mosaic appends to it — so this is the one place either reaches a cell, and
+	// the place the canvas and a colour are put on it (#227). Measured first: the
+	// art is dropped by the badge's width in columns, not in bytes.
+	painted := theme.S().Body.Render(label)
 	if labelW >= imgCols {
-		return label // label spans the whole row; no image cells remain
+		return painted // label spans the whole row; no image cells remain
 	}
-	return label + xansi.TruncateLeft(artRow, labelW, "")
+	return painted + xansi.TruncateLeft(artRow, labelW, "")
 }
 
 // captionLines wraps the album caption inside the bubble borders, matching the

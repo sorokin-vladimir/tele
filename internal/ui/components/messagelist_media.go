@@ -324,8 +324,26 @@ func videoOverlayLabel(m *domain.MediaRef) string {
 
 // labelLine renders one bordered, right-padded content line for a label.
 // Width is measured with lipgloss.Width so wide emoji pad correctly.
+//
+// The label arrives as plain text and is painted here rather than by whoever
+// produced it. Every producer of one — placeholderFor, localMediaLabel,
+// uploadStatusLine, overlayLabelFor, voicePlayingLabel, albumBadgeLabel — is
+// measured, concatenated with prefixes or compared in tests, and none of them
+// carries a reset, so the line that lays them out is free to paint them (#227,
+// and the clarification in ADR 0002). Measured before rendering, since the
+// padding is owed on the label's width and not on its escapes.
 func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
-	padding := theme.PadTo(lipgloss.Width(label), actualW)
+	return paintedLabelLine(theme.S().Body.Render(label), lipgloss.Width(label), actualW, b, bs)
+}
+
+// paintedLabelLine is the same line for a label that arrived already painted.
+// Content holding a reset in the middle of it cannot be painted by wrapping —
+// the background would be lost from that reset onward — so such a label paints
+// each of its own runs and hands over the width it occupies, which can no longer
+// be read off the string as cheaply. The voice waveform is the one label with
+// that shape: its played run takes a colour of its own.
+func paintedLabelLine(label string, labelW, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
+	padding := theme.PadTo(labelW, actualW)
 	return bs.Render(b.Left) + theme.Pad(1) + label + padding + theme.Pad(1) + bs.Render(b.Right)
 }
 

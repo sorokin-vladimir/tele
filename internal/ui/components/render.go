@@ -136,7 +136,12 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		if lo >= hi {
 			continue
 		}
-		style := theme.NewStyle()
+		// Layered onto the body style rather than onto a bare one. Entities that
+		// set a colour of their own overwrite it, but bold, italic, underline and
+		// strike add an attribute and nothing else: from a bare style those runs
+		// came out carrying the canvas and no foreground, so a word in bold lost
+		// the text colour the words either side of it had (#227).
+		style := theme.S().Body
 		styled := false
 		self := false
 		linkURL := ""

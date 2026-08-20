@@ -141,6 +141,11 @@ func (m RootModel) View() tea.View {
 		if m.help != nil {
 			content = overlayCenter(dimBackground(content), m.help.View(), m.width, m.height)
 		}
+		// Centred like the help modal, and for the same reason: it is a
+		// reference rather than something anchored to what is behind it.
+		if m.settings != nil {
+			content = overlayCenter(dimBackground(content), m.settings.View(), m.width, m.height)
+		}
 		// The profile is centred over the whole view rather than anchored to the
 		// row it was opened from: it is opened from three different places and
 		// each has a different anchor, while the centre is the same for all

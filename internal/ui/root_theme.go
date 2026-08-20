@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
+	"github.com/sorokin-vladimir/tele/internal/settings"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -17,6 +18,14 @@ import (
 // applies it to itself.
 func (m RootModel) WithConfigReload(reload func() (*config.Config, error)) RootModel {
 	m.reloadConfig = reload
+	return m
+}
+
+// WithSettingsStore installs where the settings overlay reads from. Without one
+// the overlay has nothing to show and the action does nothing, which is what
+// tests and any headless caller want.
+func (m RootModel) WithSettingsStore(store settings.Store) RootModel {
+	m.settingsStore = store
 	return m
 }
 

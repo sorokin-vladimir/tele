@@ -33,8 +33,12 @@ type Store struct {
 	current atomic.Pointer[Config]
 }
 
-// Verify the file store answers everything a store has to answer.
-var _ settings.Store = (*Store)(nil)
+// Verify the file store answers everything a store has to answer, including
+// the optional question only a store with absence in it can answer.
+var (
+	_ settings.Store      = (*Store)(nil)
+	_ settings.Defaulting = (*Store)(nil)
+)
 
 // NewStore reads the config at path and holds it.
 func NewStore(path, defaultStateDir string) (*Store, error) {
@@ -76,6 +80,13 @@ func (s *Store) Value(key string) (any, settings.Status) {
 		return nil, settings.Unknown
 	}
 	return v, settings.Saved
+}
+
+// IsDefault reports that the file does not name this setting, so what it is
+// worth is what tele chose rather than what anybody did.
+func (s *Store) IsDefault(key string) bool {
+	cfg := s.Current()
+	return cfg == nil || !cfg.named[key]
 }
 
 // Set writes a setting and applies it, in that order, because the file is what

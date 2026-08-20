@@ -221,7 +221,7 @@ func (a *App) Run() error {
 
 	root := ui.NewRootModel(a.st, a.cfg().UI.HistoryLimit, a.verbose)
 	root = root.WithContext(ctx).WithConfig(a.cfg()).WithKeyMap(km).WithOwner(att).WithLogger(a.log).
-		WithConfigReload(a.reloadConfig)
+		WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetTmpDir(a.tmpDir)
 

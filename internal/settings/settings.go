@@ -269,9 +269,23 @@ type Store interface {
 	// value: an Unknown value has not arrived, and a Failed one is the value the
 	// store still holds, not the one that was refused.
 	Value(key string) (v any, status Status)
-	// Set asks the store to take a new value. The error is refusal to attempt -
+	// Set asks the store to take a new value. A nil value resets the setting:
+	// absence is what a default is, so writing absence is how a setting goes
+	// back to one. The error is refusal to attempt -
 	// no such setting, a value Validate rejects, a read-only setting - and not
 	// the outcome of the attempt, which arrives through Value as the status
 	// leaves Saving.
 	Set(key string, v any) error
+}
+
+// Defaulting is a store that can say a setting is at its default because
+// nothing has chosen otherwise. Optional, and deliberately not part of Store:
+// it is a question about absence, and only a store where absence is possible
+// has an answer. A value kept on a server is always set to something.
+//
+// The overlay asks for it and does without when a store does not offer it, so
+// that "this is just the default" can be said where it is true and left unsaid
+// where it is meaningless.
+type Defaulting interface {
+	IsDefault(key string) bool
 }

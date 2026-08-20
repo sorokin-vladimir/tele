@@ -8,6 +8,8 @@
 | `1` / `h` / `←`           | Focus chat list |
 | `2` / `l` / `→`           | Focus chat      |
 | `q` / `Ctrl+Q` / `Ctrl+C` | Quit            |
+| `?`                       | Keyboard shortcuts |
+| `,`                       | Settings        |
 
 ## Chat list
 

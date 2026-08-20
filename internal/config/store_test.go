@@ -99,6 +99,30 @@ func TestStore_SetRefusesAKeyThatIsNotASetting(t *testing.T) {
 	assert.Error(t, s.Set("ui.nonsense", 1))
 }
 
+// A value nobody chose must not read as a choice. The question is whether the
+// file names the setting, not whether the value happens to equal the default:
+// somebody who wrote the default explicitly did choose it.
+func TestStore_IsDefaultAsksWhetherTheFileNamesTheSetting(t *testing.T) {
+	s, _ := storeAt(t, "ui:\n  history_limit: 50\n  toasts:\n    max_visible: 4\n")
+
+	assert.False(t, s.IsDefault("ui.history_limit"), "written, even though it equals the default")
+	assert.False(t, s.IsDefault("ui.toasts.max_visible"), "written and different")
+	assert.True(t, s.IsDefault("ui.notification_preview"), "not in the file at all")
+	assert.True(t, s.IsDefault("photos.disk_cache_size"), "not even its section is in the file")
+}
+
+// Writing a setting stops it being a default; resetting it makes it one again.
+func TestStore_IsDefaultFollowsWritesAndResets(t *testing.T) {
+	s, _ := storeAt(t, "")
+	require.True(t, s.IsDefault("ui.history_limit"))
+
+	require.NoError(t, s.Set("ui.history_limit", 120))
+	assert.False(t, s.IsDefault("ui.history_limit"))
+
+	require.NoError(t, s.Set("ui.history_limit", nil))
+	assert.True(t, s.IsDefault("ui.history_limit"))
+}
+
 func TestStore_ValueAnswersTheResolvedValue(t *testing.T) {
 	s, _ := storeAt(t, "ui:\n  history_limit: 77\n")
 

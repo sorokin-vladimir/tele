@@ -21,6 +21,17 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help = newHelp
 		return m, nil
 	}
+	// The settings overlay owns all keys while it is open, like the help modal:
+	// both are references you scroll and close.
+	if m.settings != nil {
+		newSettings, open := m.settings.Update(msg)
+		if !open {
+			m.settings = nil
+			return m, nil
+		}
+		m.settings = newSettings
+		return m, nil
+	}
 	// The profile is exclusive too: it closed the menu it was opened from, and
 	// nothing draws over it but a toast.
 	if m.profile != nil {
@@ -149,6 +160,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keys.ActionShowHelp:
 			m.help = components.NewHelpModal(m.keyMap, m.width, m.height)
 			return m, nil
+		case keys.ActionShowSettings:
+			return m.openSettings()
 		case keys.ActionReloadConfig, keys.ActionReloadThemes:
 			return m.reloadFromDisk()
 		}

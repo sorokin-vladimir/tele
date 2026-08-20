@@ -14,7 +14,8 @@ func KnownActions() map[Action]bool {
 		// Pane focus / app (global).
 		ActionFocusFolders: true, ActionFocusChatList: true, ActionFocusChat: true,
 		ActionFocusPrev: true, ActionFocusNext: true, ActionQuit: true,
-		ActionShowHelp: true, ActionReloadConfig: true, ActionReloadThemes: true,
+		ActionShowHelp: true, ActionShowSettings: true,
+		ActionReloadConfig: true, ActionReloadThemes: true,
 		// Navigation / scrolling.
 		ActionUp: true, ActionDown: true, ActionGoTop: true, ActionGoBottom: true,
 		ActionScrollHalfDown: true, ActionScrollHalfUp: true,

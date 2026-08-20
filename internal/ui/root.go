@@ -16,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/notices"
+	"github.com/sorokin-vladimir/tele/internal/settings"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
@@ -86,6 +87,10 @@ type RootModel struct {
 	// else holding one. Supplied by the app; nil in tests and wherever nothing
 	// can be reloaded, in which case the reload action reloads themes alone.
 	reloadConfig func() (*config.Config, error)
+	// settingsStore is where the settings overlay reads from. An interface
+	// rather than the config store itself, because the overlay is shaped for a
+	// second one - the Telegram account - to arrive beside it (ADR 0010).
+	settingsStore settings.Store
 	// configWarnings are the non-fatal config notices, shown as toasts once the
 	// TUI is up. They are also logged and printed to stderr, but stderr is wiped
 	// by the alt-screen a moment later, so on their own those two amount to
@@ -130,6 +135,7 @@ type RootModel struct {
 	chatMenu          *components.ChatContextMenu
 	reactionPicker    *components.ReactionPicker
 	help              *components.HelpModal
+	settings          *components.SettingsModal
 	profile           *components.Profile
 	openPicker        *components.OpenPicker
 	reactionTargetID  int

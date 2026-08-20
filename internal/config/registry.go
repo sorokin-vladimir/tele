@@ -238,6 +238,23 @@ func repairIllegal(v *viper.Viper) []Warning {
 	return warns
 }
 
+// namedInFile records which declared settings the file itself names. A setting
+// the file does not name is at its default, which the overlay says out loud so
+// that a value nobody chose does not read as a choice.
+//
+// Asked while the file is open. Comparing a value with its default afterwards
+// would answer a different question: somebody who wrote the default explicitly
+// chose it, and telling them they did not would be wrong.
+func namedInFile(v *viper.Viper) map[string]bool {
+	named := make(map[string]bool, len(registry))
+	for _, e := range registry {
+		if v.InConfig(e.Key) {
+			named[e.Key] = true
+		}
+	}
+	return named
+}
+
 // Settings returns the declared settings kept in the config file, in display
 // order. The entries must be treated as read-only.
 func Settings() []settings.Entry { return slices.Clone(registry) }

@@ -117,6 +117,11 @@ func configKeys(t *testing.T) []string {
 	walk = func(rt reflect.Type, prefix string) {
 		for i := range rt.NumField() {
 			f := rt.Field(i)
+			if !f.IsExported() {
+				// Bookkeeping the file cannot reach: nothing can be written to
+				// an unexported field, so it is not a key.
+				continue
+			}
 			tag := f.Tag.Get("mapstructure")
 			require.NotEmpty(t, tag, "%s.%s has no mapstructure tag, so nothing can tell whether it is a setting", rt.Name(), f.Name)
 			if tag == "-" {

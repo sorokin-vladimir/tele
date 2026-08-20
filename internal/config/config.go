@@ -106,6 +106,12 @@ type Config struct {
 	// Warnings collects non-fatal config notices for the caller to log, in the
 	// same spirit as keys.MergeOverrides.
 	Warnings []Warning `mapstructure:"-"`
+
+	// named records which settings the file itself names, as opposed to holding
+	// their default. It is what lets a setting be shown as "default" rather than
+	// as a choice somebody made, and it can only be known while the file is
+	// open, which is why it is captured here rather than worked out later.
+	named map[string]bool
 }
 
 // Warning is a non-fatal config notice.
@@ -147,6 +153,7 @@ func Load(path, defaultStateDir string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Warnings = append(cfg.Warnings, repairs...)
+	cfg.named = namedInFile(v)
 	cfg.resolveState(defaultStateDir)
 	cfg.ThemesDir = filepath.Join(filepath.Dir(path), themesDirName)
 	cfg.resolveTheme()

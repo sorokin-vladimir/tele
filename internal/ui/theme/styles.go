@@ -61,6 +61,9 @@ type Styles struct {
 	HelpKey     lipgloss.Style
 	HelpSection lipgloss.Style
 	HelpDesc    lipgloss.Style
+	// HelpFaint is secondary text on the same panel: the notes after a settings
+	// value, which must read as being about the value rather than as more of it.
+	HelpFaint lipgloss.Style
 
 	// Chat list.
 	SelectedChat   lipgloss.Style
@@ -127,6 +130,7 @@ func buildStyles(t Theme) Styles {
 		HelpKey:     n().Background(t.SurfaceHelp).Foreground(t.AccentOnSurface),
 		HelpSection: n().Background(t.SurfaceHelp).Foreground(t.TextOnSurface).Bold(true),
 		HelpDesc:    n().Background(t.SurfaceHelp).Foreground(t.TextOnSurface),
+		HelpFaint:   n().Background(t.SurfaceHelp).Foreground(t.TextFaint),
 
 		SelectedChat:   n().Background(t.SurfaceSelected).Foreground(t.TextOnSelected),
 		MutedChat:      n().Foreground(t.TextMuted),

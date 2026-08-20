@@ -26,6 +26,9 @@ const (
 	ActionQuit          Action = "quit"
 	ActionDismissToast  Action = "dismiss_toast"
 	ActionShowHelp      Action = "show_help"
+	// ActionShowSettings opens the settings overlay: everything tele can be
+	// configured with, in the order the config file has it.
+	ActionShowSettings Action = "show_settings"
 	// ActionReloadConfig re-reads the config file and the theme files and
 	// applies both. It ships with no default binding: it exists for the minutes
 	// someone spends writing a theme or editing the config in another window,
@@ -60,6 +63,7 @@ func DefaultKeyMap() KeyMap {
 			"q":      ActionQuit,
 			"ctrl+x": ActionDismissToast,
 			"?":      ActionShowHelp,
+			",":      ActionShowSettings,
 		},
 		ContextFolders: {
 			"j":     ActionDown,

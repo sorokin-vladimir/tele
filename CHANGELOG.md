@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-08-21
+
 Entries marked *already in 1.11.1* went out in that release and were left out of
 its notes. They are recorded here instead of being filed under a release nobody
 will read again.

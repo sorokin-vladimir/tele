@@ -76,8 +76,8 @@ func TestFetchAvatar_StreamsIntoItsOwnCache(t *testing.T) {
 	body, rerr := os.ReadFile(path)
 	require.NoError(t, rerr)
 	assert.Equal(t, "face", string(body))
-	assert.Equal(t, filepath.Join(dir, "avatar_1_42"), path,
-		"the key names both the person and the picture")
+	assert.Equal(t, filepath.Join(dir, "avatar_1_42_big"), path,
+		"the key names the person, the picture, and which size of it (#236)")
 	assert.Equal(t, int64(42), c.lastID)
 	require.Len(t, c.addrs, 1)
 	assert.Equal(t, int64(77), c.addrs[0].AccessHash,
@@ -110,7 +110,7 @@ func TestFetchAvatar_ANewPictureIsANewEntry(t *testing.T) {
 
 	assert.NotEqual(t, old, fresh)
 	assert.Equal(t, 2, c.downloads())
-	assert.Equal(t, filepath.Join(dir, "avatar_1_43"), fresh)
+	assert.Equal(t, filepath.Join(dir, "avatar_1_43_big"), fresh)
 	assert.FileExists(t, old, "the old file is left to the bound rather than deleted")
 }
 

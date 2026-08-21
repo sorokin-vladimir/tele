@@ -63,10 +63,18 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.chat.SetSize(lay.messages.Width, lay.messages.Height+lay.composer.Height)
 		// An open profile re-wraps its bio to the new width instead of stamping
 		// the one it opened at.
+		var avatarCmd tea.Cmd
 		if m.profile != nil {
+			before, _ := m.profile.AvatarBox()
 			m.profile.SetSize(msg.Width, msg.Height)
+			// The avatar ladder answers to height as well as width, so the
+			// picture can need re-sending after a resize that left the columns
+			// alone and the retransmit below with nothing to do (#236).
+			if after, _ := m.profile.AvatarBox(); after != before && m.profile.Avatar() != nil {
+				avatarCmd = m.transmitAvatarCmd(m.profile.Avatar())
+			}
 		}
-		return m, m.retransmitOnColsChange()
+		return m, tea.Batch(avatarCmd, m.retransmitOnColsChange())
 
 	case retransmitTickMsg:
 		// Only the latest debounce tick performs the retransmit; earlier ones

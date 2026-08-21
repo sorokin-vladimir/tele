@@ -75,33 +75,47 @@ func TestProfile_CompletedWithNothingToShowDropsThePlaceholder(t *testing.T) {
 	assert.NotContains(t, strip(p.View()), "…")
 }
 
-func TestProfile_CompletionKeepsTheCursor(t *testing.T) {
-	p := newProfile(alice(), true, false)
-	p, _ = p.Update(pressJ())
-	require.NotNil(t, p)
-	before := p.Cursor()
-	p.SetUser(alice())
-	assert.Equal(t, before, p.Cursor(), "an answer arriving must not move the selection")
+// The full answer only ever adds to what can be done about a person. It must
+// not disturb what was already offered: the actions are keys now, and a key
+// that means one thing before the answer and another after it is worse than a
+// key that arrives late (#236).
+func TestProfile_CompletionOnlyAddsToWhatIsOffered(t *testing.T) {
+	u := alice()
+	u.Username = ""
+	p := newProfile(u, true, false)
+	before := strip(p.View())
+	assert.Contains(t, before, "open chat")
+	assert.Contains(t, before, "mute")
+	assert.NotContains(t, before, "copy @")
+
+	full := alice()
+	p.SetUser(full)
+
+	after := strip(p.View())
+	assert.Contains(t, after, "open chat")
+	assert.Contains(t, after, "mute")
+	assert.Contains(t, after, "copy @", "the handle arrived, so copying it is now on offer")
 }
 
 // --- which actions exist ---
 
 func TestProfile_NoDialog_HasNoMuteItem(t *testing.T) {
 	view := strip(newProfile(alice(), false, false).View())
-	assert.NotContains(t, view, "Mute")
-	assert.NotContains(t, view, "Unmute")
-	assert.Contains(t, view, "Open chat", "open chat works with no dialog too")
+	assert.NotContains(t, view, "mute")
+	assert.Contains(t, view, "open chat", "open chat works with no dialog too")
 }
 
 func TestProfile_WithDialog_ShowsMuteOrUnmute(t *testing.T) {
-	assert.Contains(t, strip(newProfile(alice(), true, false).View()), "Mute")
-	assert.Contains(t, strip(newProfile(alice(), true, true).View()), "Unmute")
+	// Framed by its separators: "mute" is a substring of "unmute", and an
+	// assertion that cannot tell the two apart would pass on either.
+	assert.Contains(t, strip(newProfile(alice(), true, false).View()), "· mute ·")
+	assert.Contains(t, strip(newProfile(alice(), true, true).View()), "· unmute ·")
 }
 
 func TestProfile_NoUsername_HasNoCopyItem(t *testing.T) {
 	u := alice()
 	u.Username = ""
-	assert.NotContains(t, strip(newProfile(u, true, false).View()), "Copy username")
+	assert.NotContains(t, strip(newProfile(u, true, false).View()), "copy @")
 }
 
 // --- actions ---
@@ -125,9 +139,9 @@ func TestProfile_Mute_FlipsItsOwnRowAndStaysOpen(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(7), req.UserID)
 	assert.True(t, req.Muted)
-	// The overlay is a snapshot: it flips its own row rather than waiting for a
-	// delta it does not listen to.
-	assert.Contains(t, strip(next.View()), "Unmute")
+	// The overlay is a snapshot: it flips its own offer rather than waiting for
+	// a delta it does not listen to.
+	assert.Contains(t, strip(next.View()), "· unmute ·")
 }
 
 func TestProfile_Unmute_SendsMutedFalse(t *testing.T) {
@@ -138,7 +152,7 @@ func TestProfile_Unmute_SendsMutedFalse(t *testing.T) {
 	req, ok := cmd().(components.ProfileMuteRequest)
 	require.True(t, ok)
 	assert.False(t, req.Muted)
-	assert.Contains(t, strip(next.View()), "Mute")
+	assert.Contains(t, strip(next.View()), "· mute ·")
 }
 
 func TestProfile_CopyUsername_CarriesTheAt(t *testing.T) {
@@ -168,13 +182,49 @@ func TestProfile_MuteKeyOnAProfileWithoutADialog_DoesNothing(t *testing.T) {
 
 // --- geometry ---
 
-func TestProfile_TooNarrowBelowTheMinimum(t *testing.T) {
+func TestProfile_TooSmallBelowTheMinimum(t *testing.T) {
 	narrow := components.NewProfile(alice(), true, false, defaultKM(), components.ProfileMinWidth-1, 40)
-	assert.True(t, narrow.TooNarrow())
+	assert.True(t, narrow.TooSmall())
 	assert.Empty(t, narrow.View())
+}
 
-	wide := components.NewProfile(alice(), true, false, defaultKM(), components.ProfileMinWidth, 40)
-	assert.False(t, wide.TooNarrow())
+// The threshold is about this person rather than the worst one imaginable: what
+// the overlay needs is what its bottom border has to say, and a person you have
+// no chat with and no handle for has less of it to say (#236).
+func TestProfile_TheWidthItRefusesBelowFollowsTheProfile(t *testing.T) {
+	widthOf := func(hasDialog bool, username string) int {
+		u := alice()
+		u.Username = username
+		for w := components.ProfileMinWidth; w < 100; w++ {
+			if !components.NewProfile(u, hasDialog, false, defaultKM(), w, 40).TooSmall() {
+				return w
+			}
+		}
+		t.Fatal("the overlay refuses at every width")
+		return 0
+	}
+	full := widthOf(true, "alice")
+	bare := widthOf(false, "")
+
+	assert.Less(t, bare, full,
+		"fewer actions to name means a narrower terminal will do")
+}
+
+// The ladder drops the avatar before the overlay gives up, so a viewport short
+// enough to refuse is one where even the pictureless overlay does not fit. The
+// alternative is a box whose top border and bottom hint are stamped off the
+// screen: overlayCenter drops the rows that fall outside it (#236).
+func TestProfile_TooSmallWhenEvenThePicturelessOverlayIsTooTall(t *testing.T) {
+	u := alice()
+	u.Bio = "Building things in terminals."
+	u.Phone = "79991234567"
+
+	short := components.NewProfile(u, true, false, defaultKM(), 100, 8)
+	require.True(t, short.TooSmall(), "no room for the overlay at any rung of the ladder")
+	assert.Empty(t, short.View(), "a refusal draws nothing rather than half a box")
+
+	tall := components.NewProfile(u, true, false, defaultKM(), 100, 40)
+	assert.False(t, tall.TooSmall())
 }
 
 func TestProfile_NeverWiderThanTheTerminal(t *testing.T) {

@@ -48,8 +48,12 @@ func newAvatarFetcher(client internaltg.Client, log *zap.Logger) *avatarFetcher 
 //
 // The id is what makes a changed avatar a different file, which is the whole of
 // the staleness story: nothing has to notice the change.
+//
+// The size is in the name because Telegram serves two files for one avatar id,
+// and the client used to take the small one (#236). Without it the entries a
+// previous version cached would be handed back as the big picture they are not.
 func avatarCacheKey(userID, avatarID int64) string {
-	return "avatar_" + strconv.FormatInt(userID, 10) + "_" + strconv.FormatInt(avatarID, 10)
+	return "avatar_" + strconv.FormatInt(userID, 10) + "_" + strconv.FormatInt(avatarID, 10) + "_big"
 }
 
 // Fetch returns a path to the person's avatar, downloading it into the cache on

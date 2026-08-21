@@ -132,7 +132,7 @@ var contextLabels = map[Context]map[Action]Label{
 	ContextFolderSubMenu: {
 		ActionDown: {Short: "move"},
 	},
-	ContextProfile: {
-		ActionDown: {Short: "move"},
-	},
+	// ContextProfile overrides nothing: its actions are named on the overlay's
+	// bottom border with the same words every other hint uses, and it has no
+	// navigation of its own to describe (#236).
 }

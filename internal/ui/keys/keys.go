@@ -188,12 +188,11 @@ func DefaultKeyMap() KeyMap {
 		},
 		// ContextProfile is the profile overlay's own context. It borrows the
 		// menus' letters where the action is the same one: m mutes, y copies.
+		//
+		// There is nothing to move through and nothing to confirm: the overlay
+		// names its actions on its bottom border and each one is its own key, so
+		// j/k and enter are absent rather than bound to nothing (#236).
 		ContextProfile: {
-			"j":     ActionDown,
-			"down":  ActionDown,
-			"k":     ActionUp,
-			"up":    ActionUp,
-			"enter": ActionConfirm,
 			"space": ActionCancel,
 			"esc":   ActionCancel,
 			"o":     ActionOpenChat,

@@ -38,8 +38,8 @@ func (c *GotdClient) DownloadPhotoToFile(ctx context.Context, ref domain.PhotoRe
 	return nil
 }
 
-// DownloadUserAvatarToFile streams a person's avatar into dst at the small
-// size, which is the one an avatar is rendered at: a handful of cells wide.
+// DownloadUserAvatarToFile streams a person's avatar into dst at the big size,
+// which is the one the profile overlay draws it at.
 //
 // Unlike every other download here it carries no file reference. An avatar is
 // addressed by peer and photo id, both of which stay valid, so none of the
@@ -60,9 +60,11 @@ func (c *GotdClient) DownloadUserAvatarToFile(ctx context.Context, addr UserAddr
 	loc := &gotdtg.InputPeerPhotoFileLocation{
 		Peer:    peer,
 		PhotoID: avatarID,
-		// Big is deliberately left false: the big size is 640px for a picture
-		// that is drawn at roughly 80, and the small one is the whole point of
-		// keeping avatars apart from chat media.
+		// Big, because the profile draws the picture large by default and the
+		// Kitty path scales to the box's true pixel width: the small size is
+		// 160px against a block that is around that wide already, so the small
+		// one would be upscaled to fill it (#236).
+		Big: true,
 	}
 
 	d := downloader.NewDownloader()

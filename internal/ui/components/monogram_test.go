@@ -11,6 +11,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
 func TestMonogram_ShowsInitials(t *testing.T) {
@@ -39,7 +40,7 @@ func TestMonogram_DeletedAccountFallsBackToTheDisplayName(t *testing.T) {
 // The block is what the layout is built on, so it must occupy the same cells
 // whoever it is for: a name with no family name must not make it narrower.
 func TestMonogram_IsAlwaysTheSameSize(t *testing.T) {
-	cols, rows := components.AvatarBox()
+	cols, rows := newProfile(alice(), true, false).AvatarBox()
 
 	for _, u := range []domain.User{
 		alice(),
@@ -73,13 +74,18 @@ func TestProfile_AnAvatarDoesNotReshapeTheOverlay(t *testing.T) {
 
 // A terminal too narrow to hold both a picture and a name keeps the name: the
 // overlay opens today and must go on opening (#223).
+//
+// What competes with the picture is the name it stands beside: an overlay grows
+// to hold both, so the picture only costs something once that growth runs into
+// the terminal. A name long enough is what gets it there.
 func TestProfile_TheAvatarGoesBeforeTheOverlayDoes(t *testing.T) {
-	narrow := components.NewProfile(alice(), true, false, defaultKM(), 34, 40)
+	u := domain.User{ID: 7, FirstName: "Alexandrina", LastName: "Konstantinopolskaya"}
+	narrow := components.NewProfile(u, true, false, defaultKM(), 38, 40)
 
-	require.False(t, narrow.TooNarrow())
+	require.False(t, narrow.TooSmall())
 	view := strip(narrow.View())
-	assert.Contains(t, view, "Alice Ng")
-	assert.NotContains(t, view, "AN", "no room for a block, so there is no block")
+	assert.Contains(t, view, "Alexandrina")
+	assert.NotContains(t, view, "AK", "no room for a block, so there is no block")
 }
 
 // stubRenderer answers like a live Kitty renderer: a block of the size it was
@@ -87,7 +93,9 @@ func TestProfile_TheAvatarGoesBeforeTheOverlayDoes(t *testing.T) {
 type stubRenderer struct{}
 
 func (stubRenderer) Render(_ int64, _ image.Image, cols int) []string {
-	_, rows := components.AvatarBox()
+	// The real renderer is given a width and works the height out from the cell
+	// aspect; the stub answers at whichever rung of the ladder it was asked at.
+	rows := media.PhotoRows(1, 1, cols, media.CellAspect())
 	lines := make([]string, rows)
 	for i := range lines {
 		lines[i] = strings.Repeat("x", cols)
@@ -99,13 +107,20 @@ func (stubRenderer) RenderWindow(_ int64, _ image.Image, _, _, _, _, _, _ int) [
 func (stubRenderer) Reset()                                                             {}
 
 // avatarRows returns the overlay lines the avatar block occupies: the first
-// rows inside the top border.
+// rows of content, which is where the block stands.
 func avatarRows(t *testing.T, p *components.Profile) []string {
 	t.Helper()
 	lines := strings.Split(strip(p.View()), "\n")
-	_, rows := components.AvatarBox()
-	require.Greater(t, len(lines), rows+1)
-	return lines[1 : 1+rows]
+	_, rows := p.AvatarBox()
+	require.Positive(t, rows, "this viewport draws no avatar at all")
+	// Past the top frame and the panel's padding row, to the first line with
+	// something on it.
+	start := 1
+	for start < len(lines) && strings.TrimSpace(strings.Trim(lines[start], "│")) == "" {
+		start++
+	}
+	require.GreaterOrEqual(t, len(lines), start+rows)
+	return lines[start : start+rows]
 }
 
 // viewSize is the overlay's footprint: its widest line and its line count.

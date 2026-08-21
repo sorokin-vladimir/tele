@@ -91,8 +91,8 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 	m.contextMenu = nil
 	m.chatMenu = nil
 	p := components.NewProfile(user, hasDialog, muted, m.keyMap, m.width, m.height)
-	if p.TooNarrow() {
-		m.statusBar.SetStatus("Terminal too narrow for the profile")
+	if p.TooSmall() {
+		m.statusBar.SetStatus("Terminal too small for the profile")
 		return m, nil
 	}
 	m.profile = p
@@ -131,7 +131,15 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 // it ready, so the overlay keeps drawing the monogram until the picture really
 // is on the terminal, and a failed encode never marks anything ready (#95).
 func (m RootModel) transmitAvatarCmd(img image.Image) tea.Cmd {
-	cols, rows := components.AvatarBox()
+	if m.profile == nil {
+		return nil
+	}
+	// The size is the overlay's to give: it is the one that knows which rung of
+	// the avatar ladder this viewport reached (#236).
+	cols, rows := m.profile.AvatarBox()
+	if cols == 0 {
+		return nil
+	}
 	id := m.kittyStore.IDFor(components.ProfileAvatarImageKey)
 	return func() tea.Msg {
 		seq, err := media.TransmitSeq(id, img, cols, rows)
@@ -192,8 +200,10 @@ func (m RootModel) handleAvatarReady(msg avatarReadyMsg) (RootModel, tea.Cmd) {
 // checking would skip the delete in the common case.
 func (m RootModel) closeProfile() (RootModel, tea.Cmd) {
 	m.profile = nil
-	cols, _ := components.AvatarBox()
-	if m.imageMode != media.ModeKitty || !m.kittyStore.Ready(components.ProfileAvatarImageKey, cols) {
+	// Which size the picture went out at is no longer a constant, and the
+	// overlay that knew is already gone, so the store is asked whether it holds
+	// a placement at all rather than whether it holds one of a given width.
+	if m.imageMode != media.ModeKitty || !m.kittyStore.Placed(components.ProfileAvatarImageKey) {
 		return m, nil
 	}
 	id := m.kittyStore.IDFor(components.ProfileAvatarImageKey)

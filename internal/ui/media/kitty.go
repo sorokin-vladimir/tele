@@ -53,6 +53,14 @@ func (s *KittyStore) Ready(photoID int64, cols int) bool {
 	return ok && c == cols
 }
 
+// Placed reports whether the photo has a placement on the terminal, at whatever
+// width it went out at. It is what a caller asks when it has to delete a
+// placement whose size it no longer knows.
+func (s *KittyStore) Placed(photoID int64) bool {
+	_, ok := s.colsByPhoto[photoID]
+	return ok
+}
+
 // MarkTransmitted records that the photo's placement exists at cols.
 func (s *KittyStore) MarkTransmitted(photoID int64, cols int) {
 	s.colsByPhoto[photoID] = cols

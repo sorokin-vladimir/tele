@@ -40,17 +40,41 @@ type (
 // worse than a message saying so.
 const ProfileMinWidth = 30
 
-// profileHMargin is how many cells the overlay leaves free either side, so it
-// reads as a panel over the app rather than as a replacement for it.
-const profileHMargin = 4
-
-// avatarCols is how wide the avatar block is, and avatarGap how much air stands
-// between it and the name. Eight cells is a picture you can recognise a face in
-// without the overlay turning into a photo viewer.
+// profileHMargin and profileVMargin are how many cells and rows the overlay
+// leaves free around it, so it reads as a surface over the app rather than as a
+// replacement for it.
 const (
-	avatarCols = 8
-	avatarGap  = 1
+	profileHMargin = 4
+	profileVMargin = 2
 )
+
+// profilePadV and profilePadH hold the content off the frame. A surface pads
+// what it carries; a box with text against its border reads as a box someone
+// poured text into. These are the startup notice's numbers, which is the convention
+// the app already has (#236).
+const (
+	profilePadV = 1
+	profilePadH = 2
+)
+
+// avatarLargeCols and avatarSmallCols are the two widths the avatar is drawn
+// at, and avatarGap the air between it and the name. The profile is the one
+// place in the app whose subject is the person, so the large size is the
+// default and the small one is what a viewport that cannot afford it falls back
+// to (#236). One cell of gap read as a single run with the name; two separate
+// the picture from the text, monogram included.
+const (
+	avatarLargeCols = 16
+	avatarSmallCols = 8
+	avatarGap       = 2
+)
+
+// avatarLadder is what the overlay walks when it decides how big a picture to
+// draw: the large size, then the small one, then none at all. The last rung is
+// no avatar rather than no overlay — refusing to open a profile that opens
+// today would be a strange way to add a feature (#223).
+var avatarLadder = []int{avatarLargeCols, avatarSmallCols, 0}
+
 
 // ProfileAvatarImageKey is the image id the profile's avatar is transmitted
 // under, in the same sentinel space as the photo and video modals' keys (-1001
@@ -58,12 +82,6 @@ const (
 // is open, and the placement is deleted when it closes, so the next person
 // cannot inherit this one's geometry (#175).
 const ProfileAvatarImageKey int64 = -1002
-
-// profileAction is one row of the overlay's action list.
-type profileAction struct {
-	label  string
-	action keys.Action
-}
 
 // Profile is the user profile overlay: a person and what can be done about
 // them. It is a snapshot — what is known when it opens, completed once by the
@@ -91,8 +109,11 @@ type Profile struct {
 	// more.
 	renderer media.Renderer
 
-	actions []profileAction
-	list    *ListView
+	// actions is what can be done about this person, in the order it is
+	// offered. It is a list of actions rather than of rows: the overlay names
+	// them on its bottom border, and the words come from the same place every
+	// other hint's words do (#236).
+	actions []keys.Action
 	keyMap  keys.KeyMap
 	width   int
 	height  int
@@ -109,7 +130,6 @@ func NewProfile(user domain.User, hasDialog, muted bool, km keys.KeyMap, width, 
 		keyMap:    km,
 		width:     width,
 		height:    height,
-		list:      NewListView(true),
 	}
 	p.rebuild()
 	return p
@@ -118,18 +138,11 @@ func NewProfile(user domain.User, hasDialog, muted bool, km keys.KeyMap, width, 
 // UserID is the person the overlay is about.
 func (p *Profile) UserID() int64 { return p.user.ID }
 
-// Cursor is the selected action row, for tests.
-func (p *Profile) Cursor() int { return p.list.Cursor() }
-
-// SetUser replaces the person with the completed answer. The cursor is kept:
-// the answer arriving must not move the selection under the user's hands, and
-// the action list only ever grows a copy-username row.
+// SetUser replaces the person with the completed answer.
 func (p *Profile) SetUser(u domain.User) {
-	cursor := p.list.Cursor()
 	p.user = u
 	p.full = true
 	p.rebuild()
-	p.list.SetCursor(cursor)
 }
 
 // SetSize records the terminal size, so a resize while the overlay is open
@@ -152,18 +165,63 @@ func (p *Profile) Avatar() image.Image { return p.avatar }
 // HasAvatar reports whether the overlay holds a picture, for tests.
 func (p *Profile) HasAvatar() bool { return p.avatar != nil }
 
-// AvatarBox is the cell box an avatar occupies: square on screen, which is why
-// the rows come from the terminal's real cell aspect rather than from a
-// constant. The caller transmits at exactly this size.
-func AvatarBox() (cols, rows int) {
-	return avatarCols, media.PhotoRows(1, 1, avatarCols, media.CellAspect())
+// AvatarBox is the cell box the avatar occupies in the viewport the overlay was
+// last sized to, and 0, 0 when none of the ladder's sizes fit. The caller
+// transmits at exactly this size.
+//
+// The box is square on screen, which is why the rows come from the terminal's
+// real cell aspect rather than from a constant.
+func (p *Profile) AvatarBox() (cols, rows int) {
+	return avatarBoxFor(p.avatarCols())
 }
 
-// avatarFits reports whether the terminal has cells to spare for a picture.
-// Below this the avatar goes and the overlay stays: refusing to open a profile
-// that opens today would be a strange way to add a feature (#223).
-func (p *Profile) avatarFits() bool {
-	return p.width >= ProfileMinWidth+avatarCols+avatarGap
+func avatarBoxFor(cols int) (int, int) {
+	if cols <= 0 {
+		return 0, 0
+	}
+	return cols, media.PhotoRows(1, 1, cols, media.CellAspect())
+}
+
+// avatarCols is the width the avatar is drawn at here and now: the first rung
+// of the ladder this viewport can hold.
+//
+// A rung is tried by building the overlay at it and measuring, rather than by
+// comparing against a number written down beside the layout. A taller picture
+// makes a taller overlay, and how much taller depends on the person — their bio
+// length, whether they have a phone, how many actions apply — so the only
+// honest answer to "does this fit" is the one the layout itself gives.
+func (p *Profile) avatarCols() int {
+	for _, cols := range avatarLadder {
+		if p.avatarFits(cols) {
+			return cols
+		}
+	}
+	return 0
+}
+
+// avatarFits reports whether the overlay can carry a picture this wide, in both
+// directions. Both answers come from the layout built at this rung rather than
+// from a rule written down beside it: the width the content asks for with this
+// picture in it, and the rows the overlay takes with it.
+//
+// Width is a question about squeezing rather than about the terminal. The
+// overlay grows to hold the picture beside the name, so the picture only costs
+// something once that growth runs into the terminal — and then it costs the
+// name the room it is read in, which is the wrong trade at any size.
+func (p *Profile) avatarFits(cols int) bool {
+	if cols <= 0 {
+		return true // no block always fits: the overlay outlives the avatar
+	}
+	if p.contentWidth(cols) > p.maxInnerWidth() {
+		return false
+	}
+	return p.overlayHeight(cols) <= p.height-profileVMargin
+}
+
+// overlayHeight is how many rows the whole overlay takes with an avatar this
+// wide: its content, the padding above and below it, and the frame.
+func (p *Profile) overlayHeight(cols int) int {
+	return len(p.contentLines(p.innerWidth(cols), cols)) + 2*profilePadV + 2
 }
 
 // avatarBlock renders the cols×rows block standing at the head of the overlay:
@@ -186,20 +244,18 @@ func (p *Profile) avatarBlock(cols, rows int) []string {
 // cannot apply is absent rather than disabled: an item that refuses to do
 // anything is a worse answer than no item.
 func (p *Profile) rebuild() {
-	actions := []profileAction{{label: "Open chat", action: keys.ActionOpenChat}}
+	actions := []keys.Action{keys.ActionOpenChat}
 	if p.hasDialog {
 		if p.muted {
-			actions = append(actions, profileAction{label: "Unmute", action: keys.ActionUnmute})
+			actions = append(actions, keys.ActionUnmute)
 		} else {
-			actions = append(actions, profileAction{label: "Mute", action: keys.ActionMute})
+			actions = append(actions, keys.ActionMute)
 		}
 	}
 	if p.user.Username != "" {
-		actions = append(actions, profileAction{label: "Copy username", action: keys.ActionCopyUsername})
+		actions = append(actions, keys.ActionCopyUsername)
 	}
-	actions = append(actions, profileAction{label: "Close", action: keys.ActionCancel})
-	p.actions = actions
-	p.list.SetCount(len(actions))
+	p.actions = append(actions, keys.ActionCancel)
 }
 
 func (p *Profile) Update(msg tea.Msg) (*Profile, tea.Cmd) {
@@ -208,26 +264,17 @@ func (p *Profile) Update(msg tea.Msg) (*Profile, tea.Cmd) {
 		return p, nil
 	}
 	action := p.keyMap.Resolve(keys.ContextProfile, kp.String())
-	switch action {
-	case keys.ActionDown:
-		p.list.MoveDown()
-		return p, nil
-	case keys.ActionUp:
-		p.list.MoveUp()
-		return p, nil
-	case keys.ActionCancel:
+	if action == keys.ActionCancel {
 		return nil, func() tea.Msg { return CloseProfileMsg{} }
-	case keys.ActionConfirm:
-		return p.execute(p.actions[p.list.Cursor()].action)
 	}
-	// A letter bound to an action the profile is currently showing fires it
-	// directly. Mute and unmute share one key, so the row decides which of the
-	// two the press means.
+	// A letter bound to an action the profile is currently offering fires it.
+	// There is no cursor to move first: the overlay names its actions on its
+	// bottom border and each one is its own key (#236). Mute and unmute share a
+	// key, so the offer decides which of the two the press means.
 	if action != keys.ActionNone {
-		for i, a := range p.actions {
-			if a.action == action || (action == keys.ActionMute && a.action == keys.ActionUnmute) {
-				p.list.SetCursor(i)
-				return p.execute(a.action)
+		for _, a := range p.actions {
+			if a == action || (action == keys.ActionMute && a == keys.ActionUnmute) {
+				return p.execute(a)
 			}
 		}
 	}
@@ -261,7 +308,7 @@ func (p *Profile) execute(action keys.Action) (*Profile, tea.Cmd) {
 // infoLines renders the identity block: the name, the handle, presence, the bio
 // and the phone, in that order, with blank lines only between groups that are
 // actually there.
-func (p *Profile) infoLines(innerW int) []string {
+func (p *Profile) infoLines(innerW, avatarW int) []string {
 	bg := theme.NewStyle().Background(theme.T().SurfaceOverlay)
 	name := bg.Foreground(theme.T().TextOnSurface).Bold(true)
 	dim := bg.Foreground(theme.T().TextDim)
@@ -270,8 +317,8 @@ func (p *Profile) infoLines(innerW int) []string {
 	// The identity block sits beside the avatar, so it is written at the width
 	// left over rather than at the overlay's own.
 	textW := innerW
-	if p.avatarFits() {
-		textW = innerW - avatarCols - avatarGap
+	if avatarW > 0 {
+		textW = innerW - avatarW - avatarGap
 	}
 
 	var identity []string
@@ -284,8 +331,8 @@ func (p *Profile) infoLines(innerW int) []string {
 	}
 
 	lines := identity
-	if p.avatarFits() {
-		lines = p.headerLines(identity, bg)
+	if avatarW > 0 {
+		lines = p.headerLines(identity, bg, avatarW)
 	}
 
 	var detail []string
@@ -312,11 +359,11 @@ func (p *Profile) infoLines(innerW int) []string {
 // headerLines lays the avatar block beside the identity lines. Its height is
 // whichever of the two is taller, so a person with a long identity block is not
 // cut off and a short one does not cut the picture off.
-func (p *Profile) headerLines(identity []string, bg lipgloss.Style) []string {
-	cols, rows := AvatarBox()
+func (p *Profile) headerLines(identity []string, bg lipgloss.Style, avatarW int) []string {
+	cols, rows := avatarBoxFor(avatarW)
 	block := p.avatarBlock(cols, rows)
 	// Both are painted by the style rather than assembled from spaces: an
-	// unpainted cell inside the panel reads as a hole (#227).
+	// unpainted cell inside the surface reads as a hole (#227).
 	blank := bg.Width(cols).Render("")
 	gap := bg.Width(avatarGap).Render("")
 
@@ -393,11 +440,33 @@ func truncate(s string, width int) string {
 // innerWidth is the content width the overlay renders at: as wide as its
 // content wants, capped by the terminal. Zero means the terminal is too narrow
 // to open on at all.
-func (p *Profile) innerWidth() int {
-	maxW := p.width - profileHMargin - 2
+func (p *Profile) innerWidth(avatarW int) int {
+	maxW := p.maxInnerWidth()
+	if maxW == 0 {
+		return 0
+	}
+	if want := p.contentWidth(avatarW); want < maxW {
+		return want
+	}
+	return maxW
+}
+
+// maxInnerWidth is all the content width this terminal can give, and 0 when it
+// cannot give enough to open on at all.
+func (p *Profile) maxInnerWidth() int {
+	maxW := p.width - profileHMargin - 2*profilePadH - 2
 	if p.width < ProfileMinWidth || maxW < 1 {
 		return 0
 	}
+	return maxW
+}
+
+// contentWidth is the width the overlay's content asks for with an avatar this
+// wide, before the terminal has its say. The difference between this and what
+// the terminal allows is what the ladder reads: a rung that asks for more than
+// there is would be drawn squeezed, and a smaller picture is a better answer
+// than a squeezed one.
+func (p *Profile) contentWidth(avatarW int) int {
 	// The identity block is measured with the avatar in front of it: those are
 	// the lines the picture shares a row with, and the phone and the actions
 	// below it start at the overlay's left edge either way.
@@ -405,78 +474,100 @@ func (p *Profile) innerWidth() int {
 	if p.user.Username != "" {
 		want = maxInt(want, lipgloss.Width("@"+p.user.Username))
 	}
-	if p.avatarFits() {
-		want += avatarCols + avatarGap
+	if avatarW > 0 {
+		want += avatarW + avatarGap
 	}
 	if p.user.Phone != "" {
 		want = maxInt(want, lipgloss.Width(formatPhone(p.user.Phone)))
 	}
-	for _, a := range p.actions {
-		want = maxInt(want, lipgloss.Width(p.actionRow(a))+1)
-	}
+	// The bottom border names the actions, and a border cannot be narrower than
+	// what is written on it.
+	want = maxInt(want, p.hintWidth())
 	// A bio is wrapped rather than measured: it would otherwise decide the
 	// width of the whole overlay on its own.
 	if p.user.Bio != "" {
 		want = maxInt(want, 32)
 	}
-	if want > maxW {
-		want = maxW
-	}
 	return want
 }
 
 // actionRow is the unstyled text of one action row: its key, then its label.
-func (p *Profile) actionRow(a profileAction) string {
-	label := a.label
-	if k := p.keyMap.KeyFor(keys.ContextProfile, a.action); k != "" {
-		label = k + " -> " + label
+// It carries no indent of its own: the overlay's padding is the left margin, and
+// one box with two margins is what made the actions look inset under a flush
+// identity block (#236).
+func (p *Profile) hint() string {
+	pairs := make([][2]string, 0, len(p.actions))
+	for _, a := range p.actions {
+		pairs = append(pairs, [2]string{
+			p.keyMap.KeyFor(keys.ContextProfile, a),
+			DescribeShort(keys.ContextProfile, a),
+		})
 	}
-	return "  " + label
+	return OverlayHint(pairs, OverlayMenuBg())
 }
 
-// TooNarrow reports that the terminal cannot hold the overlay. The caller says
+// hintWidth is how much content width the bottom border needs to name every
+// action. RenderBox draws the hint or drops it whole, and an overlay that opens
+// without naming a single action is a broken screen rather than an answer, so
+// this is a floor on the overlay's width rather than something to hope for.
+func (p *Profile) hintWidth() int { return lipgloss.Width(p.hint()) }
+
+// TooSmall reports that the viewport cannot hold the overlay. The caller says
 // so rather than drawing a broken box.
-func (p *Profile) TooNarrow() bool { return p.innerWidth() == 0 }
+//
+// It asks about this profile rather than about the worst one imaginable: what
+// the overlay needs depends on the person, and an answer of "not here" is only
+// honest when it is about the screen in front of you (#216).
+//
+// Height counts as well as width. The ladder drops the avatar first, so this is
+// the case where even the pictureless overlay is taller than the terminal —
+// where the alternative is a box whose top border and bottom hint are stamped
+// off the screen and never drawn.
+func (p *Profile) TooSmall() bool {
+	maxW := p.maxInnerWidth()
+	if maxW == 0 || maxW < p.hintWidth() {
+		return true
+	}
+	return p.overlayHeight(0) > p.height
+}
+
+// contentLines is everything inside the padding: the identity block, and
+// nothing else — the actions are named on the bottom border. Taking the avatar
+// width as an argument is what lets the ladder ask what the overlay would look
+// like at a size before committing to it.
+func (p *Profile) contentLines(innerW, avatarW int) []string {
+	if innerW == 0 {
+		return nil
+	}
+	return p.infoLines(innerW, avatarW)
+}
 
 func (p *Profile) View() string {
-	innerW := p.innerWidth()
-	if innerW == 0 {
+	if p.TooSmall() {
 		return ""
 	}
+	avatarW := p.avatarCols()
+	innerW := p.innerWidth(avatarW)
 
-	lines := p.infoLines(innerW)
-	lines = append(lines, theme.S().MenuBg.Render(""))
-
-	rows := p.list.Render(len(p.actions), func(i int, selected bool) string {
-		row := p.actionRow(p.actions[i])
-		if selected {
-			return theme.S().MenuSelected.Width(innerW).Render(row)
-		}
-		return theme.S().MenuBg.Width(innerW).Render(row)
-	})
-	lines = append(lines, rows...)
-
-	cancel := p.keyMap.KeyFor(keys.ContextProfile, keys.ActionCancel)
-	confirm := p.keyMap.KeyFor(keys.ContextProfile, keys.ActionConfirm)
-	down := p.keyMap.KeyFor(keys.ContextProfile, keys.ActionDown)
-	up := p.keyMap.KeyFor(keys.ContextProfile, keys.ActionUp)
-	hint := OverlayHint([][2]string{
-		{down + "/" + up, DescribeShort(keys.ContextProfile, keys.ActionDown)},
-		{confirm, DescribeShort(keys.ContextProfile, keys.ActionConfirm)},
-		{cancel, DescribeShort(keys.ContextProfile, keys.ActionCancel)},
-	}, OverlayMenuBg())
+	lines := p.contentLines(innerW, avatarW)
+	hint := p.hint()
 
 	// Every line is padded to the content width so the overlay is one solid
-	// panel rather than a ragged one: an unpainted cell inside a box reads as a
-	// hole (#227).
+	// surface rather than a ragged one: an unpainted cell inside a box reads as
+	// a hole (#227).
 	for i, l := range lines {
 		if w := lipgloss.Width(l); w < innerW {
 			lines[i] = l + theme.PadTo(w, innerW)
 		}
 	}
 
-	box := RenderBox(strings.Join(lines, "\n"), "", "", hint, "",
-		lipgloss.RoundedBorder(), nil, innerW+2, len(lines)+2)
+	// The padding is part of the surface, so it is painted by the surface's own
+	// style rather than by bare spaces — a plain Padding would leave a ring of
+	// holes around the content.
+	padded := theme.S().MenuBg.Padding(profilePadV, profilePadH).Render(strings.Join(lines, "\n"))
+
+	box := RenderBox(padded, "", "", hint, "",
+		lipgloss.RoundedBorder(), nil, innerW+2*profilePadH+2, len(lines)+2*profilePadV+2)
 
 	boxLines := strings.Split(box, "\n")
 	for i, l := range boxLines {

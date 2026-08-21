@@ -87,9 +87,10 @@ type Client interface {
 	// (ref.ThumbSize) into dst. Unlike DownloadDocumentToFile, which always
 	// streams the full file, this one addresses the thumbnail location.
 	DownloadDocumentThumbToFile(ctx context.Context, ref domain.DocumentRef, dst io.Writer) error
-	// DownloadUserAvatarToFile streams a person's avatar into dst at the small
-	// size. It takes an address rather than a file reference because an avatar
-	// belongs to a person rather than to a message (#223).
+	// DownloadUserAvatarToFile streams a person's avatar into dst at the big
+	// size, which is what the profile overlay draws (#236). It takes an address
+	// rather than a file reference because an avatar belongs to a person rather
+	// than to a message (#223).
 	DownloadUserAvatarToFile(ctx context.Context, addr UserAddress, avatarID int64, dst io.Writer) error
 	DeleteMessages(ctx context.Context, peer domain.Peer, ids []int, revoke bool) error
 	EditMessage(ctx context.Context, peer domain.Peer, msgID int, text string, entities []domain.MessageEntity) error

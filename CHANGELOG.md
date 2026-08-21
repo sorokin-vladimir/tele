@@ -11,6 +11,59 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+Entries marked *already in 1.11.1* went out in that release and were left out of
+its notes. They are recorded here instead of being filed under a release nobody
+will read again.
+
+### Added
+
+- `,` opens a settings overlay: everything tele can be configured with, in one
+  place, changed without leaving the app. Eighteen settings across `telegram`,
+  `ui`, `photos` and `avatars`, each with the widget that fits it - toggle,
+  choice, number, byte size, free text - and each saying when it takes hold: at
+  once, the next time the app does the thing it governs, or at the next start.
+  An edit goes back into `config.yml` through a node round-trip, so comments,
+  key order, formatting and keys tele knows nothing about all survive it: the
+  file stays a first-class way to configure tele rather than becoming a shadow
+  of the overlay. Previously changing anything but the theme meant leaving the
+  app, and there was no way to find out what was configurable at all
+  (#221, *already in 1.11.1*).
+
+### Changed
+
+- The profile overlay pads its content away from the frame instead of standing
+  it against the border, and gives the avatar room to read as a picture beside
+  the name rather than as one run with it. The avatar is drawn large by default
+  (sixteen cells, fetched at Telegram's big size so it is a picture rather than
+  an upscaled thumbnail) and falls back to the small size, and then to none, on
+  a viewport that cannot hold it. How short the terminal is decides that as much
+  as how narrow, and where not even a pictureless overlay fits, the profile says
+  so rather than drawing a box with its top border and its keys off the screen
+  (#236).
+- The profile's actions moved from a list with a cursor inside the overlay to
+  its bottom border, where every other overlay names its keys. Each action is
+  its own letter, so `j`, `k` and `enter` are gone from the profile rather than
+  bound to nothing (#236).
+
+### Fixed
+
+- A painted theme no longer shows holes where a label was drawn without one.
+  Separators, the edited marker, reactions and the margin beside a selected
+  message left cells that fell through to the terminal's own background, which
+  is visible as a hole in any theme that claims the canvas (#227).
+- The selection indicator now stands the same distance from a bubble whichever
+  way the message went. It sat flush against an outgoing bubble, reading as part
+  of its border, and one cell away from an incoming one (#228).
+- Opening a chat left unvisited for a long time no longer paints a blank band
+  above the newest messages, with the scrollbar reporting history that is not
+  drawn. The messages were in the list all along - the viewport was anchored to
+  a position that no longer existed, which is why moving the cursor one message
+  repainted the lot (#225, *already in 1.11.1*).
+- Sending a message no longer makes the chat pane blink. The queued bubble and
+  the message Telegram confirmed both existed for a frame, so the pane drew the
+  send twice and then took one away; the queued one is now gone by the time the
+  real one is in the window (#226, *already in 1.11.1*).
+
 ## [1.11.1] - 2026-08-20
 
 ### Added
@@ -177,14 +230,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   for selectable themes. Colours are held as named roles - the accent, the
   selection fill, the read tick, the error tone - rather than being written into
   each component, and the light and dark variants are two complete palettes
-  instead of a per-colour switch. Two things do look different: the selected row
-  - in the chat list, context menus, the reaction picker, search, folders and the
-  file picker - is now white on the blue fill instead of black, which was hard to
-  read, and the status bar text is a little brighter. Beyond that the only change
-  is that the eight basic terminal colours (the online dot, read ticks,
-  sender-name colours, the edited marker) used to be taken from your terminal's
-  own palette and are now fixed values, so on a terminal with a customised
-  palette those particular colours will shift slightly.
+  instead of a per-colour switch. Two things do look different: the selected
+  row - in the chat list, context menus, the reaction picker, search, folders
+  and the file picker - is now white on the blue fill instead of black, which
+  was hard to read, and the status bar text is a little brighter. Beyond that
+  the only change is that the eight basic terminal colours (the online dot,
+  read ticks, sender-name colours, the edited marker) used to be taken from your
+  terminal's own palette and are now fixed values, so on a terminal with a
+  customised palette those particular colours will shift slightly.
 
 ## [1.10.0] - 2026-08-04
 

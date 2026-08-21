@@ -75,7 +75,6 @@ const (
 // today would be a strange way to add a feature (#223).
 var avatarLadder = []int{avatarLargeCols, avatarSmallCols, 0}
 
-
 // ProfileAvatarImageKey is the image id the profile's avatar is transmitted
 // under, in the same sentinel space as the photo and video modals' keys (-1001
 // and -1000). One stable key rather than one per person: only ever one profile

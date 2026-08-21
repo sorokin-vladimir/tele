@@ -469,7 +469,7 @@ automatically on first run - nothing is lost and you stay logged in.
 > Raise it for larger inline images, lower it for more compact ones.
 
 > **`avatars.disk_cache_size`** is a second budget, deliberately not part of
-> `photos.disk_cache_size`. An avatar is a few tens of kilobytes and is asked
+> `photos.disk_cache_size`. An avatar is around a hundred kilobytes and is asked
 > for again every time you open that person's profile, while chat media is
 > unbounded and looked at once - sharing one budget would let a scrolling
 > session evict every face you have. Either key set to `0` means "keep nothing

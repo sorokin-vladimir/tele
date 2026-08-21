@@ -11,6 +11,12 @@ import (
 
 const indicatorChar = "┃"
 
+// indicatorGap is the blank cells between a message body and the selection bar
+// beside it. The bar is a marker set off from the body: flush against the
+// border it reads as part of the border instead, so both sides keep the same
+// distance (#228).
+const indicatorGap = 1
+
 // bubbleMetrics holds the finalized geometry and border-row content for a
 // message bubble, computed once by measureBubble and consumed by the border and
 // content rendering steps.
@@ -395,6 +401,35 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 	return sideLines
 }
 
+// leadingIndicator builds the left margin an outgoing message is pushed across
+// with the selection bar in it: bar, gap, then the body. The gap is taken out of
+// the margin, so the body stays in the column it would sit in unselected. A
+// margin too narrow to hold the bar, its gap, and a cell of margin of its own
+// reports false along with the plain margin: the bar is dropped rather than
+// crowding the body (#228).
+//
+// The margin is composed rather than spliced into afterwards. It used to be
+// spliced: the first leftPad bytes were ASCII spaces, so byte offsets and cell
+// offsets agreed. They do not any more — the pad opens with an escape sequence
+// (#227) — and slicing at a cell offset would cut that sequence in half.
+func leadingIndicator(leftPad int) (string, bool) {
+	if leftPad < indicatorGap+2 {
+		return theme.Pad(leftPad), false
+	}
+	indicated := theme.Pad(leftPad-indicatorGap-1) +
+		theme.S().Indicator.Render(indicatorChar) +
+		theme.Pad(indicatorGap)
+	return indicated, true
+}
+
+// trailingIndicator is the same marker for an incoming message, which sits at
+// the left margin and so carries the bar after its body: gap, then bar. Callers
+// check the room beside the body themselves, since only they know how wide it
+// is.
+func trailingIndicator() string {
+	return theme.Pad(indicatorGap) + theme.S().Indicator.Render(indicatorChar)
+}
+
 // alignBubbleLines right-aligns outgoing bubbles (incoming stay at the left
 // margin) and draws the selection indicator bar beside the bubble on every
 // content line.
@@ -407,19 +442,9 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 			leftPad = 0
 		}
 		// The margin an outgoing bubble is pushed across by is canvas, not gap.
-		//
-		// The selection indicator sits in that margin, one cell left of the
-		// bubble, and the margin is built per line rather than spliced into
-		// afterwards. It used to be spliced: the first leftPad bytes were ASCII
-		// spaces, so byte offsets and cell offsets agreed. They do not any more —
-		// the pad opens with an escape sequence — and slicing at a cell offset
-		// would cut that sequence in half.
 		margin := theme.Pad(leftPad)
-		indicated := margin
-		if leftPad >= 2 {
-			indicated = theme.Pad(leftPad-1) + theme.S().Indicator.Render(indicatorChar)
-		}
-		bar := selected && ml.showIndicator && len(allLines) > 2 && leftPad >= 2
+		indicated, fits := leadingIndicator(leftPad)
+		bar := selected && ml.showIndicator && len(allLines) > 2 && fits
 		for i := range allLines {
 			// Content lines only: the top and bottom borders keep a clean margin.
 			if bar && i > 0 && i < len(allLines)-1 {
@@ -433,8 +458,8 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 		if selected && ml.showIndicator && len(allLines) > 2 {
 			bubbleW := lipgloss.Width(allLines[0])
 			available := ml.viewWidth - bubbleW
-			if available >= 2 {
-				bar := theme.Pad(1) + theme.S().Indicator.Render(indicatorChar)
+			if available >= indicatorGap+1 {
+				bar := trailingIndicator()
 				for i := 1; i < len(allLines)-1; i++ {
 					allLines[i] = allLines[i] + bar
 				}
@@ -534,13 +559,11 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		if leftPad < 0 {
 			leftPad = 0
 		}
-		// The margin is composed rather than spliced: with a canvas the pad opens
-		// with an escape sequence, so the byte offsets this used to slice at
-		// stopped being cell offsets and cut that sequence in half. Same reason
-		// alignBubbleLines builds its indicated margin whole (#227).
 		margin := theme.Pad(leftPad)
-		if selected && ml.showIndicator && leftPad >= 2 {
-			margin = theme.Pad(leftPad-1) + theme.S().Indicator.Render(indicatorChar)
+		if selected && ml.showIndicator {
+			if indicated, fits := leadingIndicator(leftPad); fits {
+				margin = indicated
+			}
 		}
 		for i := range lines {
 			lines[i] = margin + lines[i]
@@ -548,8 +571,8 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		return lines
 	}
 	if selected && ml.showIndicator {
-		if available := ml.viewWidth - blockW; available >= 2 {
-			bar := theme.Pad(1) + theme.S().Indicator.Render(indicatorChar)
+		if available := ml.viewWidth - blockW; available >= indicatorGap+1 {
+			bar := trailingIndicator()
 			for i := range lines {
 				lines[i] = lines[i] + bar
 			}

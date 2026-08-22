@@ -87,7 +87,7 @@ no chain of optional helper programs to install before the app is fully usable.
 | Language           | Go                                                                           | Rust                                                                                                              | Python                                                                                                                               |
 | Telegram backend   | gotd/td - MTProto in pure Go                                                 | TDLib                                                                                                             | TDLib via `python-telegram`                                                                                                          |
 | What you install   | one static binary                                                            | `cargo install` plus TDLib downloaded or built; CMake to get voice notes; a system `chafa` to get inline images    | a Python 3.9+/3.10+ runtime plus TDLib; `ffmpeg`, `terminal-notifier`, `urlview`, `ranger`/`fzf` for the full feature set             |
-| Packaging          | brew, apt, dnf, zypper, apk, AUR, snap, nix, scoop, winget, signed deb/rpm    | crates.io, AUR, nix, Docker                                                                                       | PyPI, AUR, Docker                                                                                                                    |
+| Packaging          | brew, apt, dnf, zypper, apk, nix, scoop, winget, signed deb/rpm               | crates.io, AUR, nix, Docker                                                                                       | PyPI, AUR, Docker                                                                                                                    |
 | Inline photos      | Kitty graphics protocol at full quality, ANSI block-art fallback              | `chafa` block art, behind an optional build feature                                                               | handed to an external viewer via mailcap                                                                                             |
 | Windows            | binary, Scoop, winget                                                        | supported                                                                                                         | not practical                                                                                                                        |
 | Release cadence    | weekly stable releases plus a separate beta channel                          | latest release is `v1.0.0-rc1`; most recent commits are dependency bumps                                          | `tg` ships in bursts months apart; `tuigram` is a fork of a fork                                                                      |
@@ -254,20 +254,11 @@ echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositor
 sudo apk add --allow-untrusted tele
 ```
 
-### Arch / Manjaro - AUR
-
-```sh
-yay -S tele-bin      # or: paru -S tele-bin
-```
-
-### Any Linux - Snap
-
-```sh
-sudo snap install tele
-```
-
 > Prefer a raw package? Signed `.deb` and `.rpm` files are also attached to
 > every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+
+> **Coming soon:** AUR (`tele-bin`) and Snap are already wired into the release
+> pipeline and will be published once the store credentials are in place.
 
 ### Windows - binary
 
@@ -557,7 +548,7 @@ minor lines (`v1.9`, `v1.10`, …); patch releases ship incrementally within a l
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.9` _(in work)_  | Offline history & media internals - SQLite-backed history for instant chat open, on-disk image LRU cache, album sending, `?` shortcuts help modal, Kitty renderer fixes                                  |
 | `v1.10` _(planned)_ | Search & chat polish - full-text history search, command palette, in-chat grep, pinned messages, search-modal preview, richer reply UX, plus image-modal and chat-list fixes                             |
-| `Backlog`           | Power-user & platform - color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing |
+| `Backlog`           | Power-user & platform - color themes (gruvbox / nord / catppuccin), extended vim motions, scheduled sending, bot commands & inline keyboards, voice and round-video messages, notification click routing, AUR & Snap publishing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance,
 Feature Completeness, Power User & Polish) via the board's **Theme** field.

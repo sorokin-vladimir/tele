@@ -194,8 +194,6 @@ server. Both degrade gracefully when unavailable.
 ### macOS / Linux - Homebrew
 
 ```sh
-brew tap sorokin-vladimir/tap
-brew trust sorokin-vladimir/tap
 brew install tele
 ```
 

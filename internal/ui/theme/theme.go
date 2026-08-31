@@ -292,5 +292,8 @@ func currentIsDark() bool {
 // load.
 func T() *Theme { return &current.Load().theme }
 
+// IsDark reports the terminal background classification used for the current theme.
+func IsDark() bool { return currentIsDark() }
+
 // S returns the styles derived from the current theme.
 func S() *Styles { return &current.Load().styles }

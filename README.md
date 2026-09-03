@@ -215,6 +215,14 @@ Beta builds come from prerelease tags (`vX.Y.Z-beta.N`) and are published as
 GitHub prereleases, so they never show up as the "latest" release. Run it with
 `tele-beta`.
 
+### macOS / Linux - X-CMD
+
+[x-cmd](https://www.x-cmd.com/) is a modern Shell toolkit that gives AI agents and developers powerful, portable, and composable command-line capabilities.
+
+```bash
+x eget use sorokin-vladimir/tele
+```
+
 ### Linux - binary
 
 ```sh

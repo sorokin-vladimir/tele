@@ -58,6 +58,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Quitting can ask first. With `ui.confirm_quit` on (off by default), `q`,
+  `ctrl+c` and `ctrl+q` open a confirmation: `y` or `enter` quits, `n`, `esc`
+  or `q` cancels, and a modifier quit binding pressed again quits without
+  asking.
 - iTerm2 3.7.0 and newer gets inline photos at full quality instead of block
   art. The README says which terminals `photos.mode: auto` draws images in, so
   choosing a terminal no longer means reading the source.

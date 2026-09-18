@@ -195,6 +195,7 @@ const defaultConfigHead = `telegram:
 
 ui:
   history_limit: 50
+  confirm_quit: false  # ask before q, ctrl+c or ctrl+q closes tele
   # Themes follow the terminal background: a dark one and a light one, each
   # named here. Leave this out for the built-in tele-dark and tele-light. See
   # docs/themes.md.

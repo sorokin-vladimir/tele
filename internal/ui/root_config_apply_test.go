@@ -98,6 +98,7 @@ var readAtPointOfUse = map[string]bool{
 	"ui.notifications.desktop":  true, // internal/core reads o.Config() at the sink
 	"ui.notifications.toast":    true, // internal/core reads o.Config() at the sink
 	"ui.notifications.preview":  true, // internal/core reads o.Config() as it decides
+	"ui.confirm_quit":           true, // root_keys.go reads m.cfg.UI.ConfirmQuit at the key press
 	"photos.eager_full_quality": true, // root_download.go reads m.cfg as it downloads
 }
 

@@ -155,6 +155,11 @@ func (m RootModel) View() tea.View {
 		if m.profile != nil {
 			content = overlayCenter(dimBackground(content), m.profile.View(), m.width, m.height)
 		}
+		// The quit confirmation is centred like the other dialogs: it is about
+		// the whole session, not anchored to anything behind it.
+		if m.confirmQuit != nil {
+			content = overlayCenter(dimBackground(content), m.confirmQuit.View(), m.width, m.height)
+		}
 		// Bottom-anchored toasts must clear the composer: a limit warning is
 		// useless on top of the field it is about (#126). The composer grows with
 		// the draft, so the inset is read per frame.

@@ -136,6 +136,7 @@ type RootModel struct {
 	reactionPicker    *components.ReactionPicker
 	help              *components.HelpModal
 	settings          *components.SettingsModal
+	confirmQuit       *components.ConfirmModal
 	profile           *components.Profile
 	openPicker        *components.OpenPicker
 	reactionTargetID  int

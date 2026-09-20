@@ -23,7 +23,13 @@ import (
 // two so the owner can be built over a test double.
 type Connection interface {
 	internaltg.Client
-	Connect(ctx context.Context, cfg *config.Config, af *internaltg.AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error
+	Connect(
+		ctx context.Context,
+		cfg *config.Config,
+		af *internaltg.AuthFlow,
+		readyCh chan<- struct{},
+		onAuth func(int64, string) error,
+	) error
 }
 
 // Owner holds the Telegram connection and everything that may only exist once

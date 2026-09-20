@@ -66,7 +66,13 @@ type stubClient struct {
 	uploadBlock chan struct{}
 }
 
-func (s *stubClient) Connect(context.Context, *config.Config, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (s *stubClient) Connect(
+	context.Context,
+	*config.Config,
+	*internaltg.AuthFlow,
+	chan<- struct{},
+	func(int64, string) error,
+) error {
 	return nil
 }
 

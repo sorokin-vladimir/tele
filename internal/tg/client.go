@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -80,7 +81,13 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 // Closes readyCh once auth is complete and the updates loop has started.
 // onAuth is called with the authenticated user ID and username before readyCh
 // is closed; may be nil.
-func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
+func (c *GotdClient) Connect(
+	ctx context.Context,
+	cfg *config.Config,
+	af *AuthFlow,
+	readyCh chan<- struct{},
+	onAuth func(int64, string) error,
+) error {
 	sess := NewFileSession(cfg.Telegram.SessionFile)
 
 	dispatcher := tg.NewUpdateDispatcher()
@@ -259,7 +266,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		c.log.Info("authenticated", zap.Int64("user_id", self.ID))
 
 		if onAuth != nil {
-			onAuth(self.ID, self.Username)
+			if err := onAuth(self.ID, self.Username); err != nil {
+				return fmt.Errorf("prepare authenticated account: %w", err)
+			}
 		}
 
 		c.mu.Lock()

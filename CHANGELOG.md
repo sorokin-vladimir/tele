@@ -11,6 +11,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Switching accounts now removes the previous account's cached message bodies
+  and update state from the local database instead of leaving private history
+  behind in the shared state directory.
+
 ## [1.11.7] - 2026-09-16
 
 ### Added

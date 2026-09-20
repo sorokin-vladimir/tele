@@ -86,7 +86,10 @@ const persistFlushInterval = 2 * time.Second
 // Reads are served from an in-memory map; every chat write also persists to disk.
 // domain.Message operations are in-memory only.
 type SQLiteStore struct {
-	mu       sync.RWMutex
+	mu sync.RWMutex
+	// flushMu keeps an account reset ordered after any write-behind snapshot
+	// that was already taken, so old rows cannot land after the reset commits.
+	flushMu  sync.Mutex
 	chats    map[int64]domain.Chat
 	messages map[int64][]domain.Message
 	// unreadReactionMsgs tracks, per chat, the message IDs observed this session
@@ -237,6 +240,9 @@ func (s *SQLiteStore) runFlusher() {
 // Flush persists every chat marked dirty by write-behind mutations. Snapshots
 // are taken under the lock; the disk writes run without it.
 func (s *SQLiteStore) Flush() {
+	s.flushMu.Lock()
+	defer s.flushMu.Unlock()
+
 	s.mu.Lock()
 	pending := make([]domain.Chat, 0, len(s.dirtyPersist))
 	for id := range s.dirtyPersist {

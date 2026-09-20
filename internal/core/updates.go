@@ -14,10 +14,20 @@ import (
 // Start connects to Telegram and runs until ctx is cancelled. The caller runs it
 // in its own goroutine; the update loop is started separately by RunUpdates.
 func (o *Owner) Start(ctx context.Context) error {
-	return o.client.Connect(ctx, o.Config(), o.authFlow, o.readyCh, func(userID int64, username string) {
-		o.state.Store().ClearForNewAccount(userID)
+	err := o.client.Connect(ctx, o.Config(), o.authFlow, o.readyCh, func(userID int64, username string) error {
+		if err := o.state.Store().ClearForNewAccount(userID); err != nil {
+			return err
+		}
 		o.onAuth(userID, username)
+		return nil
 	})
+	if err != nil && ctx.Err() == nil {
+		select {
+		case o.authFlow.Errors <- err.Error():
+		default:
+		}
+	}
+	return err
 }
 
 // RunUpdates applies incoming Telegram events to domain state and makes the

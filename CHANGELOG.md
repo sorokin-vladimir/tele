@@ -28,6 +28,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   including while tele is still connecting, where before no key did anything and
   the only way out was killing the process. A bare `q` stays a letter you can
   type into the phone or password field (#283).
+- A connection or login that fails now says so. The error used to be held until
+  tele exited, so the screen simply froze; it now appears on the login screen
+  with the cause, the original error text to quote in a report, where the log
+  is, and the key that quits. The login error screen itself had never been
+  drawn at all - it showed "connecting..." instead. After login, a connection
+  that ends for good raises an error toast (#283).
 
 ## [1.11.7] - 2026-09-16
 

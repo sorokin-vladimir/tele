@@ -238,9 +238,19 @@ func (a *App) Run() error {
 	readyCh := a.owner.Ready()
 
 	// The owner holds the connection; this process also happens to render it.
+	// Start returns only when the connection is over. Its error is kept for the
+	// exit code and also shown while the program still runs: waiting for the
+	// exit to report it meant nobody saw it, on a screen nobody could quit (#283).
 	tgErr := make(chan error, 1)
+	startFailed := make(chan error, 1)
 	a.owner.SetContext(ctx)
-	go func() { tgErr <- a.owner.Start(ctx) }()
+	go func() {
+		err := a.owner.Start(ctx)
+		tgErr <- err
+		if err != nil && ctx.Err() == nil {
+			startFailed <- err
+		}
+	}()
 	go a.owner.RunUpdates(ctx)
 	go a.owner.RunOutbox(ctx)
 
@@ -256,7 +266,7 @@ func (a *App) Run() error {
 
 	root := ui.NewRootModel(a.st, a.cfg().UI.HistoryLimit, a.verbose)
 	root = root.WithContext(ctx).WithConfig(a.cfg()).WithKeyMap(km).WithOwner(att).WithLogger(a.log).
-		WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore)
+		WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore).WithLogPath(a.logPath)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))
 	root.SetTmpDir(a.tmpDir)
 
@@ -266,6 +276,14 @@ func (a *App) Run() error {
 	root = root.WithNotices(notices.Pending(a.pendingNotices(), noticeSeen), noticeSeen)
 
 	prog := tea.NewProgram(root)
+
+	go func() {
+		select {
+		case err := <-startFailed:
+			prog.Send(ui.ConnectFailedMsg{Err: err})
+		case <-ctx.Done():
+		}
+	}()
 
 	// Bridge: auth requests + ready signal → bubbletea
 	go func() {

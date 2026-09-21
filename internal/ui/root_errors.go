@@ -37,7 +37,7 @@ func errText(action string, err error) (string, components.Severity, bool) {
 
 	switch e.Kind {
 	case telerr.Unauthorized:
-		return action + ": session expired, sign in again", components.SeverityError, true
+		return action + ": session expired, log in again", components.SeverityError, true
 	case telerr.AppKeyBlocked:
 		// Both remedies, on their own lines: which one is easier is the
 		// person's to judge, and neither fits beside the cause on a narrow

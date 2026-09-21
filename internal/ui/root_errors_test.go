@@ -24,7 +24,7 @@ func TestErrText_KindToTextAndSeverity(t *testing.T) {
 		{
 			"unauthorized",
 			&telerr.Error{Kind: telerr.Unauthorized},
-			"mark read: session expired, sign in again",
+			"mark read: session expired, log in again",
 			components.SeverityError,
 		},
 		{

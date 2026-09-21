@@ -51,6 +51,11 @@ func NewLoginModel(af *internaltg.AuthFlow) LoginModel {
 
 func (m LoginModel) CurrentStep() internaltg.AuthStep { return m.step }
 
+// Connecting reports whether Telegram has not answered yet: no prompt has been
+// asked for and nothing has failed. The error step is negative too, which is why
+// this is not a sign test on the step.
+func (m LoginModel) Connecting() bool { return m.step == -1 }
+
 func (m LoginModel) Init() tea.Cmd {
 	return textinput.Blink
 }
@@ -106,7 +111,9 @@ func (m LoginModel) View() tea.View {
 	var s string
 	switch {
 	case m.step == -2:
-		s = fmt.Sprintf("Login error:\n\n%s\n\n(Press Ctrl+C to exit)", m.err)
+		// The text arrives complete, with the log and the quit key: which key
+		// quits is the root's to know, not this screen's.
+		s = m.err
 	case m.step < 0:
 		s = "Connecting...\n"
 	default:

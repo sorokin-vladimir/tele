@@ -82,7 +82,10 @@ type RootModel struct {
 	historyLimit  int
 	verbose       bool
 	log           *zap.Logger
-	cfg           *config.Config
+	// logPath is where this run's log is written, named on the login screen
+	// when something goes wrong there. Empty in tests.
+	logPath string
+	cfg     *config.Config
 	// reloadConfig re-reads the config file and hands the result to everything
 	// else holding one. Supplied by the app; nil in tests and wherever nothing
 	// can be reloaded, in which case the reload action reloads themes alone.
@@ -245,6 +248,12 @@ func (m RootModel) WithFocus(f Focus) RootModel {
 // goroutines against a tearing-down client.
 func (m RootModel) WithContext(ctx context.Context) RootModel {
 	m.ctx = ctx
+	return m
+}
+
+// WithLogPath records where this run's log is written.
+func (m RootModel) WithLogPath(path string) RootModel {
+	m.logPath = path
 	return m
 }
 
@@ -509,6 +518,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardDone(msg)
 	case StatusErrMsg:
 		return m.handleStatusErr(msg)
+	case ConnectFailedMsg:
+		return m.handleConnectFailed(msg)
 	case clipboardImagePastedMsg:
 		return m.handleClipboardImagePasted(msg)
 	case components.ComposerLimitMsg:

@@ -235,7 +235,13 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		}
 		return m, nil
 
-	case screens.AuthRequestMsg, screens.ConnectedMsg, screens.AuthErrorMsg:
+	case screens.AuthErrorMsg:
+		if m.screen == ScreenLogin {
+			return m.routeLoginError(m.loginErrorText(msg.Text, ""))
+		}
+		return m, nil
+
+	case screens.AuthRequestMsg, screens.ConnectedMsg:
 		if m.screen == ScreenLogin {
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)

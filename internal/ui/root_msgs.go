@@ -110,6 +110,10 @@ type StatusErrMsg struct {
 	Sev  components.Severity
 }
 
+// ConnectFailedMsg reports that the connection to Telegram ended with an error
+// and will not come back on its own: the owner's Start has returned (#283).
+type ConnectFailedMsg struct{ Err error }
+
 // ClearStatusErrMsg clears the status-bar error identified by Serial.
 type ClearStatusErrMsg struct{ Serial int }
 

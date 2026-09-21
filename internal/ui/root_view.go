@@ -20,7 +20,7 @@ func (m RootModel) View() tea.View {
 		// on the login screen is almost the whole terminal. Left to itself that
 		// whitespace carries no background at all.
 		fill := lipgloss.WithWhitespaceStyle(theme.NewStyle())
-		if m.login.CurrentStep() < 0 {
+		if m.login.Connecting() {
 			// canvas:ok a newline occupies no cell, so there is nothing on it to
 			// leave unpainted; the text beside it goes through Body.
 			combined := joinCentred(logoView, "\n"+theme.S().Body.Render("connecting..."))

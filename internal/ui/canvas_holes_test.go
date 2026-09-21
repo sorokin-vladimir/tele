@@ -13,7 +13,9 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -319,6 +321,32 @@ func TestCanvas_LoginScreenHasNoHoles(t *testing.T) {
 
 	found := holes(m.View().Content, 100, 30)
 	require.Empty(t, found, report(found, "background"))
+}
+
+// The login screen's other states put several lines of differing width under
+// the logo or inside the box, which is where the centring has to pad (#283).
+func TestCanvas_LoginStatesHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	states := map[string]tea.Msg{
+		"still connecting": screens.SlowConnectMsg{},
+		"error": ui.ConnectFailedMsg{Err: &telerr.Error{
+			Kind: telerr.Network, Op: "dial", Detail: "connection refused",
+		}},
+	}
+	for name, msg := range states {
+		t.Run(name, func(t *testing.T) {
+			// newLoginRoot, not newRoot: a zero login model is on its first
+			// prompt rather than connecting, and would never reach the state.
+			m := newLoginRoot().WithLogPath("/state/tele.log")
+			next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+			next, _ = next.(ui.RootModel).Update(msg)
+			m = next.(ui.RootModel)
+
+			found := holes(m.View().Content, 100, 30)
+			require.Empty(t, found, report(found, "background"))
+		})
+	}
 }
 
 // With no canvas nothing is painted, and that has to stay true: the built-ins

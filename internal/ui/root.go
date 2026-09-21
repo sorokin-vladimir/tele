@@ -410,6 +410,9 @@ func (m RootModel) Init() tea.Cmd {
 	// and enables OS color-scheme reports (mode 2031) for event-driven theme
 	// updates (issue #148).
 	cmds := []tea.Cmd{requestBGColorCmd(), enableColorSchemeReportsCmd()}
+	if m.screen == ScreenLogin {
+		cmds = append(cmds, screens.SlowConnectTick())
+	}
 	if m.noticeActive() {
 		cmds = append(cmds, noticeTickCmd())
 	}
@@ -621,6 +624,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		screens.AuthRequestMsg,
 		screens.ConnectedMsg,
 		screens.AuthErrorMsg,
+		screens.SlowConnectMsg,
 		components.ToggleMuteRequest,
 		components.ToggleUnreadRequest,
 		components.AddToFolderRequest,

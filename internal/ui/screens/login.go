@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -15,6 +16,22 @@ type AuthRequestMsg struct {
 type AuthErrorMsg struct{ Text string }
 type ConnectedMsg struct{}
 type TransitionToMainMsg struct{}
+
+// SlowConnectMsg arrives SlowConnectAfter into the login screen. If Telegram
+// has not answered by then, the screen says what is worth checking (#283).
+type SlowConnectMsg struct{}
+
+// SlowConnectAfter is how long a connection may take before the screen stops
+// saying only "connecting...". Nothing is given up when it passes: gotd keeps
+// reconnecting on its own, and a network that comes back or a clock set right
+// while the screen is up lets the same attempt through. A constant rather than a setting, since all it
+// changes is a line of text.
+const SlowConnectAfter = 10 * time.Second
+
+// SlowConnectTick schedules the SlowConnectMsg.
+func SlowConnectTick() tea.Cmd {
+	return tea.Tick(SlowConnectAfter, func(time.Time) tea.Msg { return SlowConnectMsg{} })
+}
 
 // WaitForAuthRequest returns a Cmd that blocks until AuthFlow sends a request, an error, or ready closes.
 func WaitForAuthRequest(af *internaltg.AuthFlow, ready <-chan struct{}) tea.Cmd {
@@ -36,6 +53,8 @@ type LoginModel struct {
 	step   internaltg.AuthStep
 	prompt string
 	err    string
+	// slow is set when SlowConnectMsg arrives while still connecting.
+	slow bool
 }
 
 func NewLoginModel(af *internaltg.AuthFlow) LoginModel {
@@ -56,12 +75,22 @@ func (m LoginModel) CurrentStep() internaltg.AuthStep { return m.step }
 // this is not a sign test on the step.
 func (m LoginModel) Connecting() bool { return m.step == -1 }
 
+// Slow reports whether the connection is still being waited for past
+// SlowConnectAfter.
+func (m LoginModel) Slow() bool { return m.slow && m.Connecting() }
+
 func (m LoginModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
 func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case SlowConnectMsg:
+		if m.Connecting() {
+			m.slow = true
+		}
+		return m, nil
+
 	case AuthRequestMsg:
 		m.step = msg.Step
 		switch msg.Step {

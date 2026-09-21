@@ -35,6 +35,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   drawn at all - it showed "connecting..." instead. After login, a connection
   that ends for good raises an error toast that stays until you dismiss it
   (#283).
+- A connection that takes longer than ten seconds no longer sits on
+  "connecting..." with nothing else to go on. The screen says what is worth
+  checking - network, proxy settings, system clock - where the log is and which
+  key quits. The attempt itself carries on, so a network that comes back or a
+  clock set right lets it through without a restart (#283).
 
 ## [1.11.7] - 2026-09-16
 

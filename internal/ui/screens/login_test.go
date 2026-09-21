@@ -34,5 +34,29 @@ func TestLogin_InitialView_ShowsConnecting(t *testing.T) {
 	assert.Contains(t, m.View().Content, "onnect") // "Connecting..." or "Connect"
 }
 
+// The slow mark belongs to the wait for Telegram's first answer. Once a prompt
+// is up the wait is over, and a tick that arrives late must not bring it back.
+func TestLogin_SlowConnectMarksOnlyTheWait(t *testing.T) {
+	m := screens.NewLoginModel(internaltg.NewAuthFlow())
+	assert.False(t, m.Slow())
+
+	slow, _ := m.Update(screens.SlowConnectMsg{})
+	assert.True(t, slow.(screens.LoginModel).Slow())
+
+	prompted, _ := m.Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPhone})
+	late, _ := prompted.(screens.LoginModel).Update(screens.SlowConnectMsg{})
+	assert.False(t, late.(screens.LoginModel).Slow())
+}
+
+// A prompt arriving after the mark ends the wait too.
+func TestLogin_PromptEndsTheSlowWait(t *testing.T) {
+	m := screens.NewLoginModel(internaltg.NewAuthFlow())
+	slow, _ := m.Update(screens.SlowConnectMsg{})
+
+	prompted, _ := slow.(screens.LoginModel).Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPhone})
+
+	assert.False(t, prompted.(screens.LoginModel).Slow())
+}
+
 // ensure tea import is used (Blink cmd returns tea.Cmd)
 var _ tea.Cmd = screens.NewLoginModel(nil).Init()

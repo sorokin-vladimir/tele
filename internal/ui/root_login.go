@@ -10,6 +10,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
+	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // connectFailedAction is how a failed connection is named, on the login screen
@@ -65,6 +66,30 @@ func (m RootModel) loginErrorText(cause, evidence string) string {
 		b.WriteString("\n\nPress " + key + " to quit.")
 	}
 	return b.String()
+}
+
+// connectingText is what sits under the logo while Telegram has not answered.
+// Past screens.SlowConnectAfter it grows into what is worth checking, where the
+// log is and how to leave; the attempt itself goes on either way. Each line is
+// rendered on its own, so the centring pads between styled runs rather than
+// inside one.
+func (m RootModel) connectingText() string {
+	body := theme.S().Body
+	if !m.login.Slow() {
+		return body.Render("connecting...")
+	}
+	lines := []string{
+		body.Render("still connecting..."),
+		"",
+		body.Render("Check your network, proxy settings and system clock."),
+	}
+	if m.logPath != "" {
+		lines = append(lines, body.Render("Log: "+m.logPath))
+	}
+	if key := m.loginQuitKey(); key != "" {
+		lines = append(lines, body.Render("Press "+key+" to quit."))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // handleConnectFailed shows a connection that ended for good. On the login

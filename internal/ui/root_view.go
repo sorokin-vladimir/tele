@@ -23,7 +23,7 @@ func (m RootModel) View() tea.View {
 		if m.login.Connecting() {
 			// canvas:ok a newline occupies no cell, so there is nothing on it to
 			// leave unpainted; the text beside it goes through Body.
-			combined := joinCentred(logoView, "\n"+theme.S().Body.Render("connecting..."))
+			combined := joinCentred(logoView, "\n"+m.connectingText())
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		} else {
 			loginContent := m.login.View().Content

@@ -628,6 +628,9 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return next, nil
 		}
 		if m.screen == ScreenLogin {
+			if m.isLoginQuit(msg) {
+				return m, tea.Quit
+			}
 			newLogin, cmd := m.login.Update(msg)
 			m.login = newLogin.(screens.LoginModel)
 			return m, cmd

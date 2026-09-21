@@ -24,6 +24,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   media, and avatars once so stale state cannot leak into the new ownership
   model. Signing out and back in, even as the same user, starts with an empty
   account-owned cache (#263).
+- The login screen can be left. `Ctrl+C` and `Ctrl+Q` quit at every step,
+  including while tele is still connecting, where before no key did anything and
+  the only way out was killing the process. A bare `q` stays a letter you can
+  type into the phone or password field (#283).
 
 ## [1.11.7] - 2026-09-16
 

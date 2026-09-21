@@ -11,6 +11,10 @@
 | `?`                       | Keyboard shortcuts |
 | `,`                       | Settings        |
 
+On the login screen only `Ctrl+Q` and `Ctrl+C` quit, at every step, including
+while tele is still connecting. A bare `q` is typed into the field. A quit you
+rebind works there only if it uses `ctrl` or `alt`.
+
 ## Chat list
 
 | Key                 | Action                     |

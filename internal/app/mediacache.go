@@ -21,8 +21,8 @@ const tmpCacheBytes = 64 << 20
 const tmpAvatarCacheBytes = 8 << 20
 
 // removeLegacyMediaCache deletes the pre-#196 cache directory, which was shared
-// by every account and is now unreachable. It is a sibling of the per-account
-// directories, never a parent of one, so removing it cannot touch a live cache.
+// by every account and is now unreachable. It is a sibling of the per-state-directory
+// segments, never a parent of one, so removing it cannot touch a live cache.
 func removeLegacyMediaCache(log *zap.Logger) {
 	base, err := os.UserCacheDir()
 	if err != nil {

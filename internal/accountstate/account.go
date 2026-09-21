@@ -39,7 +39,9 @@ func MediaCacheDir(stateDir string) (string, error) {
 	return cacheDir(stateDir, "media")
 }
 
-// AvatarCacheDir returns the persistent avatar cache for stateDir.
+// AvatarCacheDir returns the persistent avatar cache for stateDir: a sibling of
+// the media directory, never inside it, so the two bounds are enforced over
+// disjoint sets of files (#223).
 func AvatarCacheDir(stateDir string) (string, error) {
 	return cacheDir(stateDir, "avatars")
 }

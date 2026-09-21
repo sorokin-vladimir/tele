@@ -178,9 +178,6 @@ func seedCaches(t *testing.T, stateDir string) (string, string) {
 	require.NoError(t, err)
 	avatarDir, err := accountstate.AvatarCacheDir(stateDir)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(filepath.Dir(mediaDir))
-	})
 	writeFile(t, filepath.Join(mediaDir, "media.bin"), "private")
 	writeFile(t, filepath.Join(avatarDir, "avatar.bin"), "private")
 	return mediaDir, avatarDir

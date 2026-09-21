@@ -20,6 +20,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - The same in both panes while they load: "Loading…" in the chat pane and
   "Loading chats…" in the chat list are painted now, so the first seconds after
   launch look like the rest of the app.
+- The first start after upgrading clears the local database, queued messages,
+  media, and avatars once so stale state cannot leak into the new ownership
+  model. Signing out and back in, even as the same user, starts with an empty
+  account-owned cache (#263).
 
 ## [1.11.7] - 2026-09-16
 

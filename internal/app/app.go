@@ -16,6 +16,7 @@ import (
 	"github.com/gotd/td/telegram/dcs"
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/outbox"
@@ -215,6 +216,9 @@ func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*Ap
 	// Registered after the App exists: the account identity is needed both by
 	// the message list (own messages) and by the farewell banner on exit.
 	owner.SetOnAuth(func(userID int64, username string) {
+		if err := accountstate.Record(cfg.StateDir, cfg.Telegram.SessionFile); err != nil {
+			log.Error("record account identity", zap.Error(err))
+		}
 		components.SetSelfIdentity(userID, username)
 		a.setSelf(userID, username)
 	})

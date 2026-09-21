@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 
+	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/appkey"
 	"github.com/sorokin-vladimir/tele/internal/config"
@@ -174,6 +175,15 @@ func main() {
 			fmt.Fprintf(os.Stderr, "state migration: %v\n", err)
 			os.Exit(1)
 		}
+	}
+
+	accountCleared, cleanupReason, err := accountstate.Reconcile(cfg.StateDir, cfg.Telegram.SessionFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "account state: %v\n", err)
+		os.Exit(1)
+	}
+	if accountCleared {
+		log.Info("cleared local state before startup", zap.String("reason", string(cleanupReason)))
 	}
 
 	a, err := app.New(cfgStore, log, *verbose, *trace)

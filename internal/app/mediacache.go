@@ -1,13 +1,12 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 
 	"go.uber.org/zap"
 
+	"github.com/sorokin-vladimir/tele/internal/accountstate"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/mediacache"
 )
@@ -20,34 +19,6 @@ const tmpCacheBytes = 64 << 20
 // tmpAvatarCacheBytes is the same idea for avatars, and much smaller: a run
 // that keeps nothing between sessions still holds every face it drew.
 const tmpAvatarCacheBytes = 8 << 20
-
-// accountSegment is the per-account directory name inside the shared cache
-// directory: the first 12 hex digits of the SHA-256 of the state directory.
-// Stable across runs, filename-safe, and it names nothing about the account.
-func accountSegment(stateDir string) string {
-	sum := sha256.Sum256([]byte(stateDir))
-	return hex.EncodeToString(sum[:])[:12]
-}
-
-// mediaCacheDir is where this account's media cache lives.
-func mediaCacheDir(stateDir string) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "tele", accountSegment(stateDir), "media"), nil
-}
-
-// avatarCacheDir is where this account's avatar cache lives: a sibling of the
-// media directory, never inside it, so the two bounds are enforced over
-// disjoint sets of files (#223).
-func avatarCacheDir(stateDir string) (string, error) {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "tele", accountSegment(stateDir), "avatars"), nil
-}
 
 // removeLegacyMediaCache deletes the pre-#196 cache directory, which was shared
 // by every account and is now unreachable. It is a sibling of the per-account
@@ -70,7 +41,7 @@ func openMediaCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*mediac
 	if cfg.Photos.DiskCacheSize <= 0 {
 		return mediacache.New(filepath.Join(tmpDir, "media"), tmpCacheBytes)
 	}
-	dir, err := mediaCacheDir(cfg.StateDir)
+	dir, err := accountstate.MediaCacheDir(cfg.StateDir)
 	if err != nil {
 		log.Warn("no user cache directory; caching media in the temp directory instead", zap.Error(err))
 		return mediacache.New(filepath.Join(tmpDir, "media"), tmpCacheBytes)
@@ -85,7 +56,7 @@ func openAvatarCache(cfg *config.Config, tmpDir string, log *zap.Logger) (*media
 	if cfg.Avatars.DiskCacheSize <= 0 {
 		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)
 	}
-	dir, err := avatarCacheDir(cfg.StateDir)
+	dir, err := accountstate.AvatarCacheDir(cfg.StateDir)
 	if err != nil {
 		log.Warn("no user cache directory; caching avatars in the temp directory instead", zap.Error(err))
 		return mediacache.New(filepath.Join(tmpDir, "avatars"), tmpAvatarCacheBytes)

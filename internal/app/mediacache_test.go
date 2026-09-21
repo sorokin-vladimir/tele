@@ -7,21 +7,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/accountstate"
 )
 
 // Two accounts must not share a cache directory: with one process per state
 // directory (#188), a shared directory means two independent indexes evicting
 // each other's files.
 func TestAccountSegment_DiffersPerStateDir(t *testing.T) {
-	a := accountSegment("/home/u/.local/state/tele")
-	b := accountSegment("/home/u/.local/state/tele-work")
+	a := accountstate.Segment("/home/u/.local/state/tele")
+	b := accountstate.Segment("/home/u/.local/state/tele-work")
 
 	assert.NotEqual(t, a, b)
 	assert.Len(t, a, 12)
 }
 
 func TestAccountSegment_IsStableForOneStateDir(t *testing.T) {
-	assert.Equal(t, accountSegment("/home/u/state"), accountSegment("/home/u/state"))
+	assert.Equal(t, accountstate.Segment("/home/u/state"), accountstate.Segment("/home/u/state"))
 }
 
 func TestMediaCacheDir_SitsUnderTheAccountSegment(t *testing.T) {
@@ -30,10 +32,10 @@ func TestMediaCacheDir_SitsUnderTheAccountSegment(t *testing.T) {
 	}
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
-	dir, err := mediaCacheDir("/home/u/state")
+	dir, err := accountstate.MediaCacheDir("/home/u/state")
 
 	require.NoError(t, err)
 	assert.Equal(t, "media", filepath.Base(dir))
-	assert.Equal(t, accountSegment("/home/u/state"), filepath.Base(filepath.Dir(dir)))
+	assert.Equal(t, accountstate.Segment("/home/u/state"), filepath.Base(filepath.Dir(dir)))
 	assert.Equal(t, "tele", filepath.Base(filepath.Dir(filepath.Dir(dir))))
 }

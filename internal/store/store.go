@@ -103,5 +103,5 @@ type Store interface {
 	SetChatMentionsRead(chatID int64)
 	FolderFilters() []domain.FolderFilter
 	SetFolderFilters(filters []domain.FolderFilter)
-	ClearForNewAccount(ownerID int64)
+	SetOwnerID(ownerID int64)
 }

@@ -77,7 +77,7 @@ func (af *AuthFlow) Phone(ctx context.Context) (string, error) {
 
 func (af *AuthFlow) Code(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
 	if _, ok := sentCode.Type.(*tg.AuthSentCodeTypeSetUpEmailRequired); ok {
-		af.Errors <- "Login requires email verification, which is not yet supported.\nPlease sign in via the official Telegram app first, then relaunch tele."
+		af.Errors <- "Login requires email verification, which is not yet supported.\nPlease log in via the official Telegram app first, then relaunch tele."
 		return "", fmt.Errorf("authSentCodeTypeSetUpEmailRequired: email verification required")
 	}
 	return af.askWithHint(ctx, AuthStepCode, codeHint(sentCode.Type))

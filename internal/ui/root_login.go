@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
@@ -67,15 +68,18 @@ func (m RootModel) loginErrorText(cause, evidence string) string {
 }
 
 // handleConnectFailed shows a connection that ended for good. On the login
-// screen it becomes the error step; after login it is a toast, since the chats
-// already on screen are still worth reading.
+// screen it becomes the error step. After login it is a toast, since the chats
+// already on screen are still worth reading, and one that stays until it is
+// dismissed: the connection will not come back by waiting, so a toast that timed
+// out would leave a dead app with nothing on screen saying so.
 func (m RootModel) handleConnectFailed(msg ConnectFailedMsg) (RootModel, tea.Cmd) {
 	text, sev, ok := errText(connectFailedAction, msg.Err)
 	if !ok {
 		return m, nil
 	}
 	if m.screen != ScreenLogin {
-		return m.handleStatusErr(StatusErrMsg{Text: text, Sev: sev})
+		m.toasts.Add(components.ToastKindOf(sev), text)
+		return m, nil
 	}
 	// An error with a kind has a phrase for it, and its own text goes underneath
 	// as the evidence. One without a kind has nothing to name beyond that text,

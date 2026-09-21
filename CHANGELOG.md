@@ -33,7 +33,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   with the cause, the original error text to quote in a report, where the log
   is, and the key that quits. The login error screen itself had never been
   drawn at all - it showed "connecting..." instead. After login, a connection
-  that ends for good raises an error toast (#283).
+  that ends for good raises an error toast that stays until you dismiss it
+  (#283).
 
 ## [1.11.7] - 2026-09-16
 

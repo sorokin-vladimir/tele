@@ -58,5 +58,17 @@ func TestLogin_PromptEndsTheSlowWait(t *testing.T) {
 	assert.False(t, prompted.(screens.LoginModel).Slow())
 }
 
+// A step asked again says why under the field, and the reason goes away with
+// the next step that has none (#285).
+func TestLogin_ReasonShowsUnderTheField(t *testing.T) {
+	m := screens.NewLoginModel(internaltg.NewAuthFlow())
+
+	again, _ := m.Update(screens.AuthRequestMsg{Step: internaltg.AuthStepCode, Err: "That code is not right. Try again."})
+	assert.Contains(t, again.(screens.LoginModel).View().Content, "That code is not right. Try again.")
+
+	onward, _ := again.(screens.LoginModel).Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPassword})
+	assert.NotContains(t, onward.(screens.LoginModel).View().Content, "not right")
+}
+
 // ensure tea import is used (Blink cmd returns tea.Cmd)
 var _ tea.Cmd = screens.NewLoginModel(nil).Init()

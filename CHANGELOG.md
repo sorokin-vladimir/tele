@@ -48,6 +48,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   connecting screen straight away, and after login in the status bar, until
   messages get through again. Setting the clock right is enough; no restart is
   needed (#277).
+- A mistyped login code, 2FA password or phone number is asked for again, with
+  the reason under the field, instead of ending the login. The field used to
+  clear as if the value had been taken, and whatever was typed next went
+  nowhere. An expired code gets a new one sent. Anything else Telegram refuses,
+  including its own limit on repeated guesses, ends on the error screen (#285).
 
 ## [1.11.7] - 2026-09-16
 

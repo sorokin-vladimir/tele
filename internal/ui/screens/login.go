@@ -12,6 +12,8 @@ import (
 type AuthRequestMsg struct {
 	Step internaltg.AuthStep
 	Hint string
+	// Err is why the step is asked again, shown under the field (#285).
+	Err string
 }
 type AuthErrorMsg struct{ Text string }
 type ConnectedMsg struct{}
@@ -38,7 +40,7 @@ func WaitForAuthRequest(af *internaltg.AuthFlow, ready <-chan struct{}) tea.Cmd 
 	return func() tea.Msg {
 		select {
 		case req := <-af.Requests:
-			return AuthRequestMsg{Step: req.Step, Hint: req.Hint}
+			return AuthRequestMsg{Step: req.Step, Hint: req.Hint, Err: req.Err}
 		case <-ready:
 			return ConnectedMsg{}
 		case text := <-af.Errors:
@@ -93,6 +95,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AuthRequestMsg:
 		m.step = msg.Step
+		m.err = msg.Err
 		switch msg.Step {
 		case internaltg.AuthStepPhone:
 			m.prompt = "Enter phone number:"

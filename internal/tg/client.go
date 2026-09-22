@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/telegram/updates"
 	updhook "github.com/gotd/td/telegram/updates/hook"
@@ -260,10 +259,19 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	c.log.Debug("connecting to telegram")
 	return tc.Run(ctx, func(ctx context.Context) error {
 		c.log.Debug("running auth flow")
-		flow := auth.NewFlow(af, auth.SendCodeOptions{})
-		if err := tc.Auth().IfNecessary(ctx, flow); err != nil {
-			c.log.Error("auth failed", zap.Error(err))
+		// Our own login loop rather than gotd's auth.Flow, which gives up on
+		// the first mistyped code (#285). Asked only when the session is not
+		// already authorized, as auth.Client.IfNecessary does.
+		status, err := tc.Auth().Status(ctx)
+		if err != nil {
+			c.log.Error("auth status failed", zap.Error(err))
 			return err
+		}
+		if !status.Authorized {
+			if err := af.login(ctx, tc.Auth()); err != nil {
+				c.log.Error("auth failed", zap.Error(err))
+				return err
+			}
 		}
 
 		self, err := tc.Self(ctx)

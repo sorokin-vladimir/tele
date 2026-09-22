@@ -19,6 +19,9 @@ const (
 type AuthRequest struct {
 	Step AuthStep
 	Hint string
+	// Err says why the step is asked for again: the value given last time was
+	// refused. Empty the first time a step is asked (#285).
+	Err string
 }
 
 type AuthResponse struct {
@@ -26,8 +29,9 @@ type AuthResponse struct {
 	Err   error
 }
 
-// AuthFlow bridges gotd's blocking auth.UserAuthenticator callbacks
-// with bubbletea's event loop via unbuffered channels.
+// AuthFlow bridges the login's blocking questions (see login) with bubbletea's
+// event loop via unbuffered channels. gotd's auth.Flow no longer drives it
+// (#285).
 type AuthFlow struct {
 	Requests  chan AuthRequest
 	Responses chan AuthResponse
@@ -43,25 +47,12 @@ func NewAuthFlow() *AuthFlow {
 	}
 }
 
-func (af *AuthFlow) ask(ctx context.Context, step AuthStep) (string, error) {
+// request puts one step to the login screen and waits for the answer.
+func (af *AuthFlow) request(ctx context.Context, req AuthRequest) (string, error) {
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
-	case af.Requests <- AuthRequest{Step: step}:
-	}
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case resp := <-af.Responses:
-		return resp.Value, resp.Err
-	}
-}
-
-func (af *AuthFlow) askWithHint(ctx context.Context, step AuthStep, hint string) (string, error) {
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case af.Requests <- AuthRequest{Step: step, Hint: hint}:
+	case af.Requests <- req:
 	}
 	select {
 	case <-ctx.Done():
@@ -72,15 +63,21 @@ func (af *AuthFlow) askWithHint(ctx context.Context, step AuthStep, hint string)
 }
 
 func (af *AuthFlow) Phone(ctx context.Context) (string, error) {
-	return af.ask(ctx, AuthStepPhone)
+	return af.request(ctx, AuthRequest{Step: AuthStepPhone})
 }
 
 func (af *AuthFlow) Code(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
+	return af.askCode(ctx, sentCode, "")
+}
+
+// askCode asks for the code Telegram sent, saying how it was sent and, when it
+// is asked again, why.
+func (af *AuthFlow) askCode(ctx context.Context, sentCode *tg.AuthSentCode, reason string) (string, error) {
 	if _, ok := sentCode.Type.(*tg.AuthSentCodeTypeSetUpEmailRequired); ok {
 		af.Errors <- "Login requires email verification, which is not yet supported.\nPlease log in via the official Telegram app first, then relaunch tele."
 		return "", fmt.Errorf("authSentCodeTypeSetUpEmailRequired: email verification required")
 	}
-	return af.askWithHint(ctx, AuthStepCode, codeHint(sentCode.Type))
+	return af.request(ctx, AuthRequest{Step: AuthStepCode, Hint: codeHint(sentCode.Type), Err: reason})
 }
 
 func codeHint(t tg.AuthSentCodeTypeClass) string {
@@ -108,11 +105,7 @@ func codeHint(t tg.AuthSentCodeTypeClass) string {
 }
 
 func (af *AuthFlow) Password(ctx context.Context) (string, error) {
-	return af.ask(ctx, AuthStepPassword)
-}
-
-func (af *AuthFlow) AcceptTermsOfService(_ context.Context, _ tg.HelpTermsOfService) error {
-	return nil
+	return af.request(ctx, AuthRequest{Step: AuthStepPassword})
 }
 
 func (af *AuthFlow) SignUp(_ context.Context) (auth.UserInfo, error) {

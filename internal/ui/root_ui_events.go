@@ -263,6 +263,13 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, cmd
 
 	case tea.PasteMsg:
+		// The terminal's own paste (cmd+v, ctrl+shift+v) into a login field: a
+		// code copied from another device, a password from a manager (#284).
+		if m.screen == ScreenLogin {
+			newLogin, cmd := m.login.Update(msg)
+			m.login = newLogin.(screens.LoginModel)
+			return m, cmd
+		}
 		if m.screen != ScreenMain {
 			return m, nil
 		}

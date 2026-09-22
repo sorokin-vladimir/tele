@@ -2,6 +2,7 @@ package screens_test
 
 import (
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -68,6 +69,44 @@ func TestLogin_ReasonShowsUnderTheField(t *testing.T) {
 
 	onward, _ := again.(screens.LoginModel).Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPassword})
 	assert.NotContains(t, onward.(screens.LoginModel).View().Content, "not right")
+}
+
+// submit presses enter on the login screen and returns what reached the login.
+func submit(t *testing.T, af *internaltg.AuthFlow, m screens.LoginModel) string {
+	t.Helper()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	select {
+	case resp := <-af.Responses:
+		return resp.Value
+	case <-time.After(time.Second):
+		require.FailNow(t, "nothing was submitted")
+		return ""
+	}
+}
+
+func typed(m screens.LoginModel, s string) screens.LoginModel {
+	next, _ := m.Update(tea.PasteMsg{Content: s})
+	return next.(screens.LoginModel)
+}
+
+// Copying a number or a code tends to bring a space or a line break with it,
+// and Telegram would refuse the value for it (#284).
+func TestLogin_PhoneAndCodeAreTrimmed(t *testing.T) {
+	for _, step := range []internaltg.AuthStep{internaltg.AuthStepPhone, internaltg.AuthStepCode} {
+		af := internaltg.NewAuthFlow()
+		m, _ := screens.NewLoginModel(af).Update(screens.AuthRequestMsg{Step: step})
+
+		assert.Equal(t, "12345", submit(t, af, typed(m.(screens.LoginModel), " 12345 ")))
+	}
+}
+
+// A password is sent exactly as typed: a space may be part of it, and Telegram
+// trims nothing.
+func TestLogin_PasswordIsNotTrimmed(t *testing.T) {
+	af := internaltg.NewAuthFlow()
+	m, _ := screens.NewLoginModel(af).Update(screens.AuthRequestMsg{Step: internaltg.AuthStepPassword})
+
+	assert.Equal(t, " secret ", submit(t, af, typed(m.(screens.LoginModel), " secret ")))
 }
 
 // ensure tea import is used (Blink cmd returns tea.Cmd)

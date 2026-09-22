@@ -53,6 +53,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   clear as if the value had been taken, and whatever was typed next went
   nowhere. An expired code gets a new one sent. Anything else Telegram refuses,
   including its own limit on repeated guesses, ends on the error screen (#285).
+- Pasting into the login fields works: the terminal's paste (`cmd+v` on macOS,
+  `ctrl+v` or `ctrl+shift+v` elsewhere) reaches the phone, code and password
+  fields, where it used to be dropped. A pasted password is masked like a typed
+  one. Spaces and line breaks around a number or a code are trimmed, so a copy
+  that brings one along is not refused; a password is sent exactly as typed
+  (#284).
 
 ## [1.11.7] - 2026-09-16
 

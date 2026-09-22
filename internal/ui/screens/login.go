@@ -2,8 +2,10 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -63,6 +65,10 @@ func NewLoginModel(af *internaltg.AuthFlow) LoginModel {
 	ti := textinput.New()
 	ti.Focus()
 	ti.SetWidth(40)
+	// Paste is the terminal's own, arriving as a tea.PasteMsg (#284). The
+	// input's ctrl+v would read the clipboard itself and answer with a message
+	// of its own that never comes back to it through the root.
+	ti.KeyMap.Paste = key.NewBinding()
 	return LoginModel{
 		af:    af,
 		input: ti,
@@ -125,6 +131,12 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		if msg.Code == tea.KeyEnter && m.step >= 0 {
 			val := m.input.Value()
+			// A copied number or code often brings a space or a line break
+			// along, which Telegram would refuse. A password is sent as typed:
+			// a space may be part of it, and Telegram trims nothing (#284).
+			if m.step != internaltg.AuthStepPassword {
+				val = strings.TrimSpace(val)
+			}
 			af := m.af
 			go func() {
 				af.Responses <- internaltg.AuthResponse{Value: val}

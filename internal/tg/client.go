@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gotd/log/logzap"
 	"go.uber.org/zap"
@@ -43,7 +44,15 @@ type GotdClient struct {
 	// fetches so a live update that omits the sender's entity still resolves the
 	// author instead of rendering "?" (#161).
 	senderNames *nameCache
+	// skew watches for a local clock too far off for gotd to accept what
+	// Telegram sends (#277).
+	skew *clockSkew
 }
+
+// SetOnClockSkew installs the function told about clock skew: the skew when it
+// is found or moves, positive when the local clock is ahead, and zero when
+// messages get through again. It must not block. Set before Connect.
+func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
 
 func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace bool, resolver dcs.Resolver) *GotdClient {
 	traceLog := zap.NewNop()
@@ -61,6 +70,7 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 		stateStorage: stateStorage,
 		resolver:     resolver,
 		senderNames:  newNameCache(),
+		skew:         newClockSkew(),
 	}
 }
 
@@ -161,6 +171,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	// wire message and emit the event immediately, then hand the update on to the
 	// manager as usual.
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
+	// Every update that arrives is a message the clock check let through, so it
+	// ends a clock skew (#277).
+	arrivals := c.skew.arrivals(hook)
 
 	// resync forces a full catch-up (getDifference) on every reconnect after the
 	// first, so state missed during OS sleep/suspend is reconciled immediately on
@@ -205,7 +218,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 	c.log.Info("gotd client", zap.String("gotd", gotdVersion()))
 
 	tc := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
-		UpdateHandler:  hook,
+		UpdateHandler:  arrivals,
 		SessionStorage: sess,
 		// One resolver for every data centre this client ever reaches, so a
 		// photo from a media DC takes the same route as the message it came
@@ -214,7 +227,9 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		Resolver: c.resolver,
 		// The "v" field carries the application version on every line, so gotd's
 		// own stamp of the same name is dropped and reported once above instead.
-		Logger: logzap.New(withoutField(c.log, "v")),
+		// The clock-skew watch reads the entries gotd writes for the messages it
+		// drops, the only place a skewed clock shows (#277).
+		Logger: logzap.New(watchClockSkew(withoutField(c.log, "v"), c.skew)),
 		// Names this app and this machine in Telegram's active-sessions list;
 		// without it gotd reports the Go toolchain and its own version (#200).
 		Device: deviceConfig(version.Version, os.Hostname),
@@ -239,7 +254,7 @@ func (c *GotdClient) Connect(ctx context.Context, cfg *config.Config, af *AuthFl
 		// sendMessage, sendMedia) and nowhere else, until an unrelated pts gap
 		// forces a getDifference. Without this hook a forward stayed invisible
 		// until the other side happened to read it (#198).
-		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(hook.Handle)},
+		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle)},
 	})
 
 	c.log.Debug("connecting to telegram")

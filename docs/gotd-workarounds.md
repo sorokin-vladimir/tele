@@ -1,9 +1,9 @@
 # gotd workarounds
 
-tele works around defects in the updates manager of
-[gotd](https://github.com/gotd/td). Each workaround is meant to be deleted once
-gotd fixes the defect upstream. This page lists all of them in one place, so
-that bumping the gotd dependency is also the moment each one is reconsidered.
+tele works around defects in [gotd](https://github.com/gotd/td), most of them in
+its updates manager. Each workaround is meant to be deleted once gotd fixes the
+defect upstream. This page lists all of them in one place, so that bumping the
+gotd dependency is also the moment each one is reconsidered.
 
 The comments next to each workaround explain how it works. This page is the
 index: where each one lives, what retires it, and whether that has happened.
@@ -25,8 +25,8 @@ closes one place where gotd lets an update fall through.
 
 1. Check the upstream status of every entry below. An entry is retired only when
    its fix is in a release, not just merged.
-2. Diff `telegram/updates` between the current and the new version. If the
-   package did not change, no entry below changed either.
+2. Diff `telegram/updates` and `mtproto/read.go` between the current and the new
+   version. If neither changed, no entry below changed either.
 3. Run the tripwire tests: `go test ./internal/tg/ -run 'TestStand_Without'`.
    Each one reproduces its defect against the real manager and asserts that the
    defect is still there. A failing tripwire means upstream has fixed it.
@@ -39,6 +39,7 @@ closes one place where gotd lets an update fall through.
 | Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1852](https://github.com/gotd/td/issues/1852) | open, no fix yet |
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
+| Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1856](https://github.com/gotd/td/issues/1856) | open, no fix yet |
 
 ### Channel difference cooldown stripped
 
@@ -101,3 +102,31 @@ correct and this workaround stays on our side regardless of the fix.
   (`internal/tg/outbox_gap_stand_test.go`)
 - On retirement: remove the extraction from `outboxHook`. Keep the hook itself
   if the arrival log is still wanted.
+
+### Clock skew read from the log
+
+This one is not in the updates manager but in the connection underneath it.
+gotd checks the time in the id of every message it receives against the local
+clock, and drops the message if it is more than 300 seconds old or 30 seconds
+early. It keeps no difference between the local clock and Telegram's, which the
+protocol asks a client to do, so a clock that is off by more than that drops
+everything Telegram sends. Nothing is answered, no error is raised, and the
+connection looks alive. A clock only 30 seconds behind is enough.
+
+The only trace is a Warn entry per dropped message, `Ignoring rejected
+message`, whose error names the id of the message. `watchClockSkew` wraps the
+logger handed to gotd, reads the server's time out of that id and reports the
+skew, so the app can say what is wrong instead of hanging. A successful reply
+or an arriving update ends it.
+
+This depends on the wording of a log entry, which gotd may change in any
+release without notice, so the tripwire checks the wording against gotd itself.
+
+- Tripwire: `TestStand_WithoutCalibrationASkewedClockHangs`
+  (`internal/tg/clock_skew_stand_test.go`). It fails if gotd connects despite
+  the skew (the defect is fixed) or if the entry can no longer be read (the
+  watch has gone blind).
+- On retirement: if gotd corrects for the skew, delete `clock_skew.go`, its
+  tests, the stand and this entry, and the app no longer needs to say anything.
+  If gotd instead reports the skew as an error, read it from there and drop the
+  log watch.

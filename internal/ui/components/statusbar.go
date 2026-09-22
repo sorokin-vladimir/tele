@@ -27,6 +27,10 @@ type StatusBar struct {
 	attachStaged bool
 	pickerOpen   bool
 	version      string // build version shown at the right edge, "" hides it
+	// clockSkew says the clock is too far off for Telegram (#277). It is apart
+	// from status because status is cleared on every key press, and this lasts
+	// until the skew is over.
+	clockSkew string
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -44,6 +48,9 @@ func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
 func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
+
+// SetClockSkew shows s right after the mode label until it is set to "".
+func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
 
 // StartTransfer shows a transient, animated transfer indicator with label and
 // returns the serial identifying it, so a later UpdateTransfer/ClearTransfer
@@ -97,6 +104,12 @@ func (sb *StatusBar) View() string {
 
 	segs := []string{modeStyle.Render(label)}
 
+	// First after the mode, because it explains why nothing else on screen is
+	// moving. In the bar's own colours: the theme's warning colour is chosen
+	// against the canvas, and the bar is a surface of its own.
+	if sb.clockSkew != "" {
+		segs = append(segs, theme.S().Bar.Render(sb.clockSkew))
+	}
 	if sb.dlText != "" {
 		segs = append(segs, theme.S().Bar.Render(sb.dlSpinner.View()+" "+sb.dlText))
 	} else if sb.status != "" {

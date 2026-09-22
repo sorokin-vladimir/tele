@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -218,6 +219,18 @@ func TestCanvas_MainScreenHasNoHoles(t *testing.T) {
 	}
 }
 
+// The clock-skew segment adds a run of its own to the status bar (#277).
+func TestCanvas_ClockSkewInTheStatusBarHasNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	m := newPopulatedRoot(t, 120, 40)
+	next, _ := m.Update(core.ClockSkew{Skew: 8 * time.Minute})
+	m = next.(ui.RootModel)
+
+	found := holes(m.View().Content, 120, 40)
+	require.Empty(t, found, report(found, "background"))
+}
+
 // Overlays are where the seams are: each one is stamped into the composed screen
 // by hand, and the stamping pads the base row out to meet it.
 //
@@ -330,6 +343,7 @@ func TestCanvas_LoginStatesHaveNoHoles(t *testing.T) {
 
 	states := map[string]tea.Msg{
 		"still connecting": screens.SlowConnectMsg{},
+		"clock skew":       core.ClockSkew{Skew: 8 * time.Minute},
 		"error": ui.ConnectFailedMsg{Err: &telerr.Error{
 			Kind: telerr.Network, Op: "dial", Detail: "connection refused",
 		}},

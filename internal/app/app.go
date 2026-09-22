@@ -175,6 +175,9 @@ func New(cfgStore *config.Store, log *zap.Logger, verbose bool, trace bool) (*Ap
 	}
 	client := internaltg.NewGotdClient(log, stateStorage, trace, resolver)
 	owner := core.New(cfg, log, state.New(sqliteStore), client, newNotifier(log))
+	// The client finds a skewed clock in what gotd logs; the owner hands it on
+	// to whoever is drawing (#277).
+	client.SetOnClockSkew(owner.SetClockSkew)
 
 	// The send queue shares the account database: the file DB runs on a single
 	// connection (#119), and a second one to the same file is how SQLITE_BUSY
@@ -352,6 +355,8 @@ func (a *App) Run() error {
 				prog.Send(tp)
 			case pr := <-a.owner.Progress():
 				prog.Send(pr)
+			case sk := <-a.owner.ClockSkew():
+				prog.Send(sk)
 			}
 		}
 	}()

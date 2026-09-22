@@ -40,6 +40,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   checking - network, proxy settings, system clock - where the log is and which
   key quits. The attempt itself carries on, so a network that comes back or a
   clock set right lets it through without a restart (#283).
+- A system clock that is off no longer hangs tele without a word. Telegram's
+  messages carry the time they were sent, and the library tele uses drops every
+  one that looks more than five minutes old or thirty seconds early by the local
+  clock, so a clock that was only a little behind was enough to wait forever.
+  tele now notices, and says by how much and in which direction: on the
+  connecting screen straight away, and after login in the status bar, until
+  messages get through again. Setting the clock right is enough; no restart is
+  needed (#277).
 
 ## [1.11.7] - 2026-09-16
 

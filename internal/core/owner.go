@@ -49,6 +49,8 @@ type Owner struct {
 	failures chan Failure
 	typing   chan Typing
 	progress chan Progress
+	// clockSkew carries the latest clock skew to the client (#277).
+	clockSkew *clockSkewOut
 	// notifications carries decisions the owner has already made, so a client
 	// renders rather than judges (#192).
 	notifications chan Notification
@@ -112,6 +114,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		failures:      make(chan Failure, 32),
 		typing:        make(chan Typing, 32),
 		progress:      make(chan Progress, 32),
+		clockSkew:     newClockSkewOut(),
 		notifications: make(chan Notification, 32),
 		readyCh:       make(chan struct{}),
 		ctx:           context.Background(),

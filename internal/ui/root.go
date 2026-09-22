@@ -85,7 +85,10 @@ type RootModel struct {
 	// logPath is where this run's log is written, named on the login screen
 	// when something goes wrong there. Empty in tests.
 	logPath string
-	cfg     *config.Config
+	// clockSkew is how far the local clock is from Telegram's, zero when it is
+	// close enough to be accepted (#277).
+	clockSkew time.Duration
+	cfg       *config.Config
 	// reloadConfig re-reads the config file and hands the result to everything
 	// else holding one. Supplied by the app; nil in tests and wherever nothing
 	// can be reloaded, in which case the reload action reloads themes alone.
@@ -523,6 +526,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleStatusErr(msg)
 	case ConnectFailedMsg:
 		return m.handleConnectFailed(msg)
+	case core.ClockSkew:
+		return m.handleClockSkew(msg)
 	case clipboardImagePastedMsg:
 		return m.handleClipboardImagePasted(msg)
 	case components.ComposerLimitMsg:

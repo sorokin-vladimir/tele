@@ -74,6 +74,9 @@ func (m RootModel) loginErrorText(cause, evidence string) string {
 // rendered on its own, so the centring pads between styled runs rather than
 // inside one.
 func (m RootModel) connectingText() string {
+	if m.clockSkew != 0 {
+		return m.clockSkewText()
+	}
 	body := theme.S().Body
 	if !m.login.Slow() {
 		return body.Render("connecting...")
@@ -83,13 +86,21 @@ func (m RootModel) connectingText() string {
 		"",
 		body.Render("Check your network, proxy settings and system clock."),
 	}
+	return strings.Join(append(lines, m.loginFooterLines()...), "\n")
+}
+
+// loginFooterLines are where the log is and which key quits, rendered, for the
+// bottom of the connecting screen when it has more to say than "connecting...".
+func (m RootModel) loginFooterLines() []string {
+	body := theme.S().Body
+	var lines []string
 	if m.logPath != "" {
 		lines = append(lines, body.Render("Log: "+m.logPath))
 	}
 	if key := m.loginQuitKey(); key != "" {
 		lines = append(lines, body.Render("Press "+key+" to quit."))
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 // handleConnectFailed shows a connection that ended for good. On the login

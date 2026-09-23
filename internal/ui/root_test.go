@@ -337,7 +337,7 @@ func TestSendMedia_HandsTheStagedFilesToTheQueue(t *testing.T) {
 	}
 
 	nm, cmd := m.Update(screens.SendMediaRequest{
-		Caption: "hi", ReplyToMsgID: 7,
+		ChatID: 1, Caption: "hi", ReplyToMsgID: 7,
 	})
 	m = nm.(ui.RootModel)
 	require.NotNil(t, cmd)
@@ -750,7 +750,8 @@ func TestRoot_Send_SubmitsToTheQueueAndTouchesNoStore(t *testing.T) {
 	owner := m.Owner().(*testOwner)
 
 	_, cmd := m.Update(screens.SendMsgRequest{
-		Text: "hello",
+		ChatID: 1,
+		Text:   "hello",
 	})
 	require.NotNil(t, cmd)
 	cmd()

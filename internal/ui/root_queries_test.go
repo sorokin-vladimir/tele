@@ -11,7 +11,32 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
+
+// A composer request reaches Update after the command that built it has run,
+// and the user may have switched chats in between: leaving a chat emits a
+// typing cancel on the way out. Each request names the chat it was made in and
+// goes there, not to whichever chat is open when it is handled (#278).
+func TestRoot_ComposerRequests_GoToTheChatTheyWereMadeIn(t *testing.T) {
+	m, st := newRootWithOpenChat(t)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob"})
+	nm, _ := m.Update(screens.OpenChatMsg{ChatID: 2, Title: "Bob"})
+	m = nm.(ui.RootModel)
+	o := ownerOf(t, m)
+
+	_, cmd := m.Update(screens.SetTypingRequest{ChatID: 1, Action: domain.TypingActionCancel})
+	require.NotNil(t, cmd)
+	cmd()
+	_, cmd = m.Update(screens.SendMsgRequest{ChatID: 1, Text: "hi"})
+	require.NotNil(t, cmd)
+	cmd()
+
+	require.Len(t, o.typingSent, 1)
+	assert.Equal(t, int64(1), o.typingSent[0].chatID)
+	require.Len(t, o.sent, 1)
+	assert.Equal(t, int64(1), o.sent[0].ChatID)
+}
 
 // Overlays that look at data outside the open windows ask the owner for it
 // from a command and are filled when the answer lands (#278). These tests run

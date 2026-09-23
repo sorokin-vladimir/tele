@@ -15,7 +15,11 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
+// The composer's requests name the chat they were made in. Each reaches the
+// root after the command that built it has run, by which time another chat may
+// be open; the request still belongs to the one it was typed into (#278).
 type SendMsgRequest struct {
+	ChatID       int64
 	Text         string
 	ReplyToMsgID int
 	Entities     []domain.MessageEntity
@@ -24,18 +28,21 @@ type SendMsgRequest struct {
 // SendMediaRequest is emitted when enter is pressed with a staged attachment.
 // It carries no file details; the root fills those from its pendingAttachment.
 type SendMediaRequest struct {
+	ChatID       int64
 	Caption      string
 	ReplyToMsgID int
 	Entities     []domain.MessageEntity
 }
 
 type EditSendRequest struct {
+	ChatID   int64
 	MsgID    int
 	Text     string
 	Entities []domain.MessageEntity
 }
 
 type SetTypingRequest struct {
+	ChatID int64
 	Action domain.TypingAction
 }
 
@@ -548,9 +555,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.composer.Blur()
 				m.msgList.SetShowIndicator(true)
 				if !m.lastTypingAt.IsZero() && m.header.ChatID != 0 {
+					chatID := m.header.ChatID
 					m.lastTypingAt = time.Time{}
 					return m, func() tea.Msg {
-						return SetTypingRequest{Action: domain.TypingActionCancel}
+						return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionCancel}
 					}
 				}
 			}
@@ -647,8 +655,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				if m.header.ChatID == 0 {
 					return m, nil
 				}
+				chatID := m.header.ChatID
 				return m, func() tea.Msg {
-					return SendMediaRequest{Caption: caption, ReplyToMsgID: replyID, Entities: entities}
+					return SendMediaRequest{ChatID: chatID, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
 				}
 			}
 			if msg.Code == tea.KeyEnter && msg.Mod == 0 {
@@ -665,19 +674,20 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.syncMsgListHeight()
 				m.lastTypingAt = time.Time{}
 				if m.header.ChatID != 0 && text != "" {
+					chatID := m.header.ChatID
 					var sendCmd tea.Cmd
 					if editID != 0 {
 						sendCmd = func() tea.Msg {
-							return EditSendRequest{MsgID: editID, Text: text, Entities: entities}
+							return EditSendRequest{ChatID: chatID, MsgID: editID, Text: text, Entities: entities}
 						}
 					} else {
 						sendCmd = func() tea.Msg {
-							return SendMsgRequest{Text: text, ReplyToMsgID: replyID, Entities: entities}
+							return SendMsgRequest{ChatID: chatID, Text: text, ReplyToMsgID: replyID, Entities: entities}
 						}
 					}
 					if wasTyping {
 						cancelCmd := func() tea.Msg {
-							return SetTypingRequest{Action: domain.TypingActionCancel}
+							return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionCancel}
 						}
 						return m, tea.Batch(sendCmd, cancelCmd)
 					}
@@ -689,9 +699,10 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			m.composer = newC
 			m.syncMsgListHeight()
 			if m.header.ChatID != 0 && time.Since(m.lastTypingAt) >= 4*time.Second {
+				chatID := m.header.ChatID
 				m.lastTypingAt = time.Now()
 				typingCmd := func() tea.Msg {
-					return SetTypingRequest{Action: domain.TypingActionTyping}
+					return SetTypingRequest{ChatID: chatID, Action: domain.TypingActionTyping}
 				}
 				if cmd != nil {
 					return m, tea.Batch(cmd, typingCmd)

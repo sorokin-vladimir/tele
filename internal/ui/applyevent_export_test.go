@@ -58,6 +58,7 @@ type testOwner struct {
 	forwardIDs     []int
 	forwardComment string
 	savedDrafts    []ownerDraft
+	typingSent     []ownerTyping
 	// The durable send queue (#193): what the UI submitted, retried, discarded,
 	// and the context it submitted under.
 	sent        []core.SendRequest
@@ -286,8 +287,15 @@ func (o *testOwner) InvalidateAvatar(userID, avatarID int64) {
 	o.avatarsInvalidated = append(o.avatarsInvalidated, avatarPathKey{userID, avatarID})
 }
 
-func (o *testOwner) SetTyping(_ context.Context, _ int64, _ domain.TypingAction) error {
+func (o *testOwner) SetTyping(_ context.Context, chatID int64, action domain.TypingAction) error {
+	o.typingSent = append(o.typingSent, ownerTyping{chatID: chatID, action: action})
 	return o.cmdErr
+}
+
+// ownerTyping is one SetTyping the UI issued.
+type ownerTyping struct {
+	chatID int64
+	action domain.TypingAction
 }
 
 func (o *testOwner) SaveDraft(_ context.Context, chatID int64, text string) error {

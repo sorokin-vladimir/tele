@@ -581,6 +581,7 @@ func TestChatModel_Typing_EmitsSetTypingRequest_OnKeystroke(t *testing.T) {
 	for _, msg := range msgs {
 		if req, ok := msg.(screens.SetTypingRequest); ok {
 			assert.Equal(t, domain.TypingActionTyping, req.Action)
+			assert.Equal(t, int64(10), req.ChatID)
 			found = true
 		}
 	}

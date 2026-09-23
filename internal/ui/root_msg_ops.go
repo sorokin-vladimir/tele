@@ -62,7 +62,7 @@ func (m RootModel) handleSendMsg(msg screens.SendMsgRequest) (RootModel, tea.Cmd
 	ctx, owner := m.ctx, m.owner
 	req := core.SendRequest{
 		Ref:          core.NewRef(),
-		ChatID:       m.currentChatID,
+		ChatID:       msg.ChatID,
 		Text:         msg.Text,
 		Entities:     msg.Entities,
 		ReplyToMsgID: msg.ReplyToMsgID,
@@ -93,7 +93,7 @@ func (m RootModel) handleSendMedia(msg screens.SendMediaRequest) (RootModel, tea
 	}
 	req := core.MediaSendRequest{
 		Ref:          core.NewRef(),
-		ChatID:       m.currentChatID,
+		ChatID:       msg.ChatID,
 		Files:        files,
 		Caption:      msg.Caption,
 		Entities:     msg.Entities,
@@ -192,7 +192,7 @@ func (m RootModel) handleEditSend(msg screens.EditSendRequest) (RootModel, tea.C
 	if m.owner == nil {
 		return m, nil
 	}
-	ctx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	ctx, owner, chatID := m.ctx, m.owner, msg.ChatID
 	msgID, text, entities := msg.MsgID, msg.Text, msg.Entities
 	return m, func() tea.Msg {
 		if err := owner.EditMessage(ctx, chatID, msgID, text, entities); err != nil {
@@ -265,10 +265,10 @@ func (m RootModel) saveDraftCmd(chatID int64, text string) tea.Cmd {
 }
 
 func (m RootModel) handleSetTyping(msg screens.SetTypingRequest) (RootModel, tea.Cmd) {
-	if m.owner == nil || m.currentChatID == 0 {
+	if m.owner == nil || msg.ChatID == 0 {
 		return m, nil
 	}
-	appCtx, owner, chatID := m.ctx, m.owner, m.currentChatID
+	appCtx, owner, chatID := m.ctx, m.owner, msg.ChatID
 	action := msg.Action
 	// Run as a managed tea.Cmd (not a detached goroutine) so the RPC is bound to
 	// the app lifecycle context and cancelled on shutdown.

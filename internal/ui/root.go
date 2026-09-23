@@ -143,6 +143,7 @@ type RootModel struct {
 	help              *components.HelpModal
 	settings          *components.SettingsModal
 	profile           *components.Profile
+	profileAsk        int // numbers profile requests; only the latest one's answer opens an overlay
 	openPicker        *components.OpenPicker
 	reactionTargetID  int
 	mentionPopup      *components.MentionPopup
@@ -555,6 +556,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.ProfileOpenChatRequest,
 		components.ProfileMuteRequest,
 		components.ProfileCopyUsernameRequest,
+		knownUserMsg,
 		profileLoadedMsg,
 		profileDialogMsg,
 		avatarReadyMsg:

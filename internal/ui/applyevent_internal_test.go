@@ -191,14 +191,14 @@ func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.C
 // KnownUser mirrors the real owner: it answers from the dialog when the test
 // has not seeded a user of its own, so a chat in the store is enough to open a
 // profile on.
-func (o *ownerStub) KnownUser(userID int64) (domain.User, bool) {
+func (o *ownerStub) KnownUser(_ context.Context, userID int64) (domain.User, bool, error) {
 	if u, ok := o.knownUsers[userID]; ok {
-		return u, true
+		return u, true, nil
 	}
 	if chat, ok := o.state.Store().GetChat(userID); ok && chat.Peer.IsUser() {
-		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true
+		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true, nil
 	}
-	return domain.User{}, false
+	return domain.User{}, false, nil
 }
 
 func (o *ownerStub) GetUser(_ context.Context, userID int64) (domain.User, error) {

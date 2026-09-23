@@ -69,10 +69,16 @@ func (o *Owner) GetParticipants(ctx context.Context, chatID int64) ([]domain.Cha
 }
 
 // KnownUser answers who a user is from what the owner already holds, with no
-// round trip. It is deliberately synchronous and lossy: a client opening a
-// profile draws this immediately and lets GetUser complete it, so the name that
-// was already on screen does not blink out (#222).
-func (o *Owner) KnownUser(userID int64) (domain.User, bool) {
+// round trip to Telegram. It is lossy on purpose: a client opens a profile on
+// this and lets GetUser complete it, so the name already on screen does not
+// blink out (#222). It is a query like the others rather than a synchronous
+// call, because in v2 even what the owner holds is a round trip away (#278).
+func (o *Owner) KnownUser(_ context.Context, userID int64) (domain.User, bool, error) {
+	user, ok := o.knownUser(userID)
+	return user, ok, nil
+}
+
+func (o *Owner) knownUser(userID int64) (domain.User, bool) {
 	st := o.state.Store()
 	if chat, ok := st.GetChat(userID); ok && chat.Peer.IsUser() {
 		return domain.User{
@@ -112,7 +118,7 @@ func (o *Owner) GetUser(ctx context.Context, userID int64) (domain.User, error) 
 	// A response that carried no short user has no name in it. Rather than
 	// hand back a nameless profile, keep the one already on screen.
 	if user.FirstName == "" && user.LastName == "" {
-		if known, ok := o.KnownUser(userID); ok {
+		if known, ok := o.knownUser(userID); ok {
 			user.FirstName, user.LastName = known.FirstName, known.LastName
 		}
 	}

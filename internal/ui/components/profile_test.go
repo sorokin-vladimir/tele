@@ -129,6 +129,7 @@ func TestProfile_OpenChat_EmitsRequestAndCloses(t *testing.T) {
 	req, ok := cmd().(components.ProfileOpenChatRequest)
 	require.True(t, ok)
 	assert.Equal(t, int64(7), req.UserID)
+	assert.Equal(t, "Alice Ng", req.Title, "the chat pane draws the name the overlay showed")
 }
 
 func TestProfile_Mute_FlipsItsOwnRowAndStaysOpen(t *testing.T) {

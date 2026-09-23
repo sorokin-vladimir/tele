@@ -58,8 +58,7 @@ func openAdaProfile(t *testing.T, m ui.RootModel, full domain.User) (ui.RootMode
 	t.Helper()
 	o := ownerOf(t, m)
 	o.knownUsers = map[int64]domain.User{7: {ID: 7, FirstName: "Ada"}}
-	nm, _ := m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
 	require.True(t, m.ProfileOpen())
 	nm, cmd := m.Update(ui.ProfileLoadedMsgForTest(7, full))
 	return nm.(ui.RootModel), cmd
@@ -126,8 +125,7 @@ func TestAvatar_SecondOpeningReusesTheRememberedPicture(t *testing.T) {
 	nm, _ := m.Update(pressEsc())
 	m = nm.(ui.RootModel)
 	require.False(t, m.ProfileOpen())
-	nm, _ = m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
 	require.True(t, m.ProfileOpen())
 	assert.True(t, m.Profile().HasAvatar(), "the remembered face is drawn immediately")
 
@@ -178,8 +176,8 @@ func TestAvatar_AnswerForAClosedProfileIsKeptNotDrawn(t *testing.T) {
 	nm, _ = m.Update(ui.AvatarReadyMsgForTest(7, 4242, img))
 	m = nm.(ui.RootModel)
 
-	nm, _ = m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
+	require.True(t, m.ProfileOpen())
 	assert.True(t, m.Profile().HasAvatar(), "the picture that arrived late is not thrown away")
 }
 

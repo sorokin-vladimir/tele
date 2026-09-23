@@ -18,6 +18,30 @@ import (
 
 func pressProfileKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'P', Text: "P"} }
 
+// askProfile sends msg, which asks for a profile, and delivers the owner's
+// answer about who the person is: the overlay opens on that answer, not on
+// the request (#278). The command returned is what opening the overlay asked
+// for next - the dialog, the full profile, the avatar - just as Update used to
+// return it when the overlay opened on the spot.
+func askProfile(t *testing.T, m ui.RootModel, msg tea.Msg) (ui.RootModel, tea.Cmd) {
+	t.Helper()
+	nm, cmd := m.Update(msg)
+	m = nm.(ui.RootModel)
+	if cmd == nil {
+		return m, nil
+	}
+	var next []tea.Cmd
+	for _, inner := range drainMsgs(cmd()) {
+		if inner == nil {
+			continue
+		}
+		nm, c := m.Update(inner)
+		m = nm.(ui.RootModel)
+		next = append(next, c)
+	}
+	return m, tea.Batch(next...)
+}
+
 // rootOnChatList puts the cursor on one chat-list row. Reaching the main screen
 // subscribes the list; its first delta is what fills it.
 func rootOnChatList(t *testing.T, chat domain.Chat) ui.RootModel {
@@ -57,8 +81,7 @@ func TestProfileKey_InChat_OpensOnTheMessageAuthor(t *testing.T) {
 	m, _ := groupWithMessageFrom(t, 9)
 	ownerOf(t, m).knownUsers = map[int64]domain.User{9: bob()}
 
-	nm, _ := m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
 	require.True(t, m.ProfileOpen(), "P on a message must open its author's profile")
 	assert.Equal(t, int64(9), m.Profile().UserID())
 }
@@ -87,8 +110,7 @@ func TestProfileKey_InPrivateChat_FallsBackToThePeer(t *testing.T) {
 	m = nm.(ui.RootModel)
 	m.View()
 
-	nm, _ = m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
 	require.True(t, m.ProfileOpen())
 	assert.Equal(t, int64(1), m.Profile().UserID())
 }
@@ -96,8 +118,7 @@ func TestProfileKey_InPrivateChat_FallsBackToThePeer(t *testing.T) {
 func TestProfileKey_InChatList_OpensOnAPrivateRow(t *testing.T) {
 	m := rootOnChatList(t, domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 
-	nm, _ := m.Update(pressProfileKey())
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, pressProfileKey())
 	require.True(t, m.ProfileOpen())
 	assert.Equal(t, int64(1), m.Profile().UserID())
 }
@@ -118,30 +139,49 @@ func TestOpenProfileRequest_FromTheMessageMenu_ClosesTheMenu(t *testing.T) {
 	m = nm.(ui.RootModel)
 	require.True(t, m.ContextMenuOpen())
 
-	nm, _ = m.Update(components.OpenProfileRequest{UserID: 9})
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, components.OpenProfileRequest{UserID: 9})
 	assert.True(t, m.ProfileOpen())
 	assert.False(t, m.ContextMenuOpen(), "two overlays must not compete for the same keys")
 }
 
 func TestOpenProfile_ForAnUnknownPerson_OpensNothing(t *testing.T) {
 	m, _ := newRootOnChat(t)
-	nm, _ := m.Update(components.OpenProfileRequest{UserID: 4242})
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, components.OpenProfileRequest{UserID: 4242})
 	assert.False(t, m.ProfileOpen())
 	assert.Contains(t, m.StatusText(), "No profile")
+}
+
+// Two profiles asked for in quick succession may be answered out of order; only
+// the latest request opens an overlay.
+func TestOpenProfile_AnAnswerToASupersededRequestIsDropped(t *testing.T) {
+	m, _ := groupWithMessageFrom(t, 9)
+	ownerOf(t, m).knownUsers = map[int64]domain.User{9: bob(), 1: {ID: 1, FirstName: "Alice"}}
+
+	nm, first := m.Update(components.OpenProfileRequest{UserID: 9})
+	m = nm.(ui.RootModel)
+	nm, second := m.Update(components.OpenProfileRequest{UserID: 1})
+	m = nm.(ui.RootModel)
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+
+	nm, _ = m.Update(second())
+	m = nm.(ui.RootModel)
+	nm, _ = m.Update(first())
+	m = nm.(ui.RootModel)
+
+	require.True(t, m.ProfileOpen())
+	assert.Equal(t, int64(1), m.Profile().UserID(), "the late answer about 9 must not replace 1")
 }
 
 // --- completion ---
 
 func TestProfileLoaded_ForADifferentPerson_IsIgnored(t *testing.T) {
 	m, _ := newRootOnChat(t)
-	nm, _ := m.Update(components.OpenProfileRequest{UserID: 1})
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, components.OpenProfileRequest{UserID: 1})
 	require.True(t, m.ProfileOpen())
 
 	stale := domain.User{ID: 9, FirstName: "Bob", Bio: "wrong person"}
-	nm, _ = m.Update(ui.ProfileLoadedMsgForTest(9, stale))
+	nm, _ := m.Update(ui.ProfileLoadedMsgForTest(9, stale))
 	m = nm.(ui.RootModel)
 	assert.NotContains(t, stripSeq(m.Profile().View()), "wrong person")
 }
@@ -150,7 +190,7 @@ func TestProfileLoaded_ForADifferentPerson_IsIgnored(t *testing.T) {
 
 func TestProfileOpenChat_WithADialog_OpensIt(t *testing.T) {
 	m, _ := newRootOnChat(t)
-	nm, cmd := m.Update(components.ProfileOpenChatRequest{UserID: 1})
+	nm, cmd := m.Update(components.ProfileOpenChatRequest{UserID: 1, Title: "Alice"})
 	m = nm.(ui.RootModel)
 	assert.False(t, m.ProfileOpen(), "opening a chat takes you elsewhere")
 	require.NotNil(t, cmd)
@@ -166,7 +206,7 @@ func TestProfileOpenChat_WithNoDialog_OpensByID(t *testing.T) {
 	m, _ := groupWithMessageFrom(t, 9)
 	ownerOf(t, m).knownUsers = map[int64]domain.User{9: bob()}
 
-	_, cmd := m.Update(components.ProfileOpenChatRequest{UserID: 9})
+	_, cmd := m.Update(components.ProfileOpenChatRequest{UserID: 9, Title: "Bob"})
 	require.NotNil(t, cmd)
 	req, ok := cmd().(screens.OpenChatMsg)
 	require.True(t, ok)
@@ -205,13 +245,12 @@ func TestProfileCopyUsername_NamesWhatItCopied(t *testing.T) {
 
 func TestProfile_OwnsEveryKeyWhileOpen(t *testing.T) {
 	m, _ := newRootOnChat(t)
-	nm, _ := m.Update(components.OpenProfileRequest{UserID: 1})
-	m = nm.(ui.RootModel)
+	m, _ = askProfile(t, m, components.OpenProfileRequest{UserID: 1})
 	require.True(t, m.ProfileOpen())
 
 	// "i" would drop the chat pane into insert mode if the profile were not
 	// exclusive.
-	nm, _ = m.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
 	m = nm.(ui.RootModel)
 	assert.True(t, m.ProfileOpen())
 

@@ -211,14 +211,14 @@ func (o *testOwner) GetParticipants(_ context.Context, _ int64) ([]domain.ChatMe
 // KnownUser answers from the dialog, like the real owner, so a chat in the
 // store is enough for a test to open a profile on. knownUsers overrides it for
 // a person the store holds no chat for.
-func (o *testOwner) KnownUser(userID int64) (domain.User, bool) {
+func (o *testOwner) KnownUser(_ context.Context, userID int64) (domain.User, bool, error) {
 	if u, ok := o.knownUsers[userID]; ok {
-		return u, true
+		return u, true, nil
 	}
 	if chat, ok := o.state.Store().GetChat(userID); ok && chat.Peer.IsUser() {
-		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true
+		return domain.User{ID: userID, FirstName: chat.Title, Online: chat.Online, IsBot: chat.IsBot, IsContact: chat.IsContact}, true, nil
 	}
-	return domain.User{}, false
+	return domain.User{}, false, nil
 }
 
 func (o *testOwner) GetUser(_ context.Context, userID int64) (domain.User, error) {

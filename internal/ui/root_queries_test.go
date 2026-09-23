@@ -112,8 +112,7 @@ func TestRoot_ChatMenu_FoldersArriveFromTheOwner(t *testing.T) {
 func TestRoot_Profile_WithADialog_GainsTheMuteItem(t *testing.T) {
 	m, _ := newRootOnChat(t)
 
-	nm, cmd := m.Update(components.OpenProfileRequest{UserID: 1})
-	m = nm.(ui.RootModel)
+	m, cmd := askProfile(t, m, components.OpenProfileRequest{UserID: 1})
 	require.True(t, m.ProfileOpen())
 	assert.NotContains(t, stripSeq(m.Profile().View()), "mute", "unknown until the owner answers")
 
@@ -126,8 +125,7 @@ func TestRoot_Profile_WithNoDialog_HasNoMuteItem(t *testing.T) {
 	m, _ := groupWithMessageFrom(t, 9)
 	ownerOf(t, m).knownUsers = map[int64]domain.User{9: bob()}
 
-	nm, cmd := m.Update(components.OpenProfileRequest{UserID: 9})
-	m = nm.(ui.RootModel)
+	m, cmd := askProfile(t, m, components.OpenProfileRequest{UserID: 9})
 	m = runQuery(t, m, cmd)
 
 	require.True(t, m.ProfileOpen())

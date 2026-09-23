@@ -22,8 +22,12 @@ type (
 	OpenProfileRequest struct{ UserID int64 }
 	// ProfileOpenChatRequest opens the private chat with the person. It works
 	// whether or not a dialog exists: with none, the chat opens empty and ready
-	// to take a first message.
-	ProfileOpenChatRequest struct{ UserID int64 }
+	// to take a first message. Title is the name the overlay shows, so the chat
+	// pane has one to draw before its header lands.
+	ProfileOpenChatRequest struct {
+		UserID int64
+		Title  string
+	}
 	// ProfileMuteRequest mutes or unmutes the dialog with the person. Only ever
 	// emitted when a dialog exists.
 	ProfileMuteRequest struct {
@@ -293,8 +297,8 @@ func (p *Profile) Update(msg tea.Msg) (*Profile, tea.Cmd) {
 func (p *Profile) execute(action keys.Action) (*Profile, tea.Cmd) {
 	switch action {
 	case keys.ActionOpenChat:
-		userID := p.user.ID
-		return nil, func() tea.Msg { return ProfileOpenChatRequest{UserID: userID} }
+		userID, title := p.user.ID, p.user.DisplayName()
+		return nil, func() tea.Msg { return ProfileOpenChatRequest{UserID: userID, Title: title} }
 	case keys.ActionMute, keys.ActionUnmute:
 		muted := action == keys.ActionMute
 		userID := p.user.ID

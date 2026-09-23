@@ -65,18 +65,50 @@ func (m RootModel) profileTargetUserID() int64 {
 	return 0
 }
 
-// openProfile builds the overlay from what the owner already knows and asks for
-// the rest. A person the owner knows nothing about opens nothing: there is no
-// profile to draw and no id to complete.
+// knownUserMsg carries the owner's first answer about a person back to the
+// profile request that asked for it. ask names that request.
+type knownUserMsg struct {
+	ask    int
+	userID int64
+	user   domain.User
+	found  bool
+	err    error
+}
+
+// openProfile asks the owner who the person is. The overlay opens on the
+// answer rather than before it: a profile without a name looks broken, and a
+// person the owner knows nothing about must open nothing at all (#278).
 func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 	if userID == 0 || m.owner == nil {
 		return m, nil
 	}
-	user, ok := m.owner.KnownUser(userID)
-	if !ok {
+	m.profileAsk++
+	ctx, owner, ask := m.ctx, m.owner, m.profileAsk
+	return m, func() tea.Msg {
+		user, found, err := owner.KnownUser(ctx, userID)
+		return knownUserMsg{ask: ask, userID: userID, user: user, found: found, err: err}
+	}
+}
+
+// handleKnownUser opens the overlay the latest profile request asked for, and
+// drops an answer to one that has since been superseded.
+func (m RootModel) handleKnownUser(msg knownUserMsg) (RootModel, tea.Cmd) {
+	if msg.ask != m.profileAsk {
+		return m, nil
+	}
+	if msg.err != nil {
+		return m, func() tea.Msg { return errStatus("profile", msg.err) }
+	}
+	if !msg.found {
 		m.statusBar.SetStatus("No profile for this user")
 		return m, nil
 	}
+	return m.showProfile(msg.userID, msg.user)
+}
+
+// showProfile builds the overlay from what the owner already knows and asks for
+// the rest.
+func (m RootModel) showProfile(userID int64, user domain.User) (RootModel, tea.Cmd) {
 	// Opening the profile closes the menu it was opened from: two overlays
 	// competing for the same keys is one too many.
 	m.contextMenu = nil
@@ -219,6 +251,10 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		next, cmd := m.closeProfile()
 		return next, cmd, true
 
+	case knownUserMsg:
+		next, cmd := m.handleKnownUser(req)
+		return next, cmd, true
+
 	case profileLoadedMsg:
 		next, cmd := m.handleProfileLoaded(req)
 		return next, cmd, true
@@ -237,13 +273,7 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		// chat opens empty and composable, and the first message reaches them
 		// through the address the owner kept when the profile was fetched
 		// (#278). The title only covers the moment before the header lands.
-		userID := req.UserID
-		title := ""
-		if m.owner != nil {
-			if user, ok := m.owner.KnownUser(userID); ok {
-				title = user.DisplayName()
-			}
-		}
+		userID, title := req.UserID, req.Title
 		return m, tea.Batch(closeCmd, func() tea.Msg {
 			return screens.OpenChatMsg{ChatID: userID, Title: title}
 		}), true

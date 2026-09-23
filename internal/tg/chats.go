@@ -310,7 +310,6 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []domain.Chat 
 		if d, ok := dlg.GetDraft(); ok {
 			chat.Draft = draftText(d)
 		}
-		c.cachePeer(chat.Peer)
 		out = append(out, chat)
 	}
 
@@ -344,12 +343,6 @@ func peerIDFromPeer(peer tg.PeerClass) int64 {
 		return p.ChannelID
 	}
 	return 0
-}
-
-func (c *GotdClient) cachePeer(p domain.Peer) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.peers[p.ID] = p
 }
 
 func convertUser(u *tg.User) (domain.Chat, bool) {

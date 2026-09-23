@@ -16,7 +16,6 @@ import (
 	"github.com/gotd/td/tg"
 
 	"github.com/sorokin-vladimir/tele/internal/config"
-	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
@@ -29,7 +28,6 @@ type GotdClient struct {
 	mustDeliver  chan store.Event
 	droppable    chan store.Event
 	updates      chan store.Event
-	peers        map[int64]domain.Peer
 	log          *zap.Logger
 	traceLog     *zap.Logger
 	suppressMu   sync.Mutex
@@ -62,7 +60,6 @@ func NewGotdClient(log *zap.Logger, stateStorage updates.StateStorage, trace boo
 		mustDeliver:  make(chan store.Event, 256),
 		droppable:    make(chan store.Event, 64),
 		updates:      make(chan store.Event, 32),
-		peers:        make(map[int64]domain.Peer),
 		log:          log,
 		traceLog:     traceLog,
 		suppressIDs:  make(map[int]struct{}),

@@ -21,11 +21,7 @@ func (c *GotdClient) SearchContacts(ctx context.Context, q string, limit int) ([
 	if err != nil {
 		return nil, err
 	}
-	chats := usersFromContactsFound(found, limit)
-	for _, ch := range chats {
-		c.cachePeer(ch.Peer)
-	}
-	return chats, nil
+	return usersFromContactsFound(found, limit), nil
 }
 
 // usersFromContactsFound maps the user peers of a contacts.search response to

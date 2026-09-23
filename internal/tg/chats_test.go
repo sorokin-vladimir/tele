@@ -57,7 +57,7 @@ func TestConvertUser_Self(t *testing.T) {
 }
 
 func TestParseDialogs_IncludesBots(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	bot := &tg.User{ID: 42, FirstName: "CoolBot", Bot: true, AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 42},
@@ -75,7 +75,7 @@ func TestParseDialogs_IncludesBots(t *testing.T) {
 }
 
 func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	self := &tg.User{ID: 1, FirstName: "Me", Self: true, AccessHash: 7}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 1},
@@ -93,7 +93,7 @@ func TestParseDialogs_IncludesSavedMessages(t *testing.T) {
 }
 
 func TestParseDialogs_UnreadCount(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:        &tg.PeerUser{UserID: 7},
@@ -112,7 +112,7 @@ func TestParseDialogs_UnreadCount(t *testing.T) {
 }
 
 func TestParseDialogs_UnreadReactionsCount(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:                 &tg.PeerUser{UserID: 7},
@@ -131,7 +131,7 @@ func TestParseDialogs_UnreadReactionsCount(t *testing.T) {
 }
 
 func TestParseDialogs_ExtractsDraft(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 7},
@@ -150,7 +150,7 @@ func TestParseDialogs_ExtractsDraft(t *testing.T) {
 }
 
 func TestParseDialogs_EmptyDraft(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 1}
 	dialog.SetDraft(&tg.DraftMessageEmpty{})
@@ -165,7 +165,7 @@ func TestParseDialogs_EmptyDraft(t *testing.T) {
 }
 
 func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
-	c := &GotdClient{peers: make(map[int64]domain.Peer)}
+	c := &GotdClient{}
 	user := &tg.User{ID: 7, FirstName: "Bob", AccessHash: 1}
 	dialog := &tg.Dialog{
 		Peer:       &tg.PeerUser{UserID: 7},

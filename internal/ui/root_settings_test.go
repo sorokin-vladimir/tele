@@ -20,7 +20,7 @@ func settingsRoot(t *testing.T) RootModel {
 	store, err := config.NewStore(path, t.TempDir())
 	require.NoError(t, err)
 
-	m := NewRootModel(nil, 50, false).WithConfig(store.Current()).WithSettingsStore(store)
+	m := NewRootModel(50, false).WithConfig(store.Current()).WithSettingsStore(store)
 	m.screen = ScreenMain
 	m.width, m.height = 100, 40
 	return m
@@ -58,7 +58,7 @@ func TestRoot_TheOpenOverlayOwnsTheKeys(t *testing.T) {
 // Without a store there is nothing to show, so the key does nothing rather than
 // opening an empty box.
 func TestRoot_TheKeyDoesNothingWithoutAStore(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.width, m.height = 100, 40
 
@@ -75,7 +75,7 @@ func TestRoot_ReopeningShowsWhatChangedMeanwhile(t *testing.T) {
 	store, err := config.NewStore(path, t.TempDir())
 	require.NoError(t, err)
 
-	m := NewRootModel(nil, 50, false).WithConfig(store.Current()).WithSettingsStore(store)
+	m := NewRootModel(50, false).WithConfig(store.Current()).WithSettingsStore(store)
 	m.screen = ScreenMain
 	m.width, m.height = 100, 40
 
@@ -99,7 +99,7 @@ func TestRoot_AnEditInTheOverlayReachesTheRunningApp(t *testing.T) {
 	store, err := config.NewStore(path, t.TempDir())
 	require.NoError(t, err)
 
-	m := NewRootModel(nil, 50, false).
+	m := NewRootModel(50, false).
 		WithConfig(store.Current()).
 		WithSettingsStore(store).
 		WithConfigReload(func() (*config.Config, error) {
@@ -136,7 +136,7 @@ func TestRoot_ApplyingASettingIsQuiet(t *testing.T) {
 	store, err := config.NewStore(path, t.TempDir())
 	require.NoError(t, err)
 
-	m := NewRootModel(nil, 50, false).
+	m := NewRootModel(50, false).
 		WithConfig(store.Current()).
 		WithSettingsStore(store).
 		WithConfigReload(func() (*config.Config, error) { return store.Current(), store.Reload() })

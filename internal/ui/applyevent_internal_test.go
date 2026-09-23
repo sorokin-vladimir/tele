@@ -434,7 +434,7 @@ func (o *ownerStub) drain(m RootModel) (tea.Model, tea.Cmd) {
 // newRootInternal builds a model wired to the stub owner, as app.Run wires the
 // real one.
 func newRootInternal(st store.Store, historyLimit int) RootModel {
-	m := NewRootModel(st, historyLimit, false)
+	m := NewRootModel(historyLimit, false)
 	if st != nil {
 		m = m.WithOwner(newOwnerStub(st))
 	}

@@ -21,7 +21,7 @@ func warningModel(t *testing.T, seen notices.Seen, warnings ...config.Warning) R
 	t.Helper()
 	cfg := &config.Config{Warnings: warnings}
 	cfg.UI.Toasts.MaxVisible = 3
-	m := NewRootModel(nil, 50, false).WithConfig(cfg)
+	m := NewRootModel(50, false).WithConfig(cfg)
 	if seen != nil {
 		m = m.WithNotices(nil, seen)
 	}

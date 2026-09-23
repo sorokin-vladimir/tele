@@ -44,7 +44,7 @@ func TestLogin_ClockSetRightGoesBackToConnecting(t *testing.T) {
 // show for it. It stays in the status bar, through key presses that clear the
 // ordinary status, until messages get through again.
 func TestMain_ClockSkewStaysInTheStatusBar(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	m = withLoginStep(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = withLoginStep(t, m, core.ClockSkew{Skew: 8 * time.Minute})
 

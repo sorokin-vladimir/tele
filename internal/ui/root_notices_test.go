@@ -78,7 +78,7 @@ func TestNotices_InactiveWhenNothingPending(t *testing.T) {
 // covers the login screen specifically: that is the path with no overlay stack
 // of its own, and the one a migration notice must survive.
 func TestNotices_RenderedOverTheLoginScreen(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m = m.WithNotices(testNotices(), notices.NewMemorySeen())
 	m.width, m.height = 100, 30
 
@@ -89,7 +89,7 @@ func TestNotices_RenderedOverTheLoginScreen(t *testing.T) {
 }
 
 func TestNotices_AbsentFromViewWhenNothingPending(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m = m.WithNotices(nil, notices.NewMemorySeen())
 	m.width, m.height = 100, 30
 

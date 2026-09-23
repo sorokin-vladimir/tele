@@ -90,7 +90,7 @@ func TestLogin_QuitHintFollowsTheKeyMap(t *testing.T) {
 // After login the connection can still end for good. That used to be as silent
 // as it was on the login screen.
 func TestMain_ConnectFailureRaisesAToast(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	m = withLoginStep(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	next, _ := m.Update(ui.ConnectFailedMsg{Err: &telerr.Error{Kind: telerr.Network}})

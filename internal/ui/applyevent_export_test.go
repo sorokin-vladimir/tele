@@ -495,7 +495,7 @@ func (o *testOwner) drain(m ui.RootModel) (tea.Model, tea.Cmd) {
 // real one. Tests that pass no store get no owner, matching a model that has not
 // reached the main screen.
 func newRoot(st store.Store, historyLimit int, verbose bool) ui.RootModel {
-	m := ui.NewRootModel(st, historyLimit, verbose)
+	m := ui.NewRootModel(historyLimit, verbose)
 	if st != nil {
 		m = m.WithOwner(newTestOwner(st))
 	}

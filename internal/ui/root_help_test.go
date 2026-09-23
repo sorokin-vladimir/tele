@@ -10,7 +10,7 @@ import (
 
 // newHelpTestRoot builds a main-screen root focused on the chat list.
 func newHelpTestRoot() RootModel {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.width, m.height = 80, 24
 	return m

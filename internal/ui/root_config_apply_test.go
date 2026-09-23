@@ -27,7 +27,7 @@ func applyModel(t *testing.T, body string) (RootModel, *config.Store) {
 
 	t.Cleanup(func() { theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight}) })
 
-	m := NewRootModel(nil, 50, false).
+	m := NewRootModel(50, false).
 		WithConfig(store.Current()).
 		WithConfigReload(func() (*config.Config, error) {
 			if err := store.Reload(); err != nil {

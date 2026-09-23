@@ -267,7 +267,7 @@ func (a *App) Run() error {
 	att := a.owner.Attach()
 	defer att.Detach()
 
-	root := ui.NewRootModel(a.st, a.cfg().UI.HistoryLimit, a.verbose)
+	root := ui.NewRootModel(a.cfg().UI.HistoryLimit, a.verbose)
 	root = root.WithContext(ctx).WithConfig(a.cfg()).WithKeyMap(km).WithOwner(att).WithLogger(a.log).
 		WithConfigReload(a.reloadConfig).WithSettingsStore(a.cfgStore).WithLogPath(a.logPath)
 	root.SetLoginModel(screens.NewLoginModel(authFlow))

@@ -8,7 +8,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +20,7 @@ func solidImage(w, h int) image.Image {
 
 func newSizedModel(t *testing.T) RootModel {
 	t.Helper()
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return m2.(RootModel)
 }

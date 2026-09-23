@@ -15,7 +15,7 @@ import (
 
 // mainScreenModel builds a sized main-screen RootModel for toast tests.
 func mainScreenModel() RootModel {
-	m := NewRootModel(nil, 50, false).WithScreen(ScreenMain)
+	m := NewRootModel(50, false).WithScreen(ScreenMain)
 	model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return model.(RootModel)
 }

@@ -15,7 +15,7 @@ import (
 // open showing text messages: nothing is animating (no active spinner, no idle
 // logo), so both the spinner and logo tick loops should go to sleep.
 func idleMainModel() RootModel {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
 	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
@@ -30,7 +30,7 @@ func TestRoot_SpinnerTick_IdleMain_StopsTicking(t *testing.T) {
 }
 
 func TestRoot_SpinnerTick_LoadingChats_KeepsTicking(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
 	m.chat.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: time.Now()}})
@@ -47,7 +47,7 @@ func TestRoot_LogoTick_ChatOpen_StopsTicking(t *testing.T) {
 }
 
 func TestRoot_LogoTick_LoginScreen_KeepsTicking(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenLogin
 	_, cmd := m.Update(components.LogoTickMsg{})
 	assert.NotNil(t, cmd, "the login splash logo animates, so the logo tick must keep going")
@@ -57,7 +57,7 @@ func TestRoot_LogoTick_LoginScreen_KeepsTicking(t *testing.T) {
 // re-arm it. Opening the app on the main screen with no chats yet loaded shows
 // the idle logo in the chat pane: the logo loop must (re)start.
 func TestRoot_EnsureAnimation_RestartsLogoWhenIdleLogoVisible(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
 	// No messages and no chat open: the chat pane renders the idle logo.

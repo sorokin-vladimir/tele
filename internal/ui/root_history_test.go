@@ -21,7 +21,7 @@ import (
 // longer at the bottom, and skipped the re-anchor, letting the newest message
 // scroll out of view.
 func TestRoot_PhotoReady_AtBottom_KeepsNewestVisible(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.screen = ScreenMain
 	m.chat.SetSize(80, 12)
 	msgs := []domain.Message{

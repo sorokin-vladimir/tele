@@ -18,7 +18,7 @@ import (
 // renders them mispositioned until a later repaint happens to correct it — the
 // intermittent inline-photo gap.
 func TestTransmitPhoto_NotReadyBeforePlacementTransmitted(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	m.chat.SetSize(80, 24)
@@ -41,7 +41,7 @@ func TestTransmitPhoto_NotReadyBeforePlacementTransmitted(t *testing.T) {
 // store never reports the image ready. Otherwise the cell stays permanently
 // blank with the store falsely claiming Ready (#95).
 func TestTransmitPhoto_EncodeFailureEmitsNoMessage(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	m.chat.SetSize(80, 24)
@@ -58,7 +58,7 @@ func TestTransmitPhoto_EncodeFailureEmitsNoMessage(t *testing.T) {
 // A successful encode emits kittyEncodedMsg carrying the placement sequence, so
 // the update loop can write it to the terminal and then mark the image ready.
 func TestTransmitPhoto_SuccessEmitsEncodedWithSeq(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
 	m.chat.SetSize(80, 24)
@@ -78,7 +78,7 @@ func TestTransmitPhoto_SuccessEmitsEncodedWithSeq(t *testing.T) {
 // otherwise overlapping async transmits land out of order and leave the Kitty
 // placement at a stale size (the photo renders smaller than its grid).
 func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.screen = ScreenMain
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
@@ -104,7 +104,7 @@ func TestRetransmitTick_StaleGenerationIsIgnored(t *testing.T) {
 // and corrupts placements). reconcile transmits only the on-screen images and
 // keeps the live count within the cap.
 func TestReconcileKitty_TransmitsOnlyVisible(t *testing.T) {
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.screen = ScreenMain
 	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))

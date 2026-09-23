@@ -5,7 +5,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,8 +12,7 @@ import (
 
 func rootWithToastStack(t *testing.T) RootModel {
 	t.Helper()
-	st := store.NewMemory()
-	m := NewRootModel(st, 50, false).WithScreen(ScreenMain)
+	m := NewRootModel(50, false).WithScreen(ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return newM.(RootModel)
 }

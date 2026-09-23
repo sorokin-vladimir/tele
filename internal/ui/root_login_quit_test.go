@@ -16,7 +16,7 @@ import (
 // newLoginRoot is the root as the app builds it before anything has connected:
 // on the login screen, with a live login model.
 func newLoginRoot() ui.RootModel {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m.SetLoginModel(screens.NewLoginModel(internaltg.NewAuthFlow()))
 	return m
 }

@@ -22,7 +22,7 @@ func reloadModel(t *testing.T, dir, name string) RootModel {
 	cfg.UI.Toasts.MaxVisible = 3
 	cfg.UI.ThemeSlots = config.ThemeSlots{Dark: name}
 	t.Cleanup(func() { theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight}) })
-	return NewRootModel(nil, 50, false).WithConfig(cfg)
+	return NewRootModel(50, false).WithConfig(cfg)
 }
 
 // The authoring loop: edit the file, press the key, see the change. Without this

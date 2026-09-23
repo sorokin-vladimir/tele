@@ -399,7 +399,7 @@ func drainMsgs(msg tea.Msg) []tea.Msg {
 }
 
 func TestRoot_StatusErrMsg_SetsAndSchedulesClear(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	newM, cmd := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "network down", Sev: components.SeverityError})
 	root := newM.(ui.RootModel)
@@ -409,7 +409,7 @@ func TestRoot_StatusErrMsg_SetsAndSchedulesClear(t *testing.T) {
 }
 
 func TestRoot_ClearStatusErrMsg_StaleSerialKeepsError(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m2, _ := newM.(ui.RootModel).Update(ui.StatusErrMsg{Text: "first", Sev: components.SeverityError})
 	root := m2.(ui.RootModel)
@@ -421,7 +421,7 @@ func TestRoot_ClearStatusErrMsg_StaleSerialKeepsError(t *testing.T) {
 
 // An error completion clears the download indicator and surfaces the error text.
 func TestRoot_DocumentOpenDone_ErrorShowsStatus(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.DocumentOpenDoneMsgForTest(1, "open file failed: boom", components.SeverityWarning)
 	m2, _ := newM.(ui.RootModel).Update(done)
@@ -432,7 +432,7 @@ func TestRoot_DocumentOpenDone_ErrorShowsStatus(t *testing.T) {
 
 // A successful completion adds no error text to the status bar.
 func TestRoot_DocumentOpenDone_SuccessNoError(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.DocumentOpenDoneMsgForTest(1, "", components.SeverityWarning)
 	m2, _ := newM.(ui.RootModel).Update(done)
@@ -440,7 +440,7 @@ func TestRoot_DocumentOpenDone_SuccessNoError(t *testing.T) {
 }
 
 func TestRoot_FileDownloadDone_SuccessShowsPath(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.FileDownloadDoneMsgForTest(1, "Saved to /tmp/report.pdf", components.SeverityInfo)
 	m2, _ := newM.(ui.RootModel).Update(done)
@@ -450,7 +450,7 @@ func TestRoot_FileDownloadDone_SuccessShowsPath(t *testing.T) {
 }
 
 func TestRoot_FileDownloadDone_ErrorShowsText(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false).WithScreen(ui.ScreenMain)
+	m := ui.NewRootModel(50, false).WithScreen(ui.ScreenMain)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	done := ui.FileDownloadDoneMsgForTest(1, "download failed: boom", components.SeverityWarning)
 	m2, _ := newM.(ui.RootModel).Update(done)
@@ -481,17 +481,17 @@ func TestRoot_DownloadKey_StartsFileDownload(t *testing.T) {
 }
 
 func TestRoot_InitialScreen_Login(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	assert.Equal(t, ui.ScreenLogin, m.CurrentScreen())
 }
 
 func TestRoot_InitialChatList_IsFocused(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	assert.True(t, m.ChatList().Focused(), "chatList must be focused from the start so cursor highlight is visible")
 }
 
 func TestRoot_2_FocusesChat(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
 	newM, _ := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
@@ -500,7 +500,7 @@ func TestRoot_2_FocusesChat(t *testing.T) {
 }
 
 func TestRoot_1_FocusesChatList(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m = m.WithFocus(ui.FocusChat)
 	newM, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
@@ -509,14 +509,14 @@ func TestRoot_1_FocusesChatList(t *testing.T) {
 }
 
 func TestRoot_TransitionToMain(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	newM, _ := m.Update(screens.TransitionToMainMsg{})
 	root := newM.(ui.RootModel)
 	assert.Equal(t, ui.ScreenMain, root.CurrentScreen())
 }
 
 func TestRoot_CtrlC_Quits(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	// Settle the animation loops so the returned command is the quit alone, not
 	// batched with an animation re-arm (issue #147).
@@ -1125,7 +1125,7 @@ func TestRoot_OpenChat_ClearsPendingReply(t *testing.T) {
 }
 
 func TestRoot_h_CyclesFocusLeft(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	m = m.WithFocus(ui.FocusChat)
 	newM, _ := m.Update(tea.KeyPressMsg{Code: 'h', Text: "h"})
@@ -1134,7 +1134,7 @@ func TestRoot_h_CyclesFocusLeft(t *testing.T) {
 }
 
 func TestRoot_l_CyclesFocusRight(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	assert.Equal(t, ui.FocusChatList, m.CurrentFocus())
 	newM, _ := m.Update(tea.KeyPressMsg{Code: 'l', Text: "l"})
@@ -1173,7 +1173,7 @@ func TestRoot_FolderSelectedMsg_FiltersChatList(t *testing.T) {
 }
 
 func TestRoot_FolderFiltersMsg_SetsFolders(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	filters := []domain.FolderFilter{{ID: 1, Title: "Work"}}
 	newM, _ := m.Update(ui.FolderFiltersMsg{Filters: filters})
@@ -1182,7 +1182,7 @@ func TestRoot_FolderFiltersMsg_SetsFolders(t *testing.T) {
 }
 
 func TestRoot_0_FocusesFolders(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 	filters := []domain.FolderFilter{{ID: 1, Title: "Work"}}
 	m2, _ := m.Update(ui.FolderFiltersMsg{Filters: filters})
@@ -1626,7 +1626,7 @@ func TestRoot_PasteMsg_WhenSearchOpen_UpdatesQuery(t *testing.T) {
 }
 
 func TestRoot_Esc_NormalMode_ClosesChatReturnsToChatList(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
 	// Open a chat — this sets focus to FocusChat.
@@ -1642,7 +1642,7 @@ func TestRoot_Esc_NormalMode_ClosesChatReturnsToChatList(t *testing.T) {
 }
 
 func TestRoot_SetTmpDir(t *testing.T) {
-	m := ui.NewRootModel(nil, 50, false)
+	m := ui.NewRootModel(50, false)
 	m.SetTmpDir("/tmp/tele-test")
 	assert.Equal(t, "/tmp/tele-test", m.TmpDir())
 }

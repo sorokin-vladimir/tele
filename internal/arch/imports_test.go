@@ -16,50 +16,25 @@ import (
 
 const storePkg = "github.com/sorokin-vladimir/tele/internal/store"
 
-// storeImportAllowlist names the files under internal/ui that may still import
-// internal/store, and the issue that removes each one. A client renders from
-// projections (#194); reaching into the persistence package is how that
-// boundary erodes, so the exceptions are enumerated rather than tolerated.
+// A client renders from projections (#194) and asks the owner everything else
+// (#278); reaching into the persistence package is how that boundary erodes.
+// There used to be an allowlist of files still permitted the import while their
+// issues were open. #278 removed the last one, so there are no exceptions left.
 //
-// root.go is the load-bearing entry: it holds the store.Store field every other
-// UI file reaches the store through. When #198 deletes that field, every
-// remaining m.st call site stops compiling, which is the point.
-var storeImportAllowlist = map[string]string{
-	"root.go": "#193, #195, #196, #198 — optimistic writes still go through m.st",
-}
-
+// Direct imports are what is checked. The store still arrives transitively,
+// through the protocol types the client takes from core and tg; moving those
+// into a package of their own belongs with the socket (#209).
 func TestUIDoesNotImportStore(t *testing.T) {
 	fset := token.NewFileSet()
 	for _, path := range goFilesUnder(t, filepath.Join("..", "ui")) {
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		require.NoError(t, err)
 		for _, imp := range f.Imports {
-			if strings.Trim(imp.Path.Value, `"`) != storePkg {
-				continue
-			}
-			if _, allowed := storeImportAllowlist[filepath.Base(path)]; !allowed {
-				assert.Fail(t, "the UI must not read domain state",
-					"%s imports internal/store; render from projections instead (#194)", path)
-			}
-		}
-	}
-}
-
-func TestStoreImportAllowlistHasNoStaleEntries(t *testing.T) {
-	// A stale entry is worse than no list: it silently re-permits an import the
-	// issue that owned it has already removed.
-	fset := token.NewFileSet()
-	for base := range storeImportAllowlist {
-		path := filepath.Join("..", "ui", base)
-		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
-		require.NoError(t, err, "allowlisted file %s no longer exists", base)
-		found := false
-		for _, imp := range f.Imports {
 			if strings.Trim(imp.Path.Value, `"`) == storePkg {
-				found = true
+				assert.Fail(t, "the UI must not read domain state",
+					"%s imports internal/store; take it from a projection or an owner query instead (#194, #278)", path)
 			}
 		}
-		assert.True(t, found, "%s no longer imports internal/store — drop it from the allowlist", base)
 	}
 }
 

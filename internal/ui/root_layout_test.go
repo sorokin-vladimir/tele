@@ -55,7 +55,7 @@ func TestComputeLayout_ThreePaneWithFolders(t *testing.T) {
 func TestWindowSize_SetsPaneSizesFromLayout(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
-	m := NewRootModel(st, 50, false).WithScreen(ScreenMain)
+	m := NewRootModel(50, false).WithScreen(ScreenMain)
 	m.chatList.SetWindow(0, len(st.Chats()), rowsOf(st.Chats()))
 
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})

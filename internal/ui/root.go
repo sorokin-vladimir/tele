@@ -17,7 +17,6 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/settings"
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -59,7 +58,6 @@ type RootModel struct {
 	vimState  *keys.VimState
 	keyMap    keys.KeyMap
 	matcher   *keys.Matcher
-	st        store.Store
 	owner     Owner
 	// chatListSub is the chatlist subscription; chatSub is the open chat's.
 	// Zero means not subscribed.
@@ -187,10 +185,11 @@ const (
 	fullCacheCap  = 32
 )
 
-// NewRootModel builds the TUI. It takes no Telegram client: since #195 every
-// call a client makes goes through the Owner, so nothing here can reach the
-// connection directly (#198).
-func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
+// NewRootModel builds the TUI. It takes no Telegram client and no store: every
+// call a client makes goes through the Owner, and everything it shows arrives
+// from it, so nothing here can reach the connection or the data directly
+// (#198, #278).
+func NewRootModel(historyLimit int, verbose bool) RootModel {
 	km := keys.DefaultKeyMap()
 	sb := components.NewStatusBar(80)
 	sb.SetKeyMap(km)
@@ -215,7 +214,6 @@ func NewRootModel(st store.Store, historyLimit int, verbose bool) RootModel {
 		vimState:       keys.NewVimState(),
 		keyMap:         km,
 		matcher:        keys.NewMatcher(km),
-		st:             st,
 		historyLimit:   historyLimit,
 		verbose:        verbose,
 		imageCache:     imagecache.New(thumbCacheCap),

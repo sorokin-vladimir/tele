@@ -16,7 +16,7 @@ import (
 // terminal that can draw one.
 func profileOnScreen(t *testing.T, w, h int) RootModel {
 	t.Helper()
-	m := NewRootModel(nil, 50, false)
+	m := NewRootModel(50, false)
 	m.imageMode = media.ModeKitty
 	m.width, m.height = w, h
 	m.profile = components.NewProfile(

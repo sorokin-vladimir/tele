@@ -6,7 +6,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,7 +17,7 @@ func TestUseInAppVideoPlayer(t *testing.T) {
 }
 
 func TestVideoModalBox_PreservesWithinViewport(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = m2.(RootModel)
 	cols, rows := m.videoModalBox(1920, 1080)
@@ -29,7 +28,7 @@ func TestVideoModalBox_PreservesWithinViewport(t *testing.T) {
 }
 
 func TestVideoModalBox_PortraitStaysPortrait(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m2, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = m2.(RootModel)
 	cols, rows := m.videoModalBox(1080, 1920) // portrait source
@@ -37,7 +36,7 @@ func TestVideoModalBox_PortraitStaysPortrait(t *testing.T) {
 }
 
 func TestTogglePlay_FlipsPlaying(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m.videoPlayer = &videoPlayer{playing: true}
 	m = m.togglePlay()
 	assert.False(t, m.videoPlayer.playing, "space pauses a playing video")
@@ -46,7 +45,7 @@ func TestTogglePlay_FlipsPlaying(t *testing.T) {
 }
 
 func TestHandleVideoTick_StaleGenIgnored(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m.videoPlayer = &videoPlayer{playing: true, gen: 3}
 	_, cmd := m.handleVideoTick(videoTickMsg{gen: 2})
 	assert.Nil(t, cmd, "a tick from a previous generation must not re-arm")
@@ -72,7 +71,7 @@ func TestVideoFooterHints_ReflectPlayState(t *testing.T) {
 }
 
 func TestVideoLoadingSpinnerGlyph(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m.videoPlayer = &videoPlayer{spinnerIdx: 0}
 	g0 := videoSpinnerGlyph(m.videoPlayer.spinnerIdx)
 	m.updateVideoSpinner()
@@ -81,7 +80,7 @@ func TestVideoLoadingSpinnerGlyph(t *testing.T) {
 }
 
 func TestCloseVideoPlayer_Clears(t *testing.T) {
-	m := NewRootModel(store.NewMemory(), 50, false)
+	m := NewRootModel(50, false)
 	m.videoPlayer = &videoPlayer{docID: 5}
 	m = m.closeVideoPlayer()
 	assert.Nil(t, m.videoPlayer, "closing clears the overlay")

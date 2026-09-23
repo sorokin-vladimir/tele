@@ -66,35 +66,62 @@ func (a UserAddress) inputPeer() (tg.InputPeerClass, error) {
 	return nil, &telerr.Error{Kind: telerr.PeerNotFound, Op: "download avatar"}
 }
 
+// FullUser is a full profile together with the address it arrived with. The
+// two are kept apart because they go to different places: the profile is for
+// a client to draw, the address is the owner's alone and never leaves it
+// (#278). Peer is zero when the response named nobody reachable.
+type FullUser struct {
+	User domain.User
+	Peer domain.Peer
+}
+
 // GetUser fetches a user's full profile via users.getFullUser.
 //
 // The response carries the person twice: the short tg.User in Users holds the
 // name, the username and the presence, while UserFull holds the about text and
 // the phone. Both are folded into one domain.User, because the split is
 // Telegram's rather than the domain's.
-func (c *GotdClient) GetUser(ctx context.Context, addr UserAddress) (domain.User, error) {
+func (c *GotdClient) GetUser(ctx context.Context, addr UserAddress) (FullUser, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
-		return domain.User{}, err
+		return FullUser{}, err
 	}
 	input, err := addr.inputUser()
 	if err != nil {
-		return domain.User{}, err
+		return FullUser{}, err
 	}
-	var out domain.User
+	var out FullUser
 	err = WithRetry(ctx, func() error {
 		full, err := api.UsersGetFullUser(ctx, input)
 		if err != nil {
 			c.log.Error("UsersGetFullUser failed", zap.Error(err), zap.Int64("user_id", addr.UserID))
 			return err
 		}
-		out = buildUser(addr.UserID, full)
+		out = FullUser{User: buildUser(addr.UserID, full), Peer: userPeer(addr.UserID, full)}
 		return nil
 	})
 	if err != nil {
-		return domain.User{}, err
+		return FullUser{}, err
 	}
 	return out, nil
+}
+
+// userPeer takes the person's address from a users.getFullUser response, or
+// the zero peer when there is none to take. A min user is skipped: its hash is
+// only valid alongside the message it was seen in, so on its own it addresses
+// nobody.
+func userPeer(userID int64, full *tg.UsersUserFull) domain.Peer {
+	if full == nil {
+		return domain.Peer{}
+	}
+	for _, uc := range full.Users {
+		u, ok := uc.(*tg.User)
+		if !ok || u.ID != userID || u.Min || u.AccessHash == 0 {
+			continue
+		}
+		return domain.Peer{ID: u.ID, Type: domain.PeerUser, AccessHash: u.AccessHash}
+	}
+	return domain.Peer{}
 }
 
 // buildUser folds a users.getFullUser response into a domain.User. A response

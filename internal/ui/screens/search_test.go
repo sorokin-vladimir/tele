@@ -298,7 +298,7 @@ func TestForwardPicker_EnterEmitsForwardToChatRequest(t *testing.T) {
 	req, ok := cmd().(screens.ForwardToChatRequest)
 	require.True(t, ok)
 	assert.Equal(t, 55, req.MsgID)
-	assert.Equal(t, int64(1), req.ToPeer.ID)
+	assert.Equal(t, int64(1), req.ToChatID)
 }
 
 func TestForwardPicker_RendersUnreadCount(t *testing.T) {
@@ -341,7 +341,7 @@ func TestForwardPicker_Tab_EntersCommentPhase_EnterSendsComment(t *testing.T) {
 	req, ok := cmd().(screens.ForwardToChatRequest)
 	require.True(t, ok)
 	assert.Equal(t, 55, req.MsgID)
-	assert.Equal(t, int64(1), req.ToPeer.ID) // Alice
+	assert.Equal(t, int64(1), req.ToChatID) // Alice
 	assert.Equal(t, "hiп", req.Comment)
 }
 

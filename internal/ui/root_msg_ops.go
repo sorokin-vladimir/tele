@@ -435,17 +435,17 @@ func (m RootModel) openForwardPicker(msgID int) (RootModel, tea.Cmd) {
 }
 
 // handleForwardToChat closes the picker and forwards the message from the open
-// chat to the chosen target peer, surfacing the result via a status message.
+// chat to the chosen target chat, surfacing the result via a status message.
 func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootModel, tea.Cmd) {
 	m.searchModel = nil
 	if m.owner == nil {
 		return m, nil
 	}
 	ctx, owner, from := m.ctx, m.owner, m.currentChatID
-	to, toTitle := msg.ToPeer, msg.Title
+	to, toTitle := msg.ToChatID, msg.Title
 	ids, comment := []int{msg.MsgID}, msg.Comment
 	m.debug("forward: client asked",
-		zap.Int64("from_chat", from), zap.Int64("to_peer", to.ID),
+		zap.Int64("from_chat", from), zap.Int64("to_chat", to),
 		zap.Ints("msg_ids", ids), zap.Bool("with_comment", comment != ""))
 	return m, func() tea.Msg {
 		err := owner.Forward(ctx, from, to, ids, comment)

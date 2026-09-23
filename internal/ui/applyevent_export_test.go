@@ -54,7 +54,7 @@ type testOwner struct {
 	// forward records the last Forward call, replacing what used to be asserted
 	// on the mock tg.Client (#198).
 	forwardFrom    int64
-	forwardTo      domain.Peer
+	forwardTo      int64
 	forwardIDs     []int
 	forwardComment string
 	savedDrafts    []ownerDraft
@@ -314,18 +314,18 @@ type ownerDraft struct {
 	text   string
 }
 
-func (o *testOwner) Forward(_ context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error {
-	o.forwardFrom, o.forwardTo, o.forwardIDs, o.forwardComment = fromChatID, to, msgIDs, comment
+func (o *testOwner) Forward(_ context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error {
+	o.forwardFrom, o.forwardTo, o.forwardIDs, o.forwardComment = fromChatID, toChatID, msgIDs, comment
 	if o.cmdErr != nil {
 		return o.cmdErr
 	}
-	preview := domain.Message{ChatID: to.ID, IsOut: true, Date: time.Now()}
+	preview := domain.Message{ChatID: toChatID, IsOut: true, Date: time.Now()}
 	if len(msgIDs) > 0 {
 		if src, ok := o.messageByID(fromChatID, msgIDs[0]); ok {
 			preview.Text = src.Text
 		}
 	}
-	o.state.Store().BumpChatLastMessage(to.ID, preview)
+	o.state.Store().BumpChatLastMessage(toChatID, preview)
 	o.queued = append(o.queued, o.reg.Refresh()...)
 	return nil
 }

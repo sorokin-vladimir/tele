@@ -210,7 +210,7 @@ func TestOptimisticReactions(t *testing.T) {
 var bob = domain.Peer{ID: 2, Type: domain.PeerUser}
 
 func (s *stubClient) ForwardMessages(_ context.Context, _ domain.Peer, to domain.Peer, ids []int) error {
-	s.forwardedTo, s.forwardedIDs = to.ID, ids
+	s.forwardedTo, s.forwardedPeer, s.forwardedIDs = to.ID, to, ids
 	return s.err
 }
 
@@ -219,6 +219,7 @@ func (s *stubClient) SendMessage(_ context.Context, peer domain.Peer, text strin
 	s.sendCount++
 	s.sentText = text
 	s.sentRandomID = randomID
+	s.sentPeer = peer
 	block := s.sendBlock
 	sentID := s.sentID
 	// Every send creates a distinct message, as Telegram does. Reusing one id
@@ -253,6 +254,12 @@ func (s *stubClient) sendCalls() int {
 	return s.sendCount
 }
 
+func (s *stubClient) lastSentPeer() domain.Peer {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return s.sentPeer
+}
+
 func (s *stubClient) lastRandomID() int64 {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
@@ -265,29 +272,30 @@ func TestForward_SendsToTheGivenTarget(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob, []int{5}, ""))
+	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
 
 	assert.Equal(t, int64(2), c.forwardedTo)
 	assert.Equal(t, []int{5}, c.forwardedIDs)
 }
 
-// A search hit with no dialog is a valid target: the owner holds no chat for it,
-// which is why the target is a peer rather than a chat ID.
-func TestForward_TargetWithoutADialogStillWorks(t *testing.T) {
+// A target the owner can neither find a dialog for nor has an address for is
+// nobody Telegram can reach. A search hit is reachable because search left its
+// address behind; see TestForward_ToAPersonFoundBySearch.
+func TestForward_UnknownTargetIsPeerNotFound(t *testing.T) {
 	c := &stubClient{}
 	o, st := newCmdOwner(t, c)
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
-	stranger := domain.Peer{ID: 99, Type: domain.PeerUser}
 
-	require.NoError(t, o.Forward(context.Background(), 1, stranger, []int{5}, ""))
+	err := o.Forward(context.Background(), 1, 99, []int{5}, "")
 
-	assert.Equal(t, int64(99), c.forwardedTo)
+	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
+	assert.Empty(t, c.forwardedIDs)
 }
 
 func TestForward_UnknownSourceIsPeerNotFound(t *testing.T) {
 	o, _ := newCmdOwner(t, &stubClient{})
 
-	err := o.Forward(context.Background(), 404, bob, []int{5}, "")
+	err := o.Forward(context.Background(), 404, bob.ID, []int{5}, "")
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 }
@@ -300,7 +308,7 @@ func TestForward_SendsTheCommentFirst(t *testing.T) {
 	o.SetOutbox(newOutboxStore(t))
 	ctx := runWorker(t, o)
 
-	require.NoError(t, o.Forward(ctx, 1, bob, []int{5}, "look"))
+	require.NoError(t, o.Forward(ctx, 1, bob.ID, []int{5}, "look"))
 
 	waitFor(t, "the comment was never sent", func() bool { return c.sendCalls() == 1 })
 	assert.Equal(t, "look", c.sentText)
@@ -314,7 +322,7 @@ func TestForward_BumpsTheTargetChat(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob, []int{5}, ""))
+	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
 
 	target, _ := st.GetChat(2)
 	require.NotNil(t, target.LastMessage)
@@ -328,7 +336,7 @@ func TestForward_DoesNotBumpWhenTheForwardFails(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 2, Peer: bob})
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "hi", Date: time.Unix(1, 0)}})
 
-	require.Error(t, o.Forward(context.Background(), 1, bob, []int{5}, ""))
+	require.Error(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, ""))
 
 	target, _ := st.GetChat(2)
 	assert.Nil(t, target.LastMessage, "a refused forward must not surface the target")
@@ -345,7 +353,7 @@ func TestForward_QueuesTheCommentForTheTargetChat(t *testing.T) {
 	q := newOutboxStore(t)
 	o.SetOutbox(q)
 
-	require.NoError(t, o.Forward(context.Background(), 1, bob, []int{5}, "look"))
+	require.NoError(t, o.Forward(context.Background(), 1, bob.ID, []int{5}, "look"))
 
 	queued := q.ForChat(2)
 	require.Len(t, queued, 1, "the comment must be queued for the target, not the source")
@@ -361,7 +369,7 @@ func TestForward_StopsWhenTheCommentCannotBeQueued(t *testing.T) {
 	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
 	o.SetOutbox(newOutboxStore(t))
 
-	err := o.Forward(context.Background(), 1, bob, []int{5}, "look")
+	err := o.Forward(context.Background(), 1, bob.ID, []int{5}, "look")
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 	assert.Empty(t, c.forwardedIDs, "nothing may be copied when the comment could not be queued")

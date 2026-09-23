@@ -21,3 +21,9 @@ func (s *State) SetDialogs(chats []domain.Chat) {
 func (s *State) SetFolderFilters(f []domain.FolderFilter) {
 	s.st.SetFolderFilters(f)
 }
+
+// RememberAddress keeps how to reach a chat the account has no dialog with. It
+// commits no Change: an address is never drawn, so no projection depends on it.
+func (s *State) RememberAddress(p domain.Peer) {
+	s.st.RememberAddress(p)
+}

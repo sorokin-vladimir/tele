@@ -52,6 +52,28 @@ func TestBuildUser_AResponseWithoutTheShortUserHasNoAvatar(t *testing.T) {
 	assert.Zero(t, got.AvatarID)
 }
 
+// The full profile is how the owner learns the address of someone met in a
+// group, so that a first message to them can go out (#278).
+func TestUserPeer_TakesTheAccessHashFromTheShortUser(t *testing.T) {
+	got := userPeer(7, fullUserResponse(&tg.User{ID: 7, AccessHash: 99}))
+
+	assert.Equal(t, domain.Peer{ID: 7, Type: domain.PeerUser, AccessHash: 99}, got)
+}
+
+// A min user carries a hash that only works in the context it came from; it
+// addresses nobody on its own and must not be remembered as an address.
+func TestUserPeer_AMinUserHasNoAddress(t *testing.T) {
+	u := &tg.User{ID: 7, AccessHash: 99}
+	u.SetMin(true)
+
+	assert.Zero(t, userPeer(7, fullUserResponse(u)))
+}
+
+func TestUserPeer_NoShortUserHasNoAddress(t *testing.T) {
+	assert.Zero(t, userPeer(7, fullUserResponse(nil)))
+	assert.Zero(t, userPeer(7, fullUserResponse(&tg.User{ID: 8, AccessHash: 99})))
+}
+
 func TestUserAddress_InputPeerPrefersTheAccessHash(t *testing.T) {
 	addr := UserAddress{
 		UserID:     7,

@@ -24,28 +24,35 @@ type stubClient struct {
 	internaltg.Client
 	err error
 
-	mutedWith    *bool
-	archivedWith *bool
-	unreadWith   *bool
-	readTo       int
-	editedTo     string
-	deletedIDs   []int
-	revoked      bool
-	reactedWith  string
-	reactionSent bool
-	forwardedTo  int64
-	forwardedIDs []int
-	sentText     string
-	typingCalls  int
-	draftText    string
-	searchedFor  string
-	searchLimit  int
+	mutedWith     *bool
+	archivedWith  *bool
+	unreadWith    *bool
+	readTo        int
+	editedTo      string
+	deletedIDs    []int
+	revoked       bool
+	reactedWith   string
+	reactionSent  bool
+	forwardedTo   int64
+	forwardedPeer domain.Peer
+	forwardedIDs  []int
+	sentText      string
+	typingCalls   int
+	draftText     string
+	searchedFor   string
+	searchLimit   int
+
+	// fullUser is what GetUser answers with; userAddrs records how each call
+	// addressed the person.
+	fullUser  internaltg.FullUser
+	userAddrs []internaltg.UserAddress
 
 	// Send bookkeeping for the outbox worker (#193). Guarded because the worker
 	// calls from its own goroutine while the test asserts from another.
 	sendMu       sync.Mutex
 	sendCount    int
 	sentRandomID int64
+	sentPeer     domain.Peer
 	sentID       int
 	// sendBlock, when set, holds SendMessage open so a test can catch an entry
 	// mid-flight and drop the owner under it.

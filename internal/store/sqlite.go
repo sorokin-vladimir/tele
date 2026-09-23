@@ -71,6 +71,11 @@ CREATE TABLE IF NOT EXISTS chat_gap (
 	chat_id      INTEGER PRIMARY KEY,
 	after_msg_id INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS addresses (
+	chat_id     INTEGER PRIMARY KEY,
+	peer_type   INTEGER NOT NULL,
+	access_hash INTEGER NOT NULL
+);
 `
 
 // MaxMessagesPerChat bounds how many recent messages are kept in memory per

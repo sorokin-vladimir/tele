@@ -285,12 +285,12 @@ func (o *ownerStub) DiscardOutbox(ref string) error {
 	return o.err
 }
 
-func (o *ownerStub) Forward(_ context.Context, fromChatID int64, to domain.Peer, _ []int, _ string) error {
+func (o *ownerStub) Forward(_ context.Context, fromChatID, toChatID int64, _ []int, _ string) error {
 	o.calls = append(o.calls, cmdCall{name: "Forward", chatID: fromChatID})
 	if o.err != nil {
 		return o.err
 	}
-	o.state.Store().BumpChatLastMessage(to.ID, domain.Message{ChatID: to.ID, IsOut: true, Date: time.Now()})
+	o.state.Store().BumpChatLastMessage(toChatID, domain.Message{ChatID: toChatID, IsOut: true, Date: time.Now()})
 	o.queued = append(o.queued, o.reg.Refresh()...)
 	return nil
 }

@@ -16,7 +16,7 @@ func (s *stubClient) SearchContacts(_ context.Context, q string, limit int) ([]d
 	if s.err != nil {
 		return nil, s.err
 	}
-	return []domain.Chat{{ID: 42, Title: "Ada"}}, nil
+	return []domain.Chat{{ID: ada.ID, Title: "Ada", Peer: ada}}, nil
 }
 
 func (s *stubClient) GetParticipants(_ context.Context, _ domain.Peer) ([]domain.ChatMember, error) {

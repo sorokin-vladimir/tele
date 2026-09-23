@@ -29,16 +29,16 @@ func (o *Owner) messageByID(chatID int64, msgID int) (domain.Message, error) {
 
 // Forward copies messages into another chat, optionally preceded by a comment.
 //
-// The target is a peer, not a chat ID: a forward may be addressed to a search
-// hit the owner holds no dialog for, so there is nothing to resolve. The source
-// is a chat ID like every other command.
-func (o *Owner) Forward(ctx context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error {
+// Both ends are chat IDs like every other command. A target the account has no
+// dialog with, such as a search hit, resolves through the address search left
+// behind (#278).
+func (o *Owner) Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error {
 	// Forwarding crosses four layers (client -> owner -> tg -> update stream)
 	// and shows nothing until the last one delivers, so each step says what it
 	// did: "forward:" in the log is the whole path (#198).
 	o.log.Debug("forward: requested",
 		zap.Int64("from_chat", fromChatID),
-		zap.Int64("to_peer", to.ID),
+		zap.Int64("to_chat", toChatID),
 		zap.Ints("msg_ids", msgIDs),
 		zap.Bool("with_comment", comment != ""))
 	from, err := o.peer(fromChatID)
@@ -46,25 +46,32 @@ func (o *Owner) Forward(ctx context.Context, fromChatID int64, to domain.Peer, m
 		o.log.Debug("forward: source peer not resolved", zap.Int64("from_chat", fromChatID))
 		return err
 	}
+	// Resolved before the comment is queued: a target nobody can reach would
+	// leave the comment behind with nothing to follow it.
+	to, err := o.peer(toChatID)
+	if err != nil {
+		o.log.Debug("forward: target peer not resolved", zap.Int64("to_chat", toChatID))
+		return err
+	}
 	if comment != "" {
 		// The comment goes through the durable queue like any other message. The
 		// ApplyIncoming that used to sit here existed only because echo
 		// suppression hid the comment and no optimistic bubble would ever show
 		// it; with suppression gone for text it arrives the ordinary way (#193).
-		if err := o.Send(ctx, SendRequest{Ref: NewRef(), ChatID: to.ID, Text: comment}); err != nil {
+		if err := o.Send(ctx, SendRequest{Ref: NewRef(), ChatID: toChatID, Text: comment}); err != nil {
 			o.log.Debug("forward: comment could not be queued", zap.Error(err))
 			return err
 		}
-		o.log.Debug("forward: comment queued", zap.Int64("to_peer", to.ID))
+		o.log.Debug("forward: comment queued", zap.Int64("to_chat", toChatID))
 	}
 	if err := o.client.ForwardMessages(ctx, from, to, msgIDs); err != nil {
 		o.log.Debug("forward: telegram refused", zap.Error(err))
 		return err
 	}
-	o.bumpForwardTarget(fromChatID, to.ID, msgIDs)
+	o.bumpForwardTarget(fromChatID, toChatID, msgIDs)
 	o.log.Debug("forward: done, target bumped",
-		zap.Int64("to_chat", to.ID),
-		zap.Int("held_in_store", len(o.state.Store().Messages(to.ID))))
+		zap.Int64("to_chat", toChatID),
+		zap.Int("held_in_store", len(o.state.Store().Messages(toChatID))))
 	return nil
 }
 

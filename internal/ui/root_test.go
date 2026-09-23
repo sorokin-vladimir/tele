@@ -898,9 +898,9 @@ func TestRoot_ForwardKey_OpensPicker(t *testing.T) {
 
 func TestRoot_ForwardToChat_AsksTheOwner(t *testing.T) {
 	m, _ := newRootWithOpenChat(t)
-	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
+	target := int64(999)
 
-	newM, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
+	newM, cmd := m.Update(screens.ForwardToChatRequest{ToChatID: target, MsgID: 5})
 	m = newM.(ui.RootModel)
 	require.False(t, m.SearchActive(), "picker should close on confirm")
 	require.NotNil(t, cmd)
@@ -916,9 +916,9 @@ func TestRoot_ForwardToChat_AsksTheOwner(t *testing.T) {
 // owner's business now (#198), and becomes an outbox submission in #193.
 func TestRoot_ForwardWithComment_PassesTheComment(t *testing.T) {
 	m, _ := newRootWithOpenChat(t)
-	target := domain.Peer{ID: 999, Type: domain.PeerUser, AccessHash: 7}
+	target := int64(999)
 
-	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5, Comment: "look at this"})
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToChatID: target, MsgID: 5, Comment: "look at this"})
 	require.NotNil(t, cmd)
 	drainMsgs(cmd())
 
@@ -930,9 +930,9 @@ func TestRoot_ForwardWithComment_PassesTheComment(t *testing.T) {
 
 func TestRoot_ForwardWithoutComment_PassesNoComment(t *testing.T) {
 	m, _ := newRootWithOpenChat(t)
-	target := domain.Peer{ID: 999, Type: domain.PeerUser}
+	target := int64(999)
 
-	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToChatID: target, MsgID: 5})
 	require.NotNil(t, cmd)
 	drainMsgs(cmd())
 
@@ -947,8 +947,8 @@ func TestRoot_Forward_BumpsTargetChatToTop(t *testing.T) {
 	// Source message lives in the open chat; chat 1 has an older last message.
 	st.AppendMessage(domain.Message{ID: 7, ChatID: 1, Text: "src", Date: time.Now().Add(-time.Hour)})
 
-	target := domain.Peer{ID: 2, Type: domain.PeerUser}
-	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 7})
+	target := int64(2)
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToChatID: target, MsgID: 7})
 	require.NotNil(t, cmd)
 	done := cmd()           // run the RPC cmd -> forwardDoneMsg
 	m2, _ := m.Update(done) // handleForwardDone bumps the target chat
@@ -965,9 +965,9 @@ func TestRoot_ForwardRestricted_ShowsStatus(t *testing.T) {
 	m, _ := newRootWithOpenChat(t)
 	// The refusal comes back from the owner's command now.
 	ownerOf(t, m).cmdErr = &telerr.Error{Kind: telerr.Forbidden, Detail: "CHAT_FORWARDS_RESTRICTED"}
-	target := domain.Peer{ID: 999, Type: domain.PeerUser}
+	target := int64(999)
 
-	_, cmd := m.Update(screens.ForwardToChatRequest{ToPeer: target, MsgID: 5})
+	_, cmd := m.Update(screens.ForwardToChatRequest{ToChatID: target, MsgID: 5})
 	require.NotNil(t, cmd)
 	done := cmd()
 	_, cmd2 := m.Update(done)

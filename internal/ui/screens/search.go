@@ -70,7 +70,7 @@ type SearchModel struct {
 	height  int
 	keyMap  keys.KeyMap
 	// forwardMsgID > 0 puts the picker in forward mode: confirming a chat emits
-	// ForwardToChatRequest{ToPeer, MsgID} and rows show the unread count.
+	// ForwardToChatRequest{ToChatID, MsgID} and rows show the unread count.
 	forwardMsgID int
 	phase        forwardPhase // forward mode only: select (default) | comment
 	comment      string
@@ -92,7 +92,7 @@ func NewSearchModel(chats []domain.Chat, width, height int, km keys.KeyMap) *Sea
 }
 
 // NewForwardPicker builds the chat picker in forward mode: confirming a chat
-// emits ForwardToChatRequest{ToPeer, MsgID} and rows show the unread count.
+// emits ForwardToChatRequest{ToChatID, MsgID} and rows show the unread count.
 func NewForwardPicker(chats []domain.Chat, msgID int, width, height int, km keys.KeyMap) *SearchModel {
 	m := NewSearchModel(chats, width, height, km)
 	m.forwardMsgID = msgID
@@ -304,9 +304,9 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		}
 		if m.forwardMsgID != 0 {
 			msgID := m.forwardMsgID
-			peer, title := chat.Peer, chat.Title
+			to, title := chat.ID, chat.Title
 			return m, func() tea.Msg {
-				return ForwardToChatRequest{ToPeer: peer, Title: title, MsgID: msgID}
+				return ForwardToChatRequest{ToChatID: to, Title: title, MsgID: msgID}
 			}
 		}
 		// A search hit may be a contact with no dialog, which the owner does not
@@ -362,10 +362,10 @@ func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		return m, nil
 	case tea.KeyEnter:
 		comment := m.comment
-		peer, title := m.target.Peer, m.target.Title
+		to, title := m.target.ID, m.target.Title
 		msgID := m.forwardMsgID
 		return m, func() tea.Msg {
-			return ForwardToChatRequest{ToPeer: peer, Title: title, MsgID: msgID, Comment: comment}
+			return ForwardToChatRequest{ToChatID: to, Title: title, MsgID: msgID, Comment: comment}
 		}
 	case tea.KeyBackspace:
 		if len(m.comment) > 0 {

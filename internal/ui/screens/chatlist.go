@@ -33,9 +33,10 @@ type OpenChatMsg struct {
 }
 
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user
-// confirms a target chat. The source peer is resolved by the root model.
+// confirms a target chat. Both ends are chat ids; addressing them is the
+// owner's business, including a search hit with no dialog (#278).
 type ForwardToChatRequest struct {
-	ToPeer domain.Peer
+	ToChatID int64
 	// Title names the target in the result status. The picker had the chat in
 	// hand when the user chose it, so it travels along rather than being looked
 	// up again — a search hit may not be a chat the owner holds at all.

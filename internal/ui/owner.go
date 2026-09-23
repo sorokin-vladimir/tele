@@ -35,9 +35,7 @@ type Owner interface {
 	EditMessage(ctx context.Context, chatID int64, msgID int, text string, entities []domain.MessageEntity) error
 	DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error
 	SendReaction(ctx context.Context, chatID int64, msgID int, emoji string) error
-	// Forward names its target by peer: it may be a search hit the owner holds
-	// no chat for.
-	Forward(ctx context.Context, fromChatID int64, to domain.Peer, msgIDs []int, comment string) error
+	Forward(ctx context.Context, fromChatID, toChatID int64, msgIDs []int, comment string) error
 	SetTyping(ctx context.Context, chatID int64, action domain.TypingAction) error
 	SaveDraft(ctx context.Context, chatID int64, text string) error
 

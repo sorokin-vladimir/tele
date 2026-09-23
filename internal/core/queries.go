@@ -11,8 +11,19 @@ import (
 // SearchContacts asks Telegram for users matching q. It is a query, not a
 // projection: the result is a one-off answer nobody subscribes to. No chat ID
 // is involved because the point is finding chats the owner may not hold.
+//
+// Every hit's address is kept, since a hit the user opens and writes to is
+// named by id from then on and search is the only place its address came from
+// (#278).
 func (o *Owner) SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error) {
-	return o.client.SearchContacts(ctx, q, limit)
+	chats, err := o.client.SearchContacts(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range chats {
+		o.state.RememberAddress(c.Peer)
+	}
+	return chats, nil
 }
 
 // GetParticipants returns mention candidates for a group or channel.
@@ -57,10 +68,14 @@ func (o *Owner) GetUser(ctx context.Context, userID int64) (domain.User, error) 
 	if err != nil {
 		return domain.User{}, err
 	}
-	user, err := o.client.GetUser(ctx, addr)
+	full, err := o.client.GetUser(ctx, addr)
 	if err != nil {
 		return domain.User{}, err
 	}
+	// A profile opened from a group is the other way to find someone the
+	// account has no dialog with, and a first message to them needs this.
+	o.state.RememberAddress(full.Peer)
+	user := full.User
 	// A response that carried no short user has no name in it. Rather than
 	// hand back a nameless profile, keep the one already on screen.
 	if user.FirstName == "" && user.LastName == "" {
@@ -94,8 +109,9 @@ func (o *Owner) InvalidateAvatar(userID, avatarID int64) {
 }
 
 // userAddress works out how a user can be named to Telegram: by the access hash
-// of their dialog when one exists, and otherwise through a message they wrote,
-// which is the only address left for someone met in a group.
+// of their dialog when one exists, then by one Telegram handed out earlier, and
+// otherwise through a message they wrote, which is the only address left for
+// someone met in a group.
 func (o *Owner) userAddress(userID int64) (internaltg.UserAddress, error) {
 	if userID == 0 {
 		return internaltg.UserAddress{}, &telerr.Error{Kind: telerr.PeerNotFound, Op: "get user"}
@@ -103,6 +119,9 @@ func (o *Owner) userAddress(userID int64) (internaltg.UserAddress, error) {
 	st := o.state.Store()
 	if chat, ok := st.GetChat(userID); ok && chat.Peer.IsUser() && chat.Peer.AccessHash != 0 {
 		return internaltg.UserAddress{UserID: userID, AccessHash: chat.Peer.AccessHash}, nil
+	}
+	if p, ok := st.Address(userID); ok && p.IsUser() {
+		return internaltg.UserAddress{UserID: userID, AccessHash: p.AccessHash}, nil
 	}
 	if peer, msg, ok := o.findMessageFrom(userID); ok {
 		return internaltg.UserAddress{UserID: userID, FromChat: peer, FromMsgID: msg.ID}, nil

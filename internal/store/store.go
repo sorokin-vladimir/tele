@@ -103,5 +103,12 @@ type Store interface {
 	SetChatMentionsRead(chatID int64)
 	FolderFilters() []domain.FolderFilter
 	SetFolderFilters(filters []domain.FolderFilter)
+	// Address returns how to reach a chat the account holds no dialog for: a
+	// person found by search, or one whose profile was opened from a group.
+	// A chat with a dialog is addressed by its own row, which wins over this.
+	Address(chatID int64) (domain.Peer, bool)
+	// RememberAddress keeps an address Telegram handed out, so that a send to
+	// such a chat still resolves after a restart (#278).
+	RememberAddress(p domain.Peer)
 	SetOwnerID(ownerID int64)
 }

@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [1.11.8] - 2026-09-23
+
 ### Fixed
 
 - Under a theme that paints the background, the "typing…" label in the chat

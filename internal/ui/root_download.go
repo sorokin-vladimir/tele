@@ -151,27 +151,20 @@ func (m RootModel) startDocumentOpen(msgID int, label string) (RootModel, tea.Cm
 // longer has one to show and says what sort of thing is coming instead.
 func (m RootModel) selectedDownloadLabel() string {
 	noun := "file"
-	if m.st != nil && m.chat != nil {
-		id := m.chat.SelectedMessageID()
-		for _, msg := range m.st.Messages(m.currentChatID) {
-			if msg.ID != id {
-				continue
+	if m.chat != nil {
+		if msg, ok := m.windowMessage(m.chat.SelectedMessageID()); ok && msg.Media != nil {
+			switch msg.Media.Kind {
+			case domain.MediaVideo:
+				noun = "video"
+			case domain.MediaVideoNote:
+				noun = "note"
+			case domain.MediaVoice:
+				noun = "voice message"
+			case domain.MediaAudio:
+				noun = "audio"
+			case domain.MediaGIF:
+				noun = "GIF"
 			}
-			if msg.Media != nil {
-				switch msg.Media.Kind {
-				case domain.MediaVideo:
-					noun = "video"
-				case domain.MediaVideoNote:
-					noun = "note"
-				case domain.MediaVoice:
-					noun = "voice message"
-				case domain.MediaAudio:
-					noun = "audio"
-				case domain.MediaGIF:
-					noun = "GIF"
-				}
-			}
-			break
 		}
 	}
 	return "downloading " + noun + "…"

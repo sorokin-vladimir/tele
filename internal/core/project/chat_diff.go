@@ -86,7 +86,8 @@ func DiffChat(prev, next ChatContents) []ChatDelta {
 func headerChanged(prev, next ChatContents) bool {
 	return prev.Title != next.Title || prev.IsUser != next.IsUser ||
 		prev.IsGroup != next.IsGroup || prev.Online != next.Online ||
-		prev.UnreadReactions != next.UnreadReactions
+		prev.UnreadReactions != next.UnreadReactions ||
+		prev.UnreadMentions != next.UnreadMentions
 }
 
 func diffWindow(prev, next ChatContents) []ChatDelta {

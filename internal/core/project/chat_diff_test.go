@@ -183,6 +183,17 @@ func TestDiffChat_UnreadReactionsAreHeaderState(t *testing.T) {
 	assert.Equal(t, 1, got[0].Contents.UnreadReactions)
 }
 
+func TestDiffChat_UnreadMentionsAreHeaderState(t *testing.T) {
+	prev := chatContents(msgs(3))
+	next := chatContents(msgs(3))
+	next.UnreadMentions = 2
+
+	got := project.DiffChat(prev, next)
+
+	require.Equal(t, []project.ChatDeltaKind{project.ChatHeaderUpdate}, kinds(got))
+	assert.Equal(t, 2, got[0].Contents.UnreadMentions)
+}
+
 func TestDiffChat_HeaderAndWindowChangeTogether(t *testing.T) {
 	prev := chatContents(msgs(3))
 	next := chatContents(msgs(4))

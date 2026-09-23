@@ -75,6 +75,13 @@ type RootModel struct {
 	// projection. Kept so focusing the pane can mark them read: a reaction that
 	// arrived while you were elsewhere is only seen when you look.
 	chatUnreadReactions int
+	// chatDraft is the open chat's draft as the server knows it, from the
+	// projection. Leaving the chat saves the composer only when it differs.
+	chatDraft string
+	// readMentionsOnReset is set when a chat is opened and cleared by its first
+	// Reset, which is the one that reads the chat's mentions. Later Resets - a
+	// moved window, a retried load - are not an opening.
+	readMentionsOnReset bool
 	// activeFolder is the folder the chatlist window is filtered by, kept so a
 	// window move can repeat it. 0 is All Chats.
 	activeFolder  int

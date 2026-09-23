@@ -43,9 +43,13 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// transmits the now-visible images.
 		m.requestKittyReset()
 
-		reactionsCmd, mentionsCmd := m.clearChatBadgesOnOpen(msg.ChatID)
+		// The previous chat's window and draft stop describing anything; the new
+		// chat's arrive on its opening Reset, which also reads its mentions.
+		m.chatMsgs = nil
+		m.chatDraft = ""
+		m.readMentionsOnReset = true
 		m.subscribeChat(msg.ChatID)
-		return m, tea.Batch(draftFlush, reactionsCmd, mentionsCmd)
+		return m, draftFlush
 
 	case screens.LoadMoreMsg:
 		// Reaching the top of the window asks the owner to widen it. Whether the

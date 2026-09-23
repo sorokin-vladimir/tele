@@ -152,6 +152,8 @@ func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
 		ReadInboxMaxID:  4,
 		ReadOutboxMaxID: 2,
 		Draft:           "wip",
+
+		UnreadMentionsCount: 3,
 	}
 	r := readerWith(c, msgs(5))
 
@@ -166,6 +168,7 @@ func TestBuildChat_CarriesTheHeaderTheChatPaneRenders(t *testing.T) {
 	assert.Equal(t, 4, got.ReadInboxMaxID)
 	assert.Equal(t, 2, got.ReadOutboxMaxID)
 	assert.Equal(t, "wip", got.Draft)
+	assert.Equal(t, 3, got.UnreadMentions, "opening the chat reads its mentions")
 }
 
 func TestBuildChat_UnknownChat(t *testing.T) {

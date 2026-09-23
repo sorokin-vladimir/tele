@@ -1528,14 +1528,37 @@ func TestRoot_OpenChat_ClearsUnreadReactionsOptimistically(t *testing.T) {
 	m = m.WithScreen(ui.ScreenMain)
 
 	// The badge is cleared by the owner's command, ahead of its request (#198).
-	newM, cmd := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
-	_ = newM.(ui.RootModel)
-	require.NotNil(t, cmd)
-	drainMsgs(cmd())
+	// The chat's opening Reset is what issues it (#278).
+	openChatRunningItsCommands(t, m, 1, "Alice")
 
 	c, ok := st.GetChat(1)
 	require.True(t, ok)
 	assert.Equal(t, 0, c.UnreadReactionsCount, "opening a chat clears its unread reactions")
+}
+
+// openChatRunningItsCommands opens a chat, delivers the subscription's deltas,
+// and runs every command the open and the deltas return: badges are read on
+// the opening Reset rather than on the open itself (#278).
+func openChatRunningItsCommands(t *testing.T, m ui.RootModel, chatID int64, title string) ui.RootModel {
+	t.Helper()
+	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chatID, Title: title})
+	m = nm.(ui.RootModel)
+	if cmd != nil {
+		drainMsgs(cmd())
+	}
+	o := ownerOf(t, m)
+	for len(o.queued) > 0 {
+		deltas := o.queued
+		o.queued = nil
+		for _, d := range deltas {
+			nm, cmd := m.Update(d)
+			m = nm.(ui.RootModel)
+			if cmd != nil {
+				drainMsgs(cmd())
+			}
+		}
+	}
+	return m
 }
 
 func TestRoot_NewMention_BumpsIndicatorOnOtherChat(t *testing.T) {
@@ -1568,10 +1591,7 @@ func TestRoot_OpenChat_ClearsUnreadMentionsOptimistically(t *testing.T) {
 	m := newRoot(st, 50, false)
 	m = m.WithScreen(ui.ScreenMain)
 
-	newM, cmd := m.Update(screens.OpenChatMsg{ChatID: 1, Title: "Alice"})
-	_ = newM.(ui.RootModel)
-	require.NotNil(t, cmd)
-	drainMsgs(cmd())
+	openChatRunningItsCommands(t, m, 1, "Alice")
 
 	c, ok := st.GetChat(1)
 	require.True(t, ok)

@@ -41,14 +41,11 @@ const photoPlayerKey int64 = -1001
 // selectedPhotoInfo returns the selected message's sender display name and send
 // time, or zero values if unknown.
 func (m RootModel) selectedPhotoInfo() (string, time.Time) {
-	if m.st == nil || m.chat == nil {
+	if m.chat == nil {
 		return "", time.Time{}
 	}
-	id := m.chat.SelectedMessageID()
-	for _, msg := range m.st.Messages(m.currentChatID) {
-		if msg.ID == id {
-			return msg.SenderName, msg.Date
-		}
+	if msg, ok := m.windowMessage(m.chat.SelectedMessageID()); ok {
+		return msg.SenderName, msg.Date
 	}
 	return "", time.Time{}
 }

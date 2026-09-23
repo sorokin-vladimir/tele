@@ -227,24 +227,34 @@ func (m RootModel) SetComposerValueForTest(s string) RootModel {
 }
 
 // flushCurrentDraftCmd persists the open chat's composer text as a Telegram
-// draft when it differs from the server-known value (#62). It updates the store
-// (so a re-open shows the same text) and returns a Cmd performing the RPC, or
-// nil when there is nothing to do. Edit mode is skipped: the composer then holds
-// a message being edited, not a draft, and entering edit already discarded any
+// draft when it differs from the server-known value (#62), which is the one the
+// chat's projection carries (#278). It returns a Cmd performing the RPC, or nil
+// when there is nothing to do. Edit mode is skipped: the composer then holds a
+// message being edited, not a draft, and entering edit already discarded any
 // prior draft.
 func (m RootModel) flushCurrentDraftCmd() tea.Cmd {
-	if m.st == nil || m.currentChatID == 0 || m.chat.EditMsgID() != 0 {
-		return nil
-	}
-	chat, ok := m.st.GetChat(m.currentChatID)
-	if !ok {
+	if m.currentChatID == 0 || m.chat.EditMsgID() != 0 {
 		return nil
 	}
 	text := m.chat.ComposerValue()
-	if text == chat.Draft {
+	if text == m.chatDraft {
 		return nil // unchanged — avoid a redundant messages.saveDraft round-trip
 	}
 	return m.saveDraftCmd(m.currentChatID, text)
+}
+
+// windowMessage finds a message in the open chat's window. Everything the user
+// can select is drawn from the window, so a message acted on is always there.
+func (m RootModel) windowMessage(msgID int) (domain.Message, bool) {
+	if msgID == 0 {
+		return domain.Message{}, false
+	}
+	for _, msg := range m.chatMsgs {
+		if msg.ID == msgID {
+			return msg, true
+		}
+	}
+	return domain.Message{}, false
 }
 
 // saveDraftCmd returns a managed Cmd that saves (or clears, when text == "")
@@ -400,22 +410,19 @@ func (m RootModel) handleChatLoadErr(msg chatLoadErrMsg) (RootModel, tea.Cmd) {
 // the model does directly. See the retryChatLoadMsg case in root.go.
 
 // openReactionPicker opens the reaction picker for msgID, pre-selecting the
-// already-chosen emoji (if any). No-op when there is no store or no message.
+// already-chosen emoji (if any). No-op when there is no message.
 func (m RootModel) openReactionPicker(msgID int) RootModel {
 	m.contextMenu = nil
-	if m.st == nil || msgID == 0 {
+	if msgID == 0 {
 		return m
 	}
 	var chosen string
-	for _, sm := range m.st.Messages(m.currentChatID) {
-		if sm.ID == msgID {
-			for _, r := range sm.Reactions {
-				if r.IsChosen {
-					chosen = r.Emoji
-					break
-				}
+	if msg, ok := m.windowMessage(msgID); ok {
+		for _, r := range msg.Reactions {
+			if r.IsChosen {
+				chosen = r.Emoji
+				break
 			}
-			break
 		}
 	}
 	m.reactionTargetID = msgID
@@ -464,14 +471,9 @@ func (m *RootModel) activateReply(msgID int) tea.Cmd {
 	}
 	preview := "▌ Reply to message"
 	senderName := ""
-	if m.st != nil {
-		for _, storeMsg := range m.st.Messages(m.currentChatID) {
-			if storeMsg.ID == msgID {
-				preview = components.BuildReplyPreview(storeMsg)
-				senderName = storeMsg.SenderName
-				break
-			}
-		}
+	if msg, ok := m.windowMessage(msgID); ok {
+		preview = components.BuildReplyPreview(msg)
+		senderName = msg.SenderName
 	}
 	m.chat.SetReply(msgID, preview, senderName)
 	m.vimState.Mode = keys.ModeInsert
@@ -481,23 +483,15 @@ func (m *RootModel) activateReply(msgID int) tea.Cmd {
 
 // activateEdit sets edit state for msgID, pre-fills the composer with the
 // original text, switches to insert mode, and returns the FocusComposer cmd.
-// Returns nil if msgID is zero or the message is not found in the store.
+// Returns nil if msgID is zero or the message is not in the window.
 func (m *RootModel) activateEdit(msgID int) tea.Cmd {
-	if msgID == 0 {
+	msg, ok := m.windowMessage(msgID)
+	if !ok {
 		return nil
 	}
-	if m.st == nil {
-		return nil
-	}
-	for _, storeMsg := range m.st.Messages(m.currentChatID) {
-		if storeMsg.ID == msgID {
-			preview := components.BuildEditPreview(storeMsg)
-			m.chat.SetEdit(msgID, preview)
-			m.chat.SetComposerSource(storeMsg.Text, storeMsg.Entities)
-			m.vimState.Mode = keys.ModeInsert
-			m.statusBar.SetMode(keys.ModeInsert)
-			return m.chat.FocusComposer()
-		}
-	}
-	return nil
+	m.chat.SetEdit(msgID, components.BuildEditPreview(msg))
+	m.chat.SetComposerSource(msg.Text, msg.Entities)
+	m.vimState.Mode = keys.ModeInsert
+	m.statusBar.SetMode(keys.ModeInsert)
+	return m.chat.FocusComposer()
 }

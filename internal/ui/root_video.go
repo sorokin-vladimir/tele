@@ -154,20 +154,18 @@ func transmitFrameToID(id uint32, frame image.Image, cols, rows int) tea.Cmd {
 // selectedVideoInfo returns the selected message's video duration (seconds) and
 // sender display name, or zero values if unknown.
 func (m RootModel) selectedVideoInfo() (int, string) {
-	if m.st == nil || m.chat == nil {
+	if m.chat == nil {
 		return 0, ""
 	}
-	id := m.chat.SelectedMessageID()
-	for _, msg := range m.st.Messages(m.currentChatID) {
-		if msg.ID == id {
-			dur := 0
-			if msg.Media != nil {
-				dur = msg.Media.Duration
-			}
-			return dur, msg.SenderName
-		}
+	msg, ok := m.windowMessage(m.chat.SelectedMessageID())
+	if !ok {
+		return 0, ""
 	}
-	return 0, ""
+	dur := 0
+	if msg.Media != nil {
+		dur = msg.Media.Duration
+	}
+	return dur, msg.SenderName
 }
 
 // openVideoModal opens the modal shell immediately (so the loading spinner shows

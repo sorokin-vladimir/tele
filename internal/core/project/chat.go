@@ -22,7 +22,10 @@ type ChatContents struct {
 	// not per-message: a reaction can land on a message far outside the window,
 	// and the client still has to mark it read while the user is looking.
 	UnreadReactions int
-	Draft           string
+	// UnreadMentions is the chat's unread-mention count, per-chat for the same
+	// reason: opening the chat reads them, wherever they landed.
+	UnreadMentions int
+	Draft          string
 	// Outbox is this chat's queued sends, oldest first. It is a separate list
 	// rather than synthetic messages because an entry has no message ID and
 	// carries what a message does not: attempts, an error kind, a retry time.
@@ -49,6 +52,7 @@ func BuildChat(r Reader, w ChatWindow) ChatContents {
 		out.ReadInboxMaxID = chat.ReadInboxMaxID
 		out.ReadOutboxMaxID = chat.ReadOutboxMaxID
 		out.UnreadReactions = chat.UnreadReactionsCount
+		out.UnreadMentions = chat.UnreadMentionsCount
 		out.Draft = chat.Draft
 	}
 	// Read before the empty-history return below: a chat with nothing stored can

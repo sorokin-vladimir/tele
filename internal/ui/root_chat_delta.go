@@ -56,6 +56,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 			ReadOutboxMaxID: c.ReadOutboxMaxID,
 		})
 		m.chat.SeedDraft(c.ChatID, c.Draft)
+		m.chatDraft = c.Draft
 		m.chat.SetInboxReadMaxID(c.ReadInboxMaxID)
 		m.chatMsgs = c.Messages
 		m.chat.SetMessages(m.chatMsgs)
@@ -64,8 +65,18 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.SetOutbox(c.Outbox)
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError("")
+		// Opening a chat reads its mentions, once. Reactions need no such
+		// step: readReactionsOnScreen reads them on every Reset while the pane
+		// is focused, and that covers the opening one too (#278).
+		var mentionsCmd tea.Cmd
+		if m.readMentionsOnReset {
+			m.readMentionsOnReset = false
+			if c.UnreadMentions > 0 {
+				mentionsCmd = m.readMentionsCmd(c.ChatID)
+			}
+		}
 		if cmd := m.readReactionsOnScreen(c); cmd != nil {
-			return m, cmd
+			return m, tea.Batch(cmd, mentionsCmd)
 		}
 		// The window was anchored on the first unread: it already opens on that
 		// message, so scrolling to it again would fight the anchor. Only the
@@ -80,7 +91,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		// thumbnail already cached from a prior visit; start its animation here
 		// since no key event will.
 		nm, gifCmd := m.ensureGifAnimForSelection()
-		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd)
+		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd, mentionsCmd)
 
 	case project.ChatHeaderUpdate:
 		// Only the state around the window changed. The message list is left
@@ -171,6 +182,7 @@ func (m RootModel) handleChatDelta(d *project.ChatDelta) (RootModel, tea.Cmd) {
 		m.chat.SetOutboxReadMaxID(d.ReadOutboxMaxID)
 
 	case project.ChatDraft:
+		m.chatDraft = d.Draft
 		// Reflect a draft synced from another device only while the user is not
 		// typing — otherwise it would clobber an in-progress local edit (#62).
 		if !m.chat.ComposerFocused() {
@@ -221,28 +233,4 @@ func (m RootModel) applyTypingLabelCmd(label string) (RootModel, tea.Cmd) {
 		cmds = append(cmds, typingDotsTickCmd())
 	}
 	return m, tea.Batch(cmds...)
-}
-
-// clearChatBadgesOnOpen optimistically clears a chat's unread reactions and
-// mentions when it is opened, and returns the commands that reconcile that with
-// the server.
-//
-// The commands clear the badges themselves, before their request goes out, so
-// the indicators drop as soon as the chat is open and every attached client
-// sees it (#198).
-func (m RootModel) clearChatBadgesOnOpen(chatID int64) (reactions, mentions tea.Cmd) {
-	if m.st == nil {
-		return nil, nil
-	}
-	c, ok := m.st.GetChat(chatID)
-	if !ok {
-		return nil, nil
-	}
-	if c.UnreadReactionsCount > 0 {
-		reactions = m.readReactionsCmd(c.ID)
-	}
-	if c.UnreadMentionsCount > 0 {
-		mentions = m.readMentionsCmd(c.ID)
-	}
-	return reactions, mentions
 }

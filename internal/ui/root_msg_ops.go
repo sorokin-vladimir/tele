@@ -423,17 +423,6 @@ func (m RootModel) openReactionPicker(msgID int) RootModel {
 	return m
 }
 
-// openForwardPicker opens the fuzzy chat picker in forward mode for msgID.
-// No-op (returns the model unchanged) when there is no store or no message.
-func (m RootModel) openForwardPicker(msgID int) (RootModel, tea.Cmd) {
-	if m.st == nil || msgID == 0 {
-		return m, nil
-	}
-	m.contextMenu = nil
-	m.searchModel = screens.NewForwardPicker(m.st.Chats(), msgID, m.width, m.height, m.keyMap)
-	return m, nil
-}
-
 // handleForwardToChat closes the picker and forwards the message from the open
 // chat to the chosen target chat, surfacing the result via a status message.
 func (m RootModel) handleForwardToChat(msg screens.ForwardToChatRequest) (RootModel, tea.Cmd) {

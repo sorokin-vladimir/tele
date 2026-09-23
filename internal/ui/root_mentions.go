@@ -19,8 +19,10 @@ type participantsLoadedMsg struct {
 func (m *RootModel) syncMentionPopup() tea.Cmd {
 	q, active := m.chat.ComposerMentionQuery()
 	// Mentions target group/channel participants; a 1:1 chat has none, so never
-	// open the popup there (and never fire a getFullChat on a user peer).
-	if !active || m.chat.CurrentPeer().IsUser() {
+	// open the popup there (and never fire a getFullChat on a user peer). A chat
+	// whose header has not landed yet counts as no group: asking too late is
+	// harmless, asking a person for members is not.
+	if !active || !m.chat.IsGroup() {
 		m.mentionPopup = nil
 		return nil
 	}

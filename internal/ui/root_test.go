@@ -58,7 +58,7 @@ func TestRoot_SubmissionRefused_SurfacesError(t *testing.T) {
 	owner := m.Owner().(*testOwner)
 	owner.cmdErr = &telerr.Error{Kind: telerr.PeerNotFound}
 
-	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
+	_, cmd := m.Update(screens.SendMsgRequest{Text: "hi"})
 	require.NotNil(t, cmd)
 
 	_, isErr := cmd().(ui.StatusErrMsg)
@@ -75,7 +75,7 @@ func TestRoot_ThreadsAppContextIntoCommands(t *testing.T) {
 	m = m.WithContext(appCtx)
 	owner := m.Owner().(*testOwner)
 
-	_, cmd := m.Update(screens.SendMsgRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Text: "hi"})
+	_, cmd := m.Update(screens.SendMsgRequest{Text: "hi"})
 	require.NotNil(t, cmd)
 	cmd() // run the submission cmd
 
@@ -337,7 +337,7 @@ func TestSendMedia_HandsTheStagedFilesToTheQueue(t *testing.T) {
 	}
 
 	nm, cmd := m.Update(screens.SendMediaRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser}, Caption: "hi", ReplyToMsgID: 7,
+		Caption: "hi", ReplyToMsgID: 7,
 	})
 	m = nm.(ui.RootModel)
 	require.NotNil(t, cmd)
@@ -366,7 +366,7 @@ func TestSendMedia_CarriesTheSendAsChoice(t *testing.T) {
 	m = nm.(ui.RootModel)
 	m = pressToggleSendAs(t, m)
 
-	_, cmd := m.Update(screens.SendMediaRequest{Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
+	_, cmd := m.Update(screens.SendMediaRequest{})
 	require.NotNil(t, cmd)
 	cmd()
 
@@ -750,7 +750,6 @@ func TestRoot_Send_SubmitsToTheQueueAndTouchesNoStore(t *testing.T) {
 	owner := m.Owner().(*testOwner)
 
 	_, cmd := m.Update(screens.SendMsgRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "hello",
 	})
 	require.NotNil(t, cmd)
@@ -788,7 +787,6 @@ func TestRoot_Send_ConcurrentSubmissionsHaveDistinctRefs(t *testing.T) {
 	owner := m.Owner().(*testOwner)
 
 	newM, first := m.Update(screens.SendMsgRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "first",
 	})
 	m = newM.(ui.RootModel)
@@ -796,7 +794,6 @@ func TestRoot_Send_ConcurrentSubmissionsHaveDistinctRefs(t *testing.T) {
 	first()
 
 	_, second := m.Update(screens.SendMsgRequest{
-		Peer: domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text: "second",
 	})
 	require.NotNil(t, second)
@@ -1083,7 +1080,6 @@ func TestRoot_Send_WithReply_PassesReplyToMsgID(t *testing.T) {
 	owner := m.Owner().(*testOwner)
 
 	_, cmd := m.Update(screens.SendMsgRequest{
-		Peer:         domain.Peer{ID: 1, Type: domain.PeerUser},
 		Text:         "my reply",
 		ReplyToMsgID: 10,
 	})
@@ -1754,7 +1750,7 @@ func TestRoot_ToggleMute_GoesThroughTheOwner(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Title: "A", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain)
 
-	updated, cmd := m.Update(components.ToggleMuteRequest{Peer: domain.Peer{ID: 1}, Muted: true})
+	updated, cmd := m.Update(components.ToggleMuteRequest{ChatID: 1, Muted: true})
 	rm := updated.(ui.RootModel)
 	assert.False(t, rm.ChatMenuOpen(), "menu closes after action")
 	require.NotNil(t, cmd, "the request must produce an owner command")
@@ -1769,7 +1765,7 @@ func TestRoot_MarkUnread_GoesThroughTheOwner(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain)
 
-	_, cmd := m.Update(components.ToggleUnreadRequest{Peer: domain.Peer{ID: 1}, Unread: true})
+	_, cmd := m.Update(components.ToggleUnreadRequest{ChatID: 1, Unread: true})
 
 	require.NotNil(t, cmd, "the request must produce an owner command")
 	drainMsgs(cmd())
@@ -1782,7 +1778,7 @@ func TestRoot_ToggleArchive_GoesThroughTheOwner(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1, Peer: domain.Peer{ID: 1, Type: domain.PeerUser}})
 	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain)
 
-	_, cmd := m.Update(components.ToggleArchiveRequest{Peer: domain.Peer{ID: 1}, Archived: true})
+	_, cmd := m.Update(components.ToggleArchiveRequest{ChatID: 1, Archived: true})
 
 	require.NotNil(t, cmd, "the request must produce an owner command")
 	drainMsgs(cmd())
@@ -1867,8 +1863,8 @@ func TestRoot_SearchUsersRequestRunsRPCAndRoutesResult(t *testing.T) {
 	st := store.NewMemory()
 	m := newRoot(st, 20, false).WithScreen(ui.ScreenMain)
 	// Searching is an owner query now (#198).
-	ownerOf(t, m).searchResult = []domain.Chat{
-		{ID: 99, Title: "Zoe", Peer: domain.Peer{ID: 99, Type: domain.PeerUser}},
+	ownerOf(t, m).searchResult = []project.ChatRow{
+		{ID: 99, Title: "Zoe", IsUser: true},
 	}
 
 	_, cmd := m.Update(screens.SearchUsersRequest{Query: "zo", Serial: 1})

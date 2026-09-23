@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -33,7 +33,7 @@ type SearchUsersRequest struct {
 type SearchUsersResult struct {
 	Query  string
 	Serial int
-	Chats  []domain.Chat
+	Chats  []project.ChatRow
 	Err    error
 }
 
@@ -63,40 +63,57 @@ const (
 
 type SearchModel struct {
 	query   string
-	all     []domain.Chat
-	results []domain.Chat
-	list    *components.ListView
-	width   int
-	height  int
-	keyMap  keys.KeyMap
+	all     []project.ChatRow
+	results []project.ChatRow
+	// chatsLoaded is false while the chat list is still on its way from the
+	// owner, so an empty list reads as waiting rather than as "no results".
+	chatsLoaded bool
+	list        *components.ListView
+	width       int
+	height      int
+	keyMap      keys.KeyMap
 	// forwardMsgID > 0 puts the picker in forward mode: confirming a chat emits
 	// ForwardToChatRequest{ToChatID, MsgID} and rows show the unread count.
 	forwardMsgID int
 	phase        forwardPhase // forward mode only: select (default) | comment
 	comment      string
-	target       domain.Chat // chat chosen when entering the comment phase
+	target       project.ChatRow // chat chosen when entering the comment phase
 	// globalResults holds users found via server-side contacts.search (#82),
 	// shown in the "New contacts" section. serial guards debounce/RPC staleness.
-	globalResults []domain.Chat
+	globalResults []project.ChatRow
 	globalLoading bool
 	serial        int
 	spinner       components.Spinner
 }
 
-func NewSearchModel(chats []domain.Chat, width, height int, km keys.KeyMap) *SearchModel {
-	m := &SearchModel{all: chats, width: width, height: height, keyMap: km, list: components.NewListView(false), spinner: components.NewSpinner()}
-	m.results = make([]domain.Chat, len(chats))
-	copy(m.results, chats)
+// NewSearchModel builds the search overlay over chats. A nil list means it has
+// not arrived yet: the overlay opens at once, takes typing, and is filled by
+// SetChats when the owner answers (#278).
+func NewSearchModel(chats []project.ChatRow, width, height int, km keys.KeyMap) *SearchModel {
+	m := &SearchModel{width: width, height: height, keyMap: km, list: components.NewListView(false), spinner: components.NewSpinner()}
+	if chats != nil {
+		m.SetChats(chats)
+	}
 	m.syncCount()
 	return m
 }
 
 // NewForwardPicker builds the chat picker in forward mode: confirming a chat
 // emits ForwardToChatRequest{ToChatID, MsgID} and rows show the unread count.
-func NewForwardPicker(chats []domain.Chat, msgID int, width, height int, km keys.KeyMap) *SearchModel {
+func NewForwardPicker(chats []project.ChatRow, msgID int, width, height int, km keys.KeyMap) *SearchModel {
 	m := NewSearchModel(chats, width, height, km)
 	m.forwardMsgID = msgID
 	return m
+}
+
+// SetChats installs the chat list the overlay searches, keeping whatever was
+// typed while it was on its way.
+func (m *SearchModel) SetChats(chats []project.ChatRow) {
+	m.all = chats
+	m.chatsLoaded = true
+	// A global search that answered first may hold someone the list now shows.
+	m.globalResults = dedupGlobal(m.globalResults, m.all)
+	m.filter()
 }
 
 func (m *SearchModel) hint() string {
@@ -137,18 +154,18 @@ func arrowSym(key string) string {
 	}
 }
 
-func (m *SearchModel) Cursor() int                  { return m.list.Cursor() }
-func (m *SearchModel) Query() string                { return m.query }
-func (m *SearchModel) Results() []domain.Chat       { return m.results }
-func (m *SearchModel) GlobalResults() []domain.Chat { return m.globalResults }
-func (m *SearchModel) GlobalLoading() bool          { return m.globalLoading }
+func (m *SearchModel) Cursor() int                      { return m.list.Cursor() }
+func (m *SearchModel) Query() string                    { return m.query }
+func (m *SearchModel) Results() []project.ChatRow       { return m.results }
+func (m *SearchModel) GlobalResults() []project.ChatRow { return m.globalResults }
+func (m *SearchModel) GlobalLoading() bool              { return m.globalLoading }
 
 // searchRow is one rendered line: either a non-selectable section header or a
 // selectable chat row. The list (incl. headers) is what the ListView windows
 // and scrolls; headers are skipped by cursor movement.
 type searchRow struct {
 	header string
-	chat   domain.Chat
+	chat   project.ChatRow
 	isChat bool
 }
 
@@ -183,10 +200,10 @@ func (m *SearchModel) rowModel() []searchRow {
 	return rows
 }
 
-func (m *SearchModel) selectableAt(cursor int) (domain.Chat, bool) {
+func (m *SearchModel) selectableAt(cursor int) (project.ChatRow, bool) {
 	rows := m.rowModel()
 	if cursor < 0 || cursor >= len(rows) || !rows[cursor].isChat {
-		return domain.Chat{}, false
+		return project.ChatRow{}, false
 	}
 	return rows[cursor].chat, true
 }
@@ -225,21 +242,21 @@ func (m *SearchModel) onQueryChanged() tea.Cmd {
 	})
 }
 
-// dedupGlobal drops global results whose peer already appears in the local chat
+// dedupGlobal drops global results whose chat already appears in the local chat
 // list, so a user with an existing chat stays only in the top section.
-func dedupGlobal(global []domain.Chat, existing ...[]domain.Chat) []domain.Chat {
+func dedupGlobal(global []project.ChatRow, existing ...[]project.ChatRow) []project.ChatRow {
 	seen := make(map[int64]struct{})
 	for _, set := range existing {
 		for _, c := range set {
-			seen[c.Peer.ID] = struct{}{}
+			seen[c.ID] = struct{}{}
 		}
 	}
-	out := make([]domain.Chat, 0, len(global))
+	out := make([]project.ChatRow, 0, len(global))
 	for _, c := range global {
-		if _, dup := seen[c.Peer.ID]; dup {
+		if _, dup := seen[c.ID]; dup {
 			continue
 		}
-		seen[c.Peer.ID] = struct{}{}
+		seen[c.ID] = struct{}{}
 		out = append(out, c)
 	}
 	return out
@@ -309,10 +326,10 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 				return ForwardToChatRequest{ToChatID: to, Title: title, MsgID: msgID}
 			}
 		}
-		// A search hit may be a contact with no dialog, which the owner does not
-		// hold, so the peer travels along to address a first message.
-		chatID, title, peer := chat.ID, chat.Title, chat.Peer
-		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title, Peer: peer} }
+		// A search hit may be a contact with no dialog. It opens by id like any
+		// chat: the owner kept the address search returned (#278).
+		chatID, title := chat.ID, chat.Title
+		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title} }
 	case tea.KeyBackspace:
 		if len(m.query) > 0 {
 			runes := []rune(m.query)
@@ -383,7 +400,7 @@ func (m *SearchModel) updateComment(msg tea.Msg) (*SearchModel, tea.Cmd) {
 
 func (m *SearchModel) filter() {
 	q := strings.ToLower(m.query)
-	filtered := make([]domain.Chat, 0, len(m.all))
+	filtered := make([]project.ChatRow, 0, len(m.all))
 	for _, c := range m.all {
 		if q == "" || strings.Contains(strings.ToLower(c.Title), q) {
 			filtered = append(filtered, c)
@@ -460,8 +477,8 @@ func (m *SearchModel) View() string {
 			return headerStyle.Inline(true).Width(inner).MaxWidth(inner).Render(r.header)
 		}
 		row := r.chat.Title
-		if m.forwardMsgID != 0 && r.chat.UnreadCount > 0 {
-			row = fmt.Sprintf("%s (%d)", r.chat.Title, r.chat.UnreadCount)
+		if m.forwardMsgID != 0 && r.chat.Unread > 0 {
+			row = fmt.Sprintf("%s (%d)", r.chat.Title, r.chat.Unread)
 		}
 		style := theme.S().Body
 		if selected {
@@ -471,7 +488,7 @@ func (m *SearchModel) View() string {
 	}
 
 	lines = append(lines, m.list.Render(searchMaxResults, rowFn)...)
-	if len(rows) == 0 && !m.globalLoading {
+	if len(rows) == 0 && !m.globalLoading && m.chatsLoaded {
 		lines = append(lines, theme.S().SearchHeader.Width(inner).Render("no results"))
 	}
 

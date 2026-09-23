@@ -77,20 +77,15 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 		m.statusBar.SetStatus("No profile for this user")
 		return m, nil
 	}
-	// A dialog is what mute is about. The client's own store answers it, which
-	// is also what the user sees: a chat in the list has a mute item, and a
-	// person never messaged has none rather than a guessed one.
-	hasDialog, muted := false, false
-	if m.st != nil {
-		if chat, found := m.st.GetChat(userID); found && chat.Peer.IsUser() {
-			hasDialog, muted = true, chat.IsMuted
-		}
-	}
 	// Opening the profile closes the menu it was opened from: two overlays
 	// competing for the same keys is one too many.
 	m.contextMenu = nil
 	m.chatMenu = nil
-	p := components.NewProfile(user, hasDialog, muted, m.keyMap, m.width, m.height)
+	// A dialog is what mute is about, and the owner is asked whether there is
+	// one: a chat in the list has a mute item, and a person never messaged has
+	// none rather than a guessed one. The overlay opens without it and gains it
+	// when the answer lands (#278).
+	p := components.NewProfile(user, false, false, m.keyMap, m.width, m.height)
 	if p.TooSmall() {
 		m.statusBar.SetStatus("Terminal too small for the profile")
 		return m, nil
@@ -111,6 +106,7 @@ func (m RootModel) openProfile(userID int64) (RootModel, tea.Cmd) {
 	}
 
 	ctx, owner := m.ctx, m.owner
+	cmds = append(cmds, profileDialogCmd(ctx, owner, userID))
 	cmds = append(cmds, func() tea.Msg {
 		full, err := owner.GetUser(ctx, userID)
 		if err != nil {
@@ -227,34 +223,29 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		next, cmd := m.handleProfileLoaded(req)
 		return next, cmd, true
 
+	case profileDialogMsg:
+		next, cmd := m.handleProfileDialog(req)
+		return next, cmd, true
+
 	case avatarReadyMsg:
 		next, cmd := m.handleAvatarReady(req)
 		return next, cmd, true
 
 	case components.ProfileOpenChatRequest:
 		m, closeCmd := m.closeProfile()
-		// The peer is carried for the person with no dialog: the owner holds no
-		// chat for them, so nothing but a send can address it, and the chat
-		// opens empty and composable. This is the same path a search hit takes.
-		//
-		// TRANSITIONAL (#198): when commands become owner API members addressed
-		// by chat id, the peer goes.
+		// A person with no dialog opens the same way as one with: by id. The
+		// chat opens empty and composable, and the first message reaches them
+		// through the address the owner kept when the profile was fetched
+		// (#278). The title only covers the moment before the header lands.
 		userID := req.UserID
-		var peer domain.Peer
 		title := ""
-		if m.st != nil {
-			if chat, found := m.st.GetChat(userID); found {
-				title = chat.Title
-			}
-		}
-		if title == "" && m.owner != nil {
+		if m.owner != nil {
 			if user, ok := m.owner.KnownUser(userID); ok {
 				title = user.DisplayName()
-				peer = domain.Peer{ID: userID, Type: domain.PeerUser}
 			}
 		}
 		return m, tea.Batch(closeCmd, func() tea.Msg {
-			return screens.OpenChatMsg{ChatID: userID, Title: title, Peer: peer}
+			return screens.OpenChatMsg{ChatID: userID, Title: title}
 		}), true
 
 	case components.ProfileMuteRequest:

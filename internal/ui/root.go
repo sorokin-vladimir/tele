@@ -520,6 +520,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardToChat(msg)
 	case screens.SearchUsersRequest:
 		return m.handleSearchUsers(msg)
+	case searchChatsMsg:
+		return m.handleSearchChats(msg)
+	case chatMenuFoldersMsg:
+		return m.handleChatMenuFolders(msg)
 	case forwardDoneMsg:
 		return m.handleForwardDone(msg)
 	case StatusErrMsg:
@@ -552,6 +556,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		components.ProfileMuteRequest,
 		components.ProfileCopyUsernameRequest,
 		profileLoadedMsg,
+		profileDialogMsg,
 		avatarReadyMsg:
 		next, cmd, _ := m.handleProfileRequest(msg)
 		return next, cmd
@@ -583,7 +588,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// still falls short.
 		m.chat.SetLoading(true)
 		m.chat.SetLoadError("")
-		m.subscribeChat(msg.chatID, domain.Peer{})
+		m.subscribeChat(msg.chatID)
 		return m, nil
 	// network/data messages
 	case screens.OpenChatMsg,

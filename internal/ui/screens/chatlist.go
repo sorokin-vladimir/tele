@@ -8,7 +8,6 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
-	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
@@ -19,17 +18,12 @@ import (
 // rather than a domain.Chat: a client holds no peer, and the chat's header
 // arrives on the chat:<id> projection once the subscription lands. The title is
 // here only so the pane has something to draw during that gap.
+//
+// A contact found by search that has never been messaged opens the same way:
+// the owner kept the address search returned, so the id is enough (#278).
 type OpenChatMsg struct {
 	ChatID int64
 	Title  string
-	// Peer addresses outgoing commands for a chat the owner does not hold: a
-	// contact found by search that has never been messaged has no dialog and no
-	// history, so nothing but a send can address it. Zero when the owner knows
-	// the chat, which is every chat opened from the list.
-	//
-	// TRANSITIONAL (#198): when commands become owner API members addressed by
-	// chat id, this goes.
-	Peer domain.Peer
 }
 
 // ForwardToChatRequest is emitted by the forward-mode chat picker when the user

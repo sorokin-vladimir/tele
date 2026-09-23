@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -13,17 +14,49 @@ import (
 // is involved because the point is finding chats the owner may not hold.
 //
 // Every hit's address is kept, since a hit the user opens and writes to is
-// named by id from then on and search is the only place its address came from
-// (#278).
-func (o *Owner) SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error) {
+// named by id from then on and search is the only place its address came from.
+// The client gets rows, which carry no address (#278).
+func (o *Owner) SearchContacts(ctx context.Context, q string, limit int) ([]project.ChatRow, error) {
 	chats, err := o.client.SearchContacts(ctx, q, limit)
 	if err != nil {
 		return nil, err
 	}
+	rows := make([]project.ChatRow, 0, len(chats))
 	for _, c := range chats {
 		o.state.RememberAddress(c.Peer)
+		rows = append(rows, project.Row(c))
 	}
-	return chats, nil
+	return rows, nil
+}
+
+// Chats answers with every chat the owner holds, archived ones included, in
+// the order the chat list shows them. It is a query for a modal - search, the
+// forward picker - that looks at the whole list for a few seconds; a pane that
+// stays on screen subscribes to a window instead.
+func (o *Owner) Chats(_ context.Context) ([]project.ChatRow, error) {
+	chats := o.state.Store().Chats()
+	rows := make([]project.ChatRow, 0, len(chats))
+	for _, c := range chats {
+		rows = append(rows, project.Row(c))
+	}
+	return rows, nil
+}
+
+// Chat answers with one chat the owner holds, and whether it holds it. A person
+// the owner can only address - a search hit, a profile opened from a group - is
+// not a chat until a dialog exists.
+func (o *Owner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
+	c, ok := o.state.Store().GetChat(chatID)
+	if !ok {
+		return project.ChatRow{}, false, nil
+	}
+	return project.Row(c), true, nil
+}
+
+// FolderFilters answers with the folders the owner already holds. It does not
+// go to Telegram: LoadFolderFilters is the refresh, and it runs once at start.
+func (o *Owner) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
+	return o.state.Store().FolderFilters(), nil
 }
 
 // GetParticipants returns mention candidates for a group or channel.

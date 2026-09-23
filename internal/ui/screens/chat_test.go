@@ -19,8 +19,8 @@ import (
 )
 
 // openChat applies a domain chat to the pane the way the root model does from a
-// chat:<id> projection Reset: the rendered header, plus the peer the outgoing
-// commands still address (#198). Test fixtures go on describing whole chats.
+// chat:<id> projection Reset: the rendered header. Test fixtures go on
+// describing whole chats.
 func openChat(m *screens.ChatModel, c *domain.Chat) {
 	if c == nil {
 		m.Close()
@@ -34,7 +34,6 @@ func openChat(m *screens.ChatModel, c *domain.Chat) {
 		Online:          c.Online,
 		ReadOutboxMaxID: c.ReadOutboxMaxID,
 	})
-	m.SetPeer(c.Peer)
 }
 
 func TestChatComposerPlaceholder(t *testing.T) {
@@ -582,7 +581,6 @@ func TestChatModel_Typing_EmitsSetTypingRequest_OnKeystroke(t *testing.T) {
 	for _, msg := range msgs {
 		if req, ok := msg.(screens.SetTypingRequest); ok {
 			assert.Equal(t, domain.TypingActionTyping, req.Action)
-			assert.Equal(t, int64(10), req.Peer.ID)
 			found = true
 		}
 	}

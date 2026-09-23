@@ -15,6 +15,7 @@ type ChatRow struct {
 	Reactions  int
 	UnreadMark bool
 	Muted      bool
+	Archived   bool
 }
 
 // FolderCounts is the folder pane's derived state: how many chats carry unread
@@ -61,12 +62,15 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 	}
 	out.Rows = make([]ChatRow, 0, end-start)
 	for _, c := range filtered[start:end] {
-		out.Rows = append(out.Rows, rowOf(c))
+		out.Rows = append(out.Rows, Row(c))
 	}
 	return out
 }
 
-func rowOf(c domain.Chat) ChatRow {
+// Row is how a chat reaches a client: everything a row or a menu over it shows,
+// and no address. Queries answer with it too, so a client handles one shape of
+// chat whether it came from a subscription or a one-off answer (#278).
+func Row(c domain.Chat) ChatRow {
 	return ChatRow{
 		ID:         c.ID,
 		Title:      c.Title,
@@ -77,6 +81,7 @@ func rowOf(c domain.Chat) ChatRow {
 		Reactions:  c.UnreadReactionsCount,
 		UnreadMark: c.UnreadMark,
 		Muted:      c.IsMuted,
+		Archived:   c.IsArchived,
 	}
 }
 

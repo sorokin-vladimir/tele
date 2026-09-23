@@ -51,8 +51,16 @@ type Owner interface {
 	RetryOutbox(ref string) error
 	DiscardOutbox(ref string) error
 
-	// Queries. One-off answers nobody subscribes to.
-	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
+	// Queries. One-off answers nobody subscribes to. They take a context and
+	// may fail because in v2 each is a round trip to another process, and the
+	// client asks them from a command rather than from Update (#278).
+	SearchContacts(ctx context.Context, q string, limit int) ([]project.ChatRow, error)
+	// Chats is every chat the owner holds, archived ones included, in list
+	// order: what search and the forward picker look through.
+	Chats(ctx context.Context) ([]project.ChatRow, error)
+	// Chat is one chat the owner holds; false for a person it can only address.
+	Chat(ctx context.Context, chatID int64) (project.ChatRow, bool, error)
+	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without a round
 	// trip, so a profile draws the moment it opens. GetUser completes it.

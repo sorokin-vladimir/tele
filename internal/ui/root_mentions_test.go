@@ -27,7 +27,28 @@ func newRootOnGroupChat(t *testing.T, participants []domain.ChatMember) (ui.Root
 	m = nm.(ui.RootModel)
 	nm, cmd := m.Update(screens.OpenChatMsg{ChatID: chat.ID, Title: chat.Title})
 	m = nm.(ui.RootModel)
-	return deliver(t, m, cmd), st
+	// The subscription's opening Reset carries the header, which is what says
+	// the chat is a group and so has members to mention (#278).
+	return drainOwner(t, deliver(t, m, cmd)), st
+}
+
+// Until the header lands nothing says the chat is a group, and a person has
+// no members: the popup stays shut rather than asking a user for them.
+func TestMentionPopupStaysShutBeforeTheHeaderLands(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}})
+	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(ui.RootModel)
+	nm, _ = m.Update(screens.OpenChatMsg{ChatID: 5, Title: "Group"})
+	m = nm.(ui.RootModel)
+
+	m = typeKey(t, m, 'i')
+	m = typeKey(t, m, '@')
+
+	if m.MentionPopupOpen() {
+		t.Fatal("mention popup must stay shut until the header says the chat is a group")
+	}
 }
 
 // deliver drains a (possibly batched) cmd into the model, recursing so follow-up
@@ -90,10 +111,9 @@ func TestMentionPopupOpensAndInserts(t *testing.T) {
 func TestOutgoingMentionSubmissionCarriesEntities(t *testing.T) {
 	m, _ := newRootOnGroupChat(t, nil)
 	owner := m.Owner().(*testOwner)
-	peer := domain.Peer{ID: 5, Type: domain.PeerSuperGroup}
 	ents := []domain.MessageEntity{{Type: "mention_name", Offset: 0, Length: 5, UserID: 7, AccessHash: 8}}
 
-	_, cmd := m.Update(screens.SendMsgRequest{Peer: peer, Text: "@Ivan hi", Entities: ents})
+	_, cmd := m.Update(screens.SendMsgRequest{Text: "@Ivan hi", Entities: ents})
 	if cmd == nil {
 		t.Fatal("send produced no command")
 	}

@@ -144,6 +144,14 @@ func (p *Profile) SetUser(u domain.User) {
 	p.rebuild()
 }
 
+// SetDialog records the client's dialog with the person once the owner has
+// answered. The overlay opens before that answer, without a mute item, and
+// gains one only if there turns out to be a dialog to mute (#278).
+func (p *Profile) SetDialog(hasDialog, muted bool) {
+	p.hasDialog, p.muted = hasDialog, muted
+	p.rebuild()
+}
+
 // SetSize records the terminal size, so a resize while the overlay is open
 // re-wraps the bio instead of stamping a stale width.
 func (p *Profile) SetSize(w, h int) { p.width, p.height = w, h }

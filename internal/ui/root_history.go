@@ -44,7 +44,7 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.requestKittyReset()
 
 		reactionsCmd, mentionsCmd := m.clearChatBadgesOnOpen(msg.ChatID)
-		m.subscribeChat(msg.ChatID, msg.Peer)
+		m.subscribeChat(msg.ChatID)
 		return m, tea.Batch(draftFlush, reactionsCmd, mentionsCmd)
 
 	case screens.LoadMoreMsg:

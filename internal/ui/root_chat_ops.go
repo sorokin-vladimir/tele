@@ -17,7 +17,7 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 		if m.owner == nil {
 			return m, nil, true
 		}
-		ctx, owner, chatID, muted := m.ctx, m.owner, req.Peer.ID, req.Muted
+		ctx, owner, chatID, muted := m.ctx, m.owner, req.ChatID, req.Muted
 		return m, func() tea.Msg {
 			if err := owner.SetMuted(ctx, chatID, muted); err != nil {
 				return errStatus("mute", err)
@@ -30,7 +30,7 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 		if m.owner == nil {
 			return m, nil, true
 		}
-		ctx, owner, chatID := m.ctx, m.owner, req.Peer.ID
+		ctx, owner, chatID := m.ctx, m.owner, req.ChatID
 		if req.Unread {
 			return m, func() tea.Msg {
 				if err := owner.SetUnreadMark(ctx, chatID, true); err != nil {
@@ -54,7 +54,7 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 			return m, nil, true
 		}
 		ctx, owner := m.ctx, m.owner
-		filterID, chatID, add := req.FilterID, req.Peer.ID, req.Add
+		filterID, chatID, add := req.FilterID, req.ChatID, req.Add
 		return m, func() tea.Msg {
 			if err := owner.AddToFolder(ctx, filterID, chatID, add); err != nil {
 				return errStatus("folder", err)
@@ -67,7 +67,7 @@ func (m RootModel) handleChatMenuRequest(msg tea.Msg) (RootModel, tea.Cmd, bool)
 		if m.owner == nil {
 			return m, nil, true
 		}
-		ctx, owner, chatID, archived := m.ctx, m.owner, req.Peer.ID, req.Archived
+		ctx, owner, chatID, archived := m.ctx, m.owner, req.ChatID, req.Archived
 		return m, func() tea.Msg {
 			if err := owner.SetArchived(ctx, chatID, archived); err != nil {
 				return errStatus("archive", err)

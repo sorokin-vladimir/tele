@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
@@ -259,15 +260,15 @@ func TestMessageMenu_Profile_EmitsOpenProfileRequest(t *testing.T) {
 }
 
 func TestChatMenu_ProfileItem_OnlyForAPrivateChat(t *testing.T) {
-	user := domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
+	user := project.ChatRow{ID: 1, Title: "Alice", IsUser: true}
 	assert.Contains(t, strip(components.NewChatContextMenu(user, nil, defaultKM()).View()), "Profile")
 
-	group := domain.Chat{ID: 5, Title: "Group", Peer: domain.Peer{ID: 5, Type: domain.PeerSuperGroup}}
+	group := project.ChatRow{ID: 5, Title: "Group"}
 	assert.NotContains(t, strip(components.NewChatContextMenu(group, nil, defaultKM()).View()), "Profile")
 }
 
 func TestChatMenu_Profile_EmitsOpenProfileRequest(t *testing.T) {
-	user := domain.Chat{ID: 1, Title: "Alice", Peer: domain.Peer{ID: 1, Type: domain.PeerUser}}
+	user := project.ChatRow{ID: 1, Title: "Alice", IsUser: true}
 	cm := components.NewChatContextMenu(user, nil, defaultKM())
 	next, cmd := cm.Update(keyMsg('P'))
 	assert.Nil(t, next)

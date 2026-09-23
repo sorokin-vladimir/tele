@@ -158,12 +158,11 @@ func TestProfileOpenChat_WithADialog_OpensIt(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(1), req.ChatID)
 	assert.Equal(t, "Alice", req.Title)
-	assert.Zero(t, req.Peer.ID, "the owner holds this chat, so it needs no peer")
 }
 
-func TestProfileOpenChat_WithNoDialog_CarriesThePeer(t *testing.T) {
-	// A person never messaged has no dialog and no history: nothing but a send
-	// can address them, so the chat opens on a peer and lands composable.
+func TestProfileOpenChat_WithNoDialog_OpensByID(t *testing.T) {
+	// A person never messaged has no dialog and no history. The chat still opens
+	// by id alone: the owner kept their address when the profile was fetched.
 	m, _ := groupWithMessageFrom(t, 9)
 	ownerOf(t, m).knownUsers = map[int64]domain.User{9: bob()}
 
@@ -173,8 +172,6 @@ func TestProfileOpenChat_WithNoDialog_CarriesThePeer(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, int64(9), req.ChatID)
 	assert.Equal(t, "Bob", req.Title)
-	assert.Equal(t, int64(9), req.Peer.ID)
-	assert.True(t, req.Peer.IsUser())
 }
 
 func TestProfileMute_GoesThroughTheSameOwnerCommandAsTheChatMenu(t *testing.T) {

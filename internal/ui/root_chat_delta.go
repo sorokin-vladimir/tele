@@ -14,21 +14,7 @@ import (
 // subscribeChat opens the chat:<id> subscription for a newly opened chat,
 // anchored on the first unread so the pane lands on the separator. The previous
 // subscription is dropped: a window nobody looks at must stop costing.
-//
-// fallbackPeer addresses a chat the owner does not hold — a contact found by
-// search — and is zero for every chat opened from the list.
-func (m *RootModel) subscribeChat(chatID int64, fallbackPeer domain.Peer) {
-	// TRANSITIONAL (#198): the composer's outgoing requests still address a
-	// peer, which no projection carries. Resolved from the store, or from the
-	// message when the store has never heard of this chat.
-	peer := fallbackPeer
-	if m.st != nil {
-		if c, ok := m.st.GetChat(chatID); ok {
-			peer = c.Peer
-		}
-	}
-	m.chat.SetPeer(peer)
-
+func (m *RootModel) subscribeChat(chatID int64) {
 	if m.owner == nil {
 		return
 	}

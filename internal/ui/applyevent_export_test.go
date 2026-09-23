@@ -67,7 +67,7 @@ type testOwner struct {
 	lastSendCtx context.Context
 	// searchResult and participants are what the queries answer with;
 	// lastSearchQuery records what was asked.
-	searchResult    []domain.Chat
+	searchResult    []project.ChatRow
 	participants    []domain.ChatMember
 	lastSearchQuery string
 	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
@@ -176,9 +176,31 @@ func (o *testOwner) SetUnreadMark(_ context.Context, chatID int64, unread bool) 
 	return nil
 }
 
-func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]domain.Chat, error) {
+func (o *testOwner) SearchContacts(_ context.Context, q string, _ int) ([]project.ChatRow, error) {
 	o.lastSearchQuery = q
 	return o.searchResult, o.cmdErr
+}
+
+// Chats, Chat and FolderFilters answer from the test's store, as the real
+// owner answers from its own.
+func (o *testOwner) Chats(_ context.Context) ([]project.ChatRow, error) {
+	var rows []project.ChatRow
+	for _, c := range o.state.Store().Chats() {
+		rows = append(rows, project.Row(c))
+	}
+	return rows, o.cmdErr
+}
+
+func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
+	c, ok := o.state.Store().GetChat(chatID)
+	if !ok {
+		return project.ChatRow{}, false, o.cmdErr
+	}
+	return project.Row(c), true, o.cmdErr
+}
+
+func (o *testOwner) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
+	return o.state.Store().FolderFilters(), o.cmdErr
 }
 
 func (o *testOwner) GetParticipants(_ context.Context, _ int64) ([]domain.ChatMember, error) {

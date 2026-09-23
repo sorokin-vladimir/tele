@@ -157,8 +157,30 @@ func (o *ownerStub) SetUnreadMark(_ context.Context, chatID int64, unread bool) 
 	return nil
 }
 
-func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]domain.Chat, error) {
+func (o *ownerStub) SearchContacts(_ context.Context, _ string, _ int) ([]project.ChatRow, error) {
 	return nil, o.err
+}
+
+// Chats, Chat and FolderFilters answer from the stub's store, as the real
+// owner answers from its own.
+func (o *ownerStub) Chats(_ context.Context) ([]project.ChatRow, error) {
+	var rows []project.ChatRow
+	for _, c := range o.state.Store().Chats() {
+		rows = append(rows, project.Row(c))
+	}
+	return rows, o.err
+}
+
+func (o *ownerStub) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
+	c, ok := o.state.Store().GetChat(chatID)
+	if !ok {
+		return project.ChatRow{}, false, o.err
+	}
+	return project.Row(c), true, o.err
+}
+
+func (o *ownerStub) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
+	return o.state.Store().FolderFilters(), o.err
 }
 
 func (o *ownerStub) GetParticipants(_ context.Context, chatID int64) ([]domain.ChatMember, error) {

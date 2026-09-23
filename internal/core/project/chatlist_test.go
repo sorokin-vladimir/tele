@@ -145,6 +145,14 @@ func TestBuildChatList_RowCarriesWhatTheRowRenders(t *testing.T) {
 	}, got.Rows[0], "the row carries no Peer: a client holds no access hash")
 }
 
+// The chat context menu is built from the row under the cursor, and it offers
+// Archive or Unarchive by this flag (#278).
+func TestRow_CarriesWhetherTheChatIsArchived(t *testing.T) {
+	got := project.Row(domain.Chat{ID: 1, Title: "Ada", IsArchived: true})
+
+	assert.True(t, got.Archived)
+}
+
 func TestBuildChatList_FolderCountsCountChatsWithUnreadAcrossTheWholeList(t *testing.T) {
 	all := chats(4)
 	all[0].UnreadCount = 1

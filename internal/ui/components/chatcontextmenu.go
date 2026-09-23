@@ -6,28 +6,29 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
-// Chat context-menu request messages. The root model turns each into an
-// optimistic store mutation plus an async Telegram RPC.
+// Chat context-menu request messages. The root model turns each into an owner
+// command, addressed by chat id like every other (#278).
 type ToggleUnreadRequest struct {
-	Peer   domain.Peer
+	ChatID int64
 	Unread bool
 }
 type ToggleMuteRequest struct {
-	Peer  domain.Peer
-	Muted bool
+	ChatID int64
+	Muted  bool
 }
 type AddToFolderRequest struct {
-	Peer     domain.Peer
+	ChatID   int64
 	FilterID int
 	Add      bool
 }
 type ToggleArchiveRequest struct {
-	Peer     domain.Peer
+	ChatID   int64
 	Archived bool
 }
 
@@ -42,7 +43,7 @@ const (
 // row. It reuses the menu styles and box rendering from the message
 // context menu but carries chat-specific actions.
 type ChatContextMenu struct {
-	chat      domain.Chat
+	chat      project.ChatRow
 	folders   []domain.FolderFilter
 	items     []menuItem
 	savedMain []menuItem
@@ -51,10 +52,35 @@ type ChatContextMenu struct {
 	keyMap    keys.KeyMap
 }
 
-func NewChatContextMenu(chat domain.Chat, folders []domain.FolderFilter, km keys.KeyMap) *ChatContextMenu {
+// NewChatContextMenu builds the menu over the row under the cursor. The row
+// carries everything the main items need, so the menu opens at once; folders
+// come from an owner query and arrive through SetFolders (#278).
+func NewChatContextMenu(chat project.ChatRow, folders []domain.FolderFilter, km keys.KeyMap) *ChatContextMenu {
 	cm := &ChatContextMenu{chat: chat, folders: folders, keyMap: km, list: NewListView(true)}
 	cm.setItems(cm.mainItems())
 	return cm
+}
+
+// ChatID is the chat the menu was opened over, so an answer that arrives after
+// the menu moved on can be told from one meant for it.
+func (cm *ChatContextMenu) ChatID() int64 { return cm.chat.ID }
+
+// SetFolders installs the account's folders once the owner has answered. The
+// main items gain "Add to folder" when there are any; the cursor stays on the
+// item it was on rather than on whatever slid under it.
+func (cm *ChatContextMenu) SetFolders(folders []domain.FolderFilter) {
+	cm.folders = folders
+	if cm.state != chatStateMain {
+		return
+	}
+	current := cm.items[cm.list.Cursor()].action
+	cm.setItems(cm.mainItems())
+	for i, it := range cm.items {
+		if it.action == current {
+			cm.list.SetCursor(i)
+			break
+		}
+	}
 }
 
 // setItems swaps the menu items and re-seeds the list: separator rows are
@@ -71,12 +97,12 @@ func (cm *ChatContextMenu) Cursor() int { return cm.list.Cursor() }
 
 func (cm *ChatContextMenu) mainItems() []menuItem {
 	var items []menuItem
-	if cm.chat.UnreadCount > 0 || cm.chat.UnreadMark {
+	if cm.chat.Unread > 0 || cm.chat.UnreadMark {
 		items = append(items, menuItem{label: "Mark as read", action: keys.ActionMarkRead})
 	} else {
 		items = append(items, menuItem{label: "Mark as unread", action: keys.ActionMarkUnread})
 	}
-	if cm.chat.IsMuted {
+	if cm.chat.Muted {
 		items = append(items, menuItem{label: "Unmute", action: keys.ActionUnmute})
 	} else {
 		items = append(items, menuItem{label: "Mute", action: keys.ActionMute})
@@ -84,14 +110,14 @@ func (cm *ChatContextMenu) mainItems() []menuItem {
 	if len(cm.folders) > 0 {
 		items = append(items, menuItem{label: "Add to folder", action: keys.ActionAddToFolder})
 	}
-	if cm.chat.IsArchived {
+	if cm.chat.Archived {
 		items = append(items, menuItem{label: "Unarchive", action: keys.ActionUnarchive})
 	} else {
 		items = append(items, menuItem{label: "Archive", action: keys.ActionArchive})
 	}
 	// A profile is a fact about a person, so the entry is there for a private
 	// chat and absent for a group or a channel (#222).
-	if cm.chat.Peer.IsUser() {
+	if cm.chat.IsUser {
 		items = append(items, menuItem{label: "Profile", action: keys.ActionShowProfile})
 	}
 	return items
@@ -166,7 +192,7 @@ func (cm *ChatContextMenu) Update(msg tea.Msg) (*ChatContextMenu, tea.Cmd) {
 
 func (cm *ChatContextMenu) execute() (*ChatContextMenu, tea.Cmd) {
 	item := cm.items[cm.list.Cursor()]
-	peer := cm.chat.Peer
+	chatID := cm.chat.ID
 
 	if item.isFolder {
 		add := true
@@ -178,31 +204,30 @@ func (cm *ChatContextMenu) execute() (*ChatContextMenu, tea.Cmd) {
 		}
 		filterID := item.filterID
 		return nil, func() tea.Msg {
-			return AddToFolderRequest{Peer: peer, FilterID: filterID, Add: add}
+			return AddToFolderRequest{ChatID: chatID, FilterID: filterID, Add: add}
 		}
 	}
 
 	switch item.action {
 	case keys.ActionMarkRead:
-		return nil, func() tea.Msg { return ToggleUnreadRequest{Peer: peer, Unread: false} }
+		return nil, func() tea.Msg { return ToggleUnreadRequest{ChatID: chatID, Unread: false} }
 	case keys.ActionMarkUnread:
-		return nil, func() tea.Msg { return ToggleUnreadRequest{Peer: peer, Unread: true} }
+		return nil, func() tea.Msg { return ToggleUnreadRequest{ChatID: chatID, Unread: true} }
 	case keys.ActionMute:
-		return nil, func() tea.Msg { return ToggleMuteRequest{Peer: peer, Muted: true} }
+		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, Muted: true} }
 	case keys.ActionUnmute:
-		return nil, func() tea.Msg { return ToggleMuteRequest{Peer: peer, Muted: false} }
+		return nil, func() tea.Msg { return ToggleMuteRequest{ChatID: chatID, Muted: false} }
 	case keys.ActionAddToFolder:
 		cm.savedMain = cm.items
 		cm.setItems(cm.folderSubItems())
 		cm.state = chatStateFolderSub
 		return cm, nil
 	case keys.ActionArchive:
-		return nil, func() tea.Msg { return ToggleArchiveRequest{Peer: peer, Archived: true} }
+		return nil, func() tea.Msg { return ToggleArchiveRequest{ChatID: chatID, Archived: true} }
 	case keys.ActionUnarchive:
-		return nil, func() tea.Msg { return ToggleArchiveRequest{Peer: peer, Archived: false} }
+		return nil, func() tea.Msg { return ToggleArchiveRequest{ChatID: chatID, Archived: false} }
 	case keys.ActionShowProfile:
-		userID := cm.chat.ID
-		return nil, func() tea.Msg { return OpenProfileRequest{UserID: userID} }
+		return nil, func() tea.Msg { return OpenProfileRequest{UserID: chatID} }
 	case keys.ActionCancel:
 		return nil, func() tea.Msg { return CloseContextMenuMsg{} }
 	}

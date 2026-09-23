@@ -174,10 +174,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if keyStr == "/" {
-		if m.st != nil {
-			m.searchModel = screens.NewSearchModel(m.st.Chats(), m.width, m.height, m.keyMap)
-		}
-		return m, nil
+		return m.openSearch()
 	}
 
 	if m.focus == FocusFolders {
@@ -202,15 +199,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.openProfile(m.profileTargetUserID())
 		}
 		if action == keys.ActionOpenContextMenu {
-			// The menu's actions address a peer, so it still needs the domain
-			// chat. TRANSITIONAL (#198): commands move to the owner API and the
-			// menu will address a chat id like everything else.
-			if row, ok := m.chatList.CursorChat(); ok && m.st != nil {
-				if chat, found := m.st.GetChat(row.ID); found {
-					m.chatMenu = components.NewChatContextMenu(chat, m.st.FolderFilters(), m.keyMap)
-				}
-			}
-			return m, nil
+			return m.openChatMenu()
 		}
 		if action != keys.ActionNone {
 			newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})

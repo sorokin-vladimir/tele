@@ -36,6 +36,11 @@ telegram:
 ui:
   history_limit: 50
 
+  # Ask before quitting. With this on, q, ctrl+c and ctrl+q open a small
+  # confirmation instead of closing tele at once; y or enter quits, n or esc
+  # cancels, and ctrl+c or ctrl+q pressed again quits without asking.
+  confirm_quit: false
+
   # Themes. Leaving this out gives the built-in tele-dark and tele-light,
   # switched by the terminal background. Name one theme to use it whatever the
   # background is, or fill the slots one at a time. Eight ported palettes ship

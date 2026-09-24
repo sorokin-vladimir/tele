@@ -36,6 +36,7 @@ type UIConfig struct {
 	ThemeSlots    ThemeSlots          `mapstructure:"-"`
 	DateFormat    string              `mapstructure:"date_format"`
 	HistoryLimit  int                 `mapstructure:"history_limit"`
+	ConfirmQuit   bool                `mapstructure:"confirm_quit"`
 	Notifications NotificationsConfig `mapstructure:"notifications"`
 	Toasts        ToastsConfig        `mapstructure:"toasts"`
 }

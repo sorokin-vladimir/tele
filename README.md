@@ -418,6 +418,7 @@ Commonly changed settings:
 ```yaml
 ui:
   history_limit: 50 # messages fetched per chat on open
+  confirm_quit: false # ask before q/ctrl+c/ctrl+q closes tele
   # theme: # omit for the built-in tele-dark / tele-light
   #   dark: my-dark # ~/.config/tele/themes/my-dark.yml
   #   light: my-light

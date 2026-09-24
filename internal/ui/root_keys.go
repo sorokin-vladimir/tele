@@ -11,6 +11,27 @@ import (
 
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.statusBar.SetStatus("")
+	// The quit confirmation owns all keys while it is open. A quit binding other
+	// than the bare q (ctrl+c and ctrl+q by default) forces the quit without
+	// asking again, so there is always an escape hatch; the bare q cancels, so a
+	// second q never quits by accident.
+	if m.confirmQuit != nil {
+		keyStr := keys.NormalizeKey(msg.String())
+		if keyStr != "q" && m.keyMap.Resolve(keys.ContextGlobal, keyStr) == keys.ActionQuit {
+			return m, tea.Quit
+		}
+		newModal, res := m.confirmQuit.Update(msg)
+		switch res {
+		case components.ConfirmYes:
+			m.confirmQuit = nil
+			return m, tea.Quit
+		case components.ConfirmNo:
+			m.confirmQuit = nil
+			return m, nil
+		}
+		m.confirmQuit = newModal
+		return m, nil
+	}
 	// While the help modal is open it owns all keys.
 	if m.help != nil {
 		newHelp, open := m.help.Update(msg)
@@ -159,6 +180,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keys.ActionQuit:
+			if m.cfg != nil && m.cfg.UI.ConfirmQuit {
+				m.confirmQuit = components.NewConfirmModal("Quit", "Quit tele?", m.width, m.height)
+				return m, nil
+			}
 			return m, tea.Quit
 		case keys.ActionDismissToast:
 			m.toasts.DismissTop()

@@ -74,6 +74,9 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 				avatarCmd = m.transmitAvatarCmd(m.profile.Avatar())
 			}
 		}
+		if m.confirmQuit != nil {
+			m.confirmQuit.SetSize(msg.Width, msg.Height)
+		}
 		return m, tea.Batch(avatarCmd, m.retransmitOnColsChange())
 
 	case retransmitTickMsg:

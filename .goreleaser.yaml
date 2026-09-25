@@ -53,7 +53,7 @@ nfpms:
     homepage: https://github.com/sorokin-vladimir/tele
     maintainer: "Vladimir Sorokin <v.sorokin@hey.com>"
     description: TUI Telegram client for the terminal.
-    license: MIT
+    license: GPL-3.0-only
     formats: [deb, rpm, apk]
     file_name_template: "{{ .ConventionalFileName }}"
     contents:
@@ -89,7 +89,7 @@ sboms:
 #     homepage: https://github.com/sorokin-vladimir/tele
 #     description: TUI Telegram client for the terminal.
 #     maintainers: ["Vladimir Sorokin <v.sorokin@hey.com>"]
-#     license: MIT
+#     license: GPL-3.0-only
 #     private_key: "{{ .Env.AUR_KEY }}"
 #     git_url:
 #     # Publish only on stable tags AND once AUR_KEY is configured.
@@ -111,7 +111,7 @@ scoops:
       token: "{{ .Env.SCOOP_WINGET_TOKEN }}"
     homepage: https://github.com/sorokin-vladimir/tele
     description: TUI Telegram client for the terminal.
-    license: MIT
+    license: GPL-3.0-only
     # Publish only on stable tags AND once SCOOP_WINGET_TOKEN is configured.
     skip_upload: '{{ if .Prerelease }}true{{ else if eq (index .Env "SCOOP_WINGET_TOKEN") "" }}true{{ else }}false{{ end }}'
 
@@ -121,7 +121,7 @@ winget:
     publisher: sorokin-vladimir
     name: tele
     package_identifier: sorokin-vladimir.tele
-    license: MIT
+    license: GPL-3.0-only
     homepage: https://github.com/sorokin-vladimir/tele
     short_description: TUI Telegram client for the terminal.
     repository:
@@ -149,7 +149,7 @@ snapcrafts:
       and send messages, and view media without leaving the terminal.
     grade: stable
     confinement: strict
-    license: MIT
+    license: GPL-3.0-only
     base: core22
     # Build+publish only on stable tags AND once SNAPCRAFT_STORE_CREDENTIALS is set.
     disable: '{{ if .Prerelease }}true{{ else if eq (index .Env "SNAPCRAFT_STORE_CREDENTIALS") "" }}true{{ else }}false{{ end }}'

@@ -16,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -602,3 +603,55 @@ func TestCanvas_LoadingPanesHaveNoHoles(t *testing.T) {
 		})
 	}
 }
+
+// Staged attachments in the composer (single file, album, summary, truncated name,
+// and staged with a reply preview) must have no holes in their chip lines or
+// separators (#295).
+func TestCanvas_ComposerAttachmentsHaveNoHoles(t *testing.T) {
+	paintedSlots(t)
+
+	for _, tc := range []struct {
+		name  string
+		setup func(*components.Composer)
+	}{
+		{"single-file", func(c *components.Composer) {
+			c.SetAttachment("photo.jpg", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
+		}},
+		{"numbered-album", func(c *components.Composer) {
+			c.SetAttachments([]components.AttachmentChip{
+				{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+				{Name: "b.jpg", Size: 20, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
+			}, true)
+		}},
+		{"files-summary", func(c *components.Composer) {
+			var items []components.AttachmentChip
+			for _, n := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg"} {
+				items = append(items, components.AttachmentChip{Name: n, Size: 1024, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto})
+			}
+			c.SetAttachments(items, true)
+		}},
+		{"truncated-name", func(c *components.Composer) {
+			c.SetAttachment("very_long_file_name_overflowing_the_box.png", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
+		}},
+		{"with-reply-preview", func(c *components.Composer) {
+			c.SetAttachment("photo.jpg", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
+			c.SetReplyPreview(theme.S().NameIncoming.Render("▌ Reply") + "\n" + theme.S().Quote.Render("▌ snippet"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, size := range scanSizes {
+				t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+					c := components.NewComposer(size.w)
+					tc.setup(c)
+					view := c.View()
+					h := c.VisualHeight()
+					found := holes(view, size.w, h)
+					require.Empty(t, found, report(found, "background"))
+					bare := unowned(view, size.w, h)
+					require.Empty(t, bare, report(bare, "foreground"))
+				})
+			}
+		})
+	}
+}
+

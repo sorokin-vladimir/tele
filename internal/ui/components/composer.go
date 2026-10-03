@@ -454,7 +454,8 @@ func allChipsOfKind(items []AttachmentChip, kind domain.MediaKind) bool {
 
 // chipLine assembles one clamped chip line: the filename is ellipsized first to
 // keep the "Send as" toggle readable, and the whole line is truncated only as a
-// last resort on very narrow widths.
+// last resort on very narrow widths. Every variant is rendered with Body so that
+// the line and its spacing carry the canvas when a theme paints one (#295).
 func (c *Composer) chipLine(name, sizePart, suffix string) string {
 	const prefix = "📎 "
 	inner := c.width - 2
@@ -464,11 +465,11 @@ func (c *Composer) chipLine(name, sizePart, suffix string) string {
 		if nameBudget < 1 {
 			// Even an empty filename overflows (extremely narrow pane or a very
 			// long toggle): truncate the assembled line as a whole.
-			return runewidth.Truncate(prefix+name+sizePart+suffix, max(inner, 0), "…")
+			return theme.S().Body.Render(runewidth.Truncate(prefix+name+sizePart+suffix, max(inner, 0), "…"))
 		}
 		name = runewidth.Truncate(name, nameBudget, "…")
 	}
-	return prefix + name + sizePart + suffix
+	return theme.S().Body.Render(prefix + name + sizePart + suffix)
 }
 
 func humanSize(n int64) string {
@@ -485,10 +486,15 @@ func humanSize(n int64) string {
 }
 
 // buildContent assembles the composer's inner content: optional attachment chip,
-// optional reply/edit preview (plus a blank spacer line), then the textarea.
+// an optional blank separator before the reply/edit preview when chips are
+// staged, optional reply/edit preview (plus a blank spacer line), then the textarea.
 func (c *Composer) buildContent() string {
 	var parts []string
-	parts = append(parts, c.attachmentLines()...)
+	chips := c.attachmentLines()
+	parts = append(parts, chips...)
+	if len(chips) > 0 && c.replyPreview != "" {
+		parts = append(parts, "")
+	}
 	if c.replyPreview != "" {
 		parts = append(parts, c.replyPreview, "")
 	}

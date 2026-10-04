@@ -654,4 +654,3 @@ func TestCanvas_ComposerAttachmentsHaveNoHoles(t *testing.T) {
 		})
 	}
 }
-

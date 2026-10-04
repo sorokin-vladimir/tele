@@ -8,8 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -1055,10 +1053,6 @@ func TestAttachments_SeparatorBeforeReplyPreview(t *testing.T) {
 	// The line between chip and preview must be blank inside the box borders.
 	sep := strings.TrimSpace(strings.Trim(lines[chipIdx+1], "│ "))
 	assert.Empty(t, sep, "line between attachment chip and preview must be blank")
-
-	// Without preview, chip is immediately followed by textarea (no extra separator).
-	c.ClearReplyPreview()
-	assert.Equal(t, 4, c.VisualHeight(), "chip without preview VisualHeight should be 4 (1 chip + 1 textarea + 2 borders)")
 }
 
 func TestAttachments_VisualHeightWithAndWithoutSeparator(t *testing.T) {
@@ -1085,119 +1079,4 @@ func TestAttachments_VisualHeightWithAndWithoutSeparator(t *testing.T) {
 	c.SetAttachment("pic.jpg", 1024, domain.MediaPhoto, domain.MediaPhoto, true)
 	c.ClearReplyPreview()
 	assert.Equal(t, base+1, c.VisualHeight(), "attachment only restored without preview")
-}
-
-func TestAttachments_ChipLinePaintsCanvas(t *testing.T) {
-	t.Cleanup(func() {
-		theme.SetSlots(theme.Slots{Dark: theme.TeleDark, Light: theme.TeleLight})
-		theme.Apply(true)
-	})
-
-	bg, err := theme.ParseColor("#282c34")
-	require.NoError(t, err)
-	fg, err := theme.ParseColor("#abb2bf")
-	require.NoError(t, err)
-
-	painted := theme.TeleDark
-	painted.Name = "canvas-test"
-	painted.Background, painted.Text = bg, fg
-	theme.SetSlots(theme.Slots{Dark: painted, Light: painted})
-	theme.Apply(true)
-
-	cases := []struct {
-		name  string
-		width int
-		setup func(*components.Composer)
-	}{
-		{
-			name:  "single-file",
-			width: 60,
-			setup: func(c *components.Composer) {
-				c.SetAttachment("pic.jpg", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, false)
-			},
-		},
-		{
-			name:  "single-file-with-send-as",
-			width: 60,
-			setup: func(c *components.Composer) {
-				c.SetAttachment("pic.jpg", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
-			},
-		},
-		{
-			name:  "numbered-album",
-			width: 60,
-			setup: func(c *components.Composer) {
-				c.SetAttachments([]components.AttachmentChip{
-					{Name: "a.jpg", Size: 10, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
-					{Name: "b.jpg", Size: 20, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto},
-				}, true)
-			},
-		},
-		{
-			name:  "files-summary",
-			width: 60,
-			setup: func(c *components.Composer) {
-				items := []components.AttachmentChip{}
-				for _, n := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg"} {
-					items = append(items, components.AttachmentChip{Name: n, Size: 1024, Kind: domain.MediaPhoto, SendAs: domain.MediaPhoto})
-				}
-				c.SetAttachments(items, true)
-			},
-		},
-		{
-			name:  "truncated-name",
-			width: 40,
-			setup: func(c *components.Composer) {
-				c.SetAttachment("a_very_long_file_name_that_overflows_the_box.png", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
-			},
-		},
-		{
-			name:  "extreme-narrow",
-			width: 10,
-			setup: func(c *components.Composer) {
-				c.SetAttachment("photo.png", 2_100_000, domain.MediaPhoto, domain.MediaPhoto, true)
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			c := components.NewComposer(tc.width)
-			tc.setup(c)
-			view := c.View()
-			h := c.VisualHeight()
-
-			buf := uv.NewScreenBuffer(tc.width, h)
-			buf.Method = ansi.GraphemeWidth
-			uv.NewStyledString(view).Draw(buf, uv.Rect(0, 0, tc.width, h))
-
-			for row := 0; row < h; row++ {
-				span := 0
-				for col := 0; col < tc.width; col++ {
-					cell := buf.CellAt(col, row)
-					if span > 0 {
-						span--
-						continue
-					}
-					if cell != nil && cell.Width > 1 {
-						span = cell.Width - 1
-					}
-					require.NotNil(t, cell, "row %d col %d: cell is nil", row, col)
-					require.NotNil(t, cell.Style.Bg, "row %d col %d (%q): cell missing background", row, col, cell.Content)
-					if strings.TrimSpace(cell.Content) != "" && !isBoxChar(cell.Content) {
-						require.NotNil(t, cell.Style.Fg, "row %d col %d (%q): glyph missing foreground", row, col, cell.Content)
-					}
-				}
-			}
-		})
-	}
-}
-
-func isBoxChar(s string) bool {
-	for _, r := range s {
-		if r >= 0x2500 && r <= 0x259F {
-			return true
-		}
-	}
-	return false
 }

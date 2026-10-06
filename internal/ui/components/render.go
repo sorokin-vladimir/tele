@@ -79,13 +79,22 @@ func applyEntityStyle(s lipgloss.Style, typ string) lipgloss.Style {
 // correctly. text_url runs are additionally wrapped in an OSC 8 hyperlink.
 // Unknown types pass through as plain text.
 func RenderEntities(text string, entities []domain.MessageEntity) string {
+	return renderEntities(text, entities, theme.S().Body)
+}
+
+// renderEntities is RenderEntities with the run base style given explicitly. The
+// base is what a run with no entity of its own is painted with, and the layer
+// entity styles are applied on top of. Rich-message blocks call it with a
+// heading, quote or code style as the base; classic messages always use the body
+// style.
+func renderEntities(text string, entities []domain.MessageEntity, base lipgloss.Style) string {
 	// The two short circuits go through the body style rather than returning the
 	// text raw. Most messages carry no entity at all, so this is the ordinary
 	// path, not a corner: returning raw text here left the body of nearly every
 	// message outside the theme's reach — unpainted by the canvas, and not even
 	// taking the text token that shipped before it.
 	if len(entities) == 0 {
-		return theme.S().Body.Render(text)
+		return base.Render(text)
 	}
 	runes := []rune(text)
 	n := len(runes)
@@ -121,7 +130,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		boundarySet[end] = struct{}{}
 	}
 	if len(spans) == 0 {
-		return theme.S().Body.Render(text)
+		return base.Render(text)
 	}
 
 	bounds := make([]int, 0, len(boundarySet))
@@ -136,12 +145,12 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		if lo >= hi {
 			continue
 		}
-		// Layered onto the body style rather than onto a bare one. Entities that
+		// Layered onto the base style rather than onto a bare one. Entities that
 		// set a colour of their own overwrite it, but bold, italic, underline and
 		// strike add an attribute and nothing else: from a bare style those runs
 		// came out carrying the canvas and no foreground, so a word in bold lost
 		// the text colour the words either side of it had (#227).
-		style := theme.S().Body
+		style := base
 		styled := false
 		self := false
 		linkURL := ""
@@ -166,10 +175,10 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		case styled:
 			segment = renderPerLine(style, segment)
 		default:
-			// Plain message text. Rendered through the body style rather than
+			// Plain message text. Rendered through the base style rather than
 			// emitted raw, so a theme that sets Text owns it; with Text unset
 			// this is byte-for-byte the raw segment.
-			segment = renderPerLine(theme.S().Body, segment)
+			segment = renderPerLine(base, segment)
 		}
 		if linkURL != "" {
 			segment = osc8(linkID, linkURL, segment)

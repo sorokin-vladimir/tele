@@ -7,6 +7,12 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 )
 
+// richContent reports whether a message carries rich block content worth the
+// bubble's attention, as opposed to an empty block list.
+func richContent(msg domain.Message) bool {
+	return msg.Rich != nil && msg.Rich.HasContent()
+}
+
 // wrappedLineCount returns how many rendered rows the message body occupies at
 // the given content width. It uses the same lipgloss word-wrap that renderMessage
 // applies, so the height estimate and the actual render stay in lock-step. A naive
@@ -82,7 +88,7 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		h += 2
 		// Blank separator between the forward header and any following content,
 		// matching renderMessage; without this the tail clips (issue #115).
-		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil {
+		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil || richContent(msg) {
 			h++
 		}
 	}
@@ -93,7 +99,7 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		} else {
 			h += 1
 		}
-		if msg.Text != "" || msg.Media != nil {
+		if msg.Text != "" || msg.Media != nil || richContent(msg) {
 			h++ // blank separator line between preview and body
 		}
 	}
@@ -118,12 +124,18 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		} else {
 			h++ // text placeholder line
 		}
-		if msg.Text != "" {
+		if msg.Text != "" || richContent(msg) {
 			h++ // blank separator line between media and caption
 		}
 	}
 
-	if msg.Text != "" {
+	switch {
+	case richContent(msg):
+		// Rich body rows come from the block layout at the bubble's content
+		// width, in lock-step with bubbleContentLines (both call richMessageLines
+		// at measureBubble's actualW).
+		h += len(richMessageLines(msg.Rich, ml.measureBubble(msg).actualW))
+	case msg.Text != "":
 		// The width the renderer will actually wrap at, not the widest one it is
 		// allowed. A bubble is widened past its text by a long sender name, a row
 		// of reactions or the timestamp, and narrowed below the maximum whenever

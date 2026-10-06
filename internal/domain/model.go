@@ -345,9 +345,16 @@ type Message struct {
 	Date       time.Time
 	IsOut      bool
 	Entities   []MessageEntity
-	Media      *MediaRef    // nil if message has no media
-	Photo      *PhotoRef    // nil if message has no photo
-	Document   *DocumentRef // nil if message has no document-backed media
+	// Rich holds the structured content of a rich message (tables, headings,
+	// lists, …). Nil for a classic text+entities message. When set, the message
+	// list renders Rich in place of Text, falling back to Text (Telegram sends a
+	// plain-text rendering too) wherever a snippet is shown — the chat list, a
+	// reply preview. The store keeps Text only, so a rich message reloaded from
+	// history reads as its plain text until re-fetched.
+	Rich     *RichMessage
+	Media    *MediaRef    // nil if message has no media
+	Photo    *PhotoRef    // nil if message has no photo
+	Document *DocumentRef // nil if message has no document-backed media
 	// GroupedID is Telegram's album key: album parts share the same non-zero
 	// grouped_id. 0 means the message is not part of an album.
 	GroupedID    int64

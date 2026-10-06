@@ -23,6 +23,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   directory, the proxy, the cache sizes, the image mode and the app key - keep
   the values it started with for whoever logs in next, whatever the config
   says by then (#239).
+- Quitting can ask first. With `ui.confirm_quit` on (off by default), `q`,
+  `ctrl+c` and `ctrl+q` open a confirmation: `y` or `enter` quits, `n`, `esc`
+  or `q` cancels, and a modifier quit binding pressed again quits without
+  asking.
 
 ### Changed
 

@@ -154,6 +154,10 @@ These are the action names usable as YAML keys in the `keybindings:` section
 | `quit`          | Quit the app               |
 | `log_out`       | Log out of this account    |
 
+> With `ui.confirm_quit` on, every quit binding asks first: `y` or `enter`
+> quits, `n`, `esc` or `q` cancels, and a modifier quit binding (`ctrl+c`,
+> `ctrl+q`) pressed again quits without asking.
+
 ### Navigation & scrolling - contexts `folders`, `chatlist`, `chat`, `context_menu`, `delete_submenu`, `search`
 
 | Action             | Description                          |

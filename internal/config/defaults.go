@@ -25,6 +25,7 @@ func defaultValues() map[string]any {
 		"proxy.type":                 proxy.TypeAuto,
 		"proxy.port":                 0,
 		"ui.history_limit":           50,
+		"ui.confirm_quit":            false,
 		"ui.notifications.desktop":   true,
 		"ui.notifications.toast":     true,
 		"ui.notifications.preview":   true,

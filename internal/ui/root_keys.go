@@ -15,6 +15,29 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, handled := m.handleLogOutKey(msg); handled {
 		return next, cmd
 	}
+	// The quit confirmation owns all keys while it is open. Its own keys win,
+	// even when one of them is also bound to quit: y or enter quits, n, esc or q
+	// cancels. A quit binding with a modifier (ctrl+c and ctrl+q by default) is
+	// the escape hatch and quits without asking; a plain key never does, so
+	// rebinding quit to a bare key cannot defeat the confirmation.
+	if m.confirmQuit != nil {
+		newModal, res := m.confirmQuit.Update(msg)
+		switch res {
+		case components.ConfirmYes:
+			m.confirmQuit = nil
+			return m, tea.Quit
+		case components.ConfirmNo:
+			m.confirmQuit = nil
+			return m, nil
+		}
+		m.confirmQuit = newModal
+		if msg.Mod&(tea.ModCtrl|tea.ModAlt) != 0 &&
+			m.keyMap.Resolve(keys.ContextGlobal, keys.NormalizeKey(msg.String())) == keys.ActionQuit {
+			m.confirmQuit = nil
+			return m, tea.Quit
+		}
+		return m, nil
+	}
 	// While the help modal is open it owns all keys.
 	if m.help != nil {
 		newHelp, open := m.help.Update(msg)
@@ -163,6 +186,10 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case keys.ActionQuit:
+			if m.cfg != nil && m.cfg.UI.ConfirmQuit {
+				m.confirmQuit = components.NewConfirmModal("Quit", "Quit tele?", m.width, m.height)
+				return m, nil
+			}
 			return m, tea.Quit
 		case keys.ActionDismissToast:
 			m.toasts.DismissTop()

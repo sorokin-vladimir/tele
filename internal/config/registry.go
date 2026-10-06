@@ -135,6 +135,14 @@ var registry = []settings.Entry{
 		Max:     500,
 	},
 	{
+		Key:     "ui.confirm_quit",
+		Group:   "ui",
+		Label:   "Confirm before quitting",
+		Help:    "Whether q, ctrl+c and ctrl+q ask before closing tele. Off quits at once, as it always has. Read at the key press, so the change takes hold immediately.",
+		Widget:  settings.Toggle,
+		Applies: settings.Immediate,
+	},
+	{
 		// Last of the ui keys, where every template tele has ever written puts
 		// it, so the overlay and the file read in the same order.
 		Key:     "ui.theme",

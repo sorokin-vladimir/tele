@@ -164,6 +164,7 @@ type RootModel struct {
 	reactionPicker    *components.ReactionPicker
 	help              *components.HelpModal
 	settings          *components.SettingsModal
+	confirmQuit       *components.ConfirmModal
 	profile           *components.Profile
 	profileAsk        int // numbers profile requests; only the latest one's answer opens an overlay
 	openPicker        *components.OpenPicker

@@ -11,6 +11,17 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Rich messages render their structure instead of collapsing to their plain
+  text: paragraphs, headings, subtitles and footers, bulleted and numbered
+  lists, block quotes and pull quotes, details, preformatted code, tables with
+  bold header cells and bordered grids, dividers, bylines, related-article
+  suggestions and channel references. A media block inside a rich message - a
+  photo, video, audio, map or embed - shows as a labelled placeholder, since
+  its bytes still come through the classic media pipeline, and details always
+  render expanded, as a terminal has no collapse control.
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

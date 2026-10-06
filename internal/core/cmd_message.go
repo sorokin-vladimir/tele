@@ -254,6 +254,10 @@ func (o *Owner) EditMessage(ctx context.Context, chatID int64, msgID int, text s
 	edited := prev
 	edited.Text = text
 	edited.Entities = entities
+	// The composed edit is plain text, so it has no structured blocks. Clearing
+	// Rich stops the bubble drawing the pre-edit blocks until Telegram echoes
+	// the edited message back.
+	edited.Rich = nil
 	now := time.Now()
 	edited.EditDate = &now
 	o.state.ApplyEdit(edited)

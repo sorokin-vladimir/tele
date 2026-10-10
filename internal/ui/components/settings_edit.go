@@ -74,7 +74,7 @@ func (s *SettingsModal) activate() (*SettingsModal, SettingsResult) {
 	if !ok {
 		return s, SettingsResult{Open: true}
 	}
-	if it.entry.ReadOnly {
+	if it.readOnly() {
 		s.status = "kept in " + s.store.Origin()
 		return s, SettingsResult{Open: true}
 	}
@@ -93,7 +93,7 @@ func (s *SettingsModal) activate() (*SettingsModal, SettingsResult) {
 // cycle moves a choice along its list, wrapping, so one key gets to any of them.
 func (s *SettingsModal) cycle(by int) (*SettingsModal, SettingsResult) {
 	it, ok := s.current()
-	if !ok || it.entry.ReadOnly || it.entry.Widget != settings.Choice {
+	if !ok || it.readOnly() || it.entry == nil || it.entry.Widget != settings.Choice {
 		return s, SettingsResult{Open: true}
 	}
 	choices := it.entry.Choices
@@ -113,7 +113,7 @@ func (s *SettingsModal) reset() (*SettingsModal, SettingsResult) {
 	if !ok {
 		return s, SettingsResult{Open: true}
 	}
-	if it.entry.ReadOnly {
+	if it.readOnly() {
 		s.status = "kept in " + s.store.Origin()
 		return s, SettingsResult{Open: true}
 	}
@@ -158,7 +158,7 @@ func (s *SettingsModal) updateEditing(msg tea.KeyPressMsg, key string) (*Setting
 // commitTyped turns what was typed into the value the setting is kept in.
 func (s *SettingsModal) commitTyped(buffer string) (*SettingsModal, SettingsResult) {
 	it, ok := s.current()
-	if !ok {
+	if !ok || it.entry == nil {
 		return s, SettingsResult{Open: true}
 	}
 	buffer = strings.TrimSpace(buffer)
@@ -198,7 +198,7 @@ func (s *SettingsModal) commitTyped(buffer string) (*SettingsModal, SettingsResu
 // opens the file, so an illegal value never reaches the disk.
 func (s *SettingsModal) commit(value any) (*SettingsModal, SettingsResult) {
 	it, ok := s.current()
-	if !ok {
+	if !ok || it.entry == nil {
 		return s, SettingsResult{Open: true}
 	}
 	if err := s.store.Set(it.key(), value); err != nil {
@@ -222,7 +222,7 @@ func refusalText(err error, key string) string {
 // into a mapping when the row is one half of one.
 func (s *SettingsModal) currentValue() any {
 	it, ok := s.current()
-	if !ok {
+	if !ok || it.entry == nil {
 		return nil
 	}
 	value, _ := s.store.Value(it.entry.Key)
@@ -243,7 +243,7 @@ func (s *SettingsModal) editableValue(it settingsItem) string {
 	if value == nil {
 		return ""
 	}
-	if it.entry.Widget == settings.Bytes {
+	if it.entry != nil && it.entry.Widget == settings.Bytes {
 		if n, ok := asInt64(value); ok {
 			return strconv.FormatInt(n>>20, 10)
 		}
@@ -259,7 +259,7 @@ func (s *SettingsModal) current() (*settingsItem, bool) {
 }
 
 // nextSelectable finds the next row the cursor can sit on, searching in the
-// given direction. Headings, blanks, keybindings and the legend are read, not
+// given direction. Headings, blanks, the legend and the footer are read, not
 // visited.
 func (s *SettingsModal) nextSelectable(from, dir int) int {
 	for i := from + dir; i >= 0 && i < len(s.items); i += dir {
@@ -282,6 +282,9 @@ func (s *SettingsModal) clampCursor() {
 	if s.cursor < 0 || !s.items[s.cursor].selectable() {
 		s.cursor = s.nextSelectable(s.cursor, 1)
 	}
+	if s.cursor >= len(s.items) || !s.items[s.cursor].selectable() {
+		s.cursor = s.nextSelectable(len(s.items), -1)
+	}
 }
 
 // scroll moves the view and takes the cursor with it, so the cursor is never
@@ -297,7 +300,12 @@ func (s *SettingsModal) scroll(by int) {
 		} else {
 			s.cursor = s.offset - 1
 		}
-		s.cursor = s.nextSelectable(s.cursor, dir)
+		target := s.nextSelectable(s.cursor, dir)
+		if target != s.cursor {
+			s.cursor = target
+		} else {
+			s.cursor = s.nextSelectable(s.cursor, -dir)
+		}
 	}
 }
 

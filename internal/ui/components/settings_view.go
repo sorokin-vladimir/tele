@@ -125,7 +125,7 @@ func (s *SettingsModal) hint() string {
 		return OverlayHint([][2]string{{"enter", "save"}, {"esc", "cancel"}}, theme.T().SurfaceHelp)
 	}
 	pairs := [][2]string{{"j/k", "move"}}
-	if it, ok := s.current(); ok && !it.entry.ReadOnly {
+	if it, ok := s.current(); ok && !it.readOnly() {
 		switch it.entry.Widget {
 		case settings.Toggle:
 			pairs = append(pairs, [2]string{"enter", "toggle"})

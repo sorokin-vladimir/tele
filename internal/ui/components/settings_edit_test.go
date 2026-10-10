@@ -258,25 +258,91 @@ func TestSettingsEdit_AThemeSlotIsEditedOnItsOwn(t *testing.T) {
 	assert.Contains(t, rowFor(t, m, "Theme (dark)"), "gruvbox-dark")
 }
 
-// The cursor visits settings and steps over everything that is only there to be
-// read.
-func TestSettingsEdit_TheCursorOnlyStopsOnSettings(t *testing.T) {
+// The cursor visits settings and keybindings, stepping over headings, blanks,
+// the legend and the footer.
+func TestSettingsEdit_TheCursorStopsOnSettingsAndKeybindings(t *testing.T) {
 	m, _, _ := editable(t, "")
 
 	assert.Equal(t, "API ID", m.CursorLabelForTest(), "it starts on the first setting")
 
 	seen := map[string]bool{}
-	for range 40 {
+	for range 120 {
 		seen[m.CursorLabelForTest()] = true
 		m, _ = press(m, key('j'))
 	}
 
 	assert.True(t, seen["Avatar cache size"], "it reaches the last setting")
+	assert.True(t, seen["quit"], "it steps into keybindings past the last setting")
+	assert.True(t, seen["reply"], "it reaches bindings in later contexts")
 	for label := range seen {
-		assert.NotContains(t, label, "keybindings", "and never stops on a heading or a binding")
-		assert.NotEqual(t, "reply", label)
+		assert.False(t, strings.HasPrefix(label, "keybindings."), "never stops on a heading: %s", label)
+		assert.False(t, strings.HasPrefix(label, "["), "never stops on a legend item: %s", label)
+		assert.NotEqual(t, "what the marks mean", label)
 		assert.NotEqual(t, "edited in", label)
 	}
+
+	// At the bottom, pressing j stays on the last keybinding.
+	last := m.CursorLabelForTest()
+	assert.NotEmpty(t, last)
+	m, _ = press(m, key('j'))
+	assert.Equal(t, last, m.CursorLabelForTest(), "holding j stops at the last keybinding")
+
+	// Moving back up returns to the first setting.
+	for range 120 {
+		m, _ = press(m, key('k'))
+	}
+	assert.Equal(t, "API ID", m.CursorLabelForTest(), "it navigates back to the top")
+}
+
+// Keybinding rows are read-only: pressing enter or reset names the file where they are changed.
+func TestSettingsEdit_KeybindingRowIsReadOnly(t *testing.T) {
+	m, _, path := editable(t, "")
+	m = moveTo(t, m, "quit")
+
+	m, changed := press(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	assert.False(t, changed, "activating a keybinding writes nothing")
+	assert.Contains(t, m.StatusForTest(), path, "it says where the binding is changed")
+
+	m, changed = press(m, key('r'))
+	assert.False(t, changed, "resetting a keybinding writes nothing")
+	assert.Contains(t, m.StatusForTest(), path)
+
+	m, changed = press(m, key('l'))
+	assert.False(t, changed, "cycling a keybinding does nothing")
+}
+
+// G navigates to the last selectable row (the last keybinding) and puts it in view.
+func TestSettingsEdit_GNavigatesToLastKeybinding(t *testing.T) {
+	m, _, _ := editable(t, "")
+	m, _ = press(m, key('G'))
+
+	assert.NotEmpty(t, m.CursorLabelForTest())
+	assert.NotEqual(t, "Avatar cache size", m.CursorLabelForTest(), "past the last setting")
+	assert.NotEqual(t, "edited in", m.CursorLabelForTest(), "never on the footer")
+
+	// The cursor indicator must be visible on the selected row.
+	foundCursor := false
+	for _, l := range m.LinesForTest() {
+		if strings.HasPrefix(l, "› ") || strings.Contains(l, "› ") {
+			foundCursor = true
+			break
+		}
+	}
+	assert.True(t, foundCursor, "cursor indicator is visible on screen")
+}
+
+// Scrolling down with ctrl+d keeps the cursor on a selectable row even if the viewport reaches the unselectable legend/footer.
+func TestSettingsEdit_ScrollLeavesCursorOnSelectableRow(t *testing.T) {
+	m, _, _ := editable(t, "")
+
+	// Scroll repeatedly to the very bottom.
+	for range 10 {
+		m, _ = press(m, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	}
+
+	assert.NotEmpty(t, m.CursorLabelForTest(), "cursor remains on a selectable row")
+	assert.NotEqual(t, "edited in", m.CursorLabelForTest())
+	assert.False(t, strings.HasPrefix(m.CursorLabelForTest(), "["))
 }
 
 // Writing goes through the file, so a value set here is a value an editor would

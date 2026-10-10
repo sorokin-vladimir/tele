@@ -71,6 +71,9 @@ type settingsItem struct {
 	// slot names which part of a setting written as a mapping this row is - the
 	// dark half of a theme pair. Empty for everything else.
 	slot string
+	// keybinding reports that this row is a keybinding. Keybinding rows are
+	// selectable and read-only until rebound in #241.
+	keybinding bool
 }
 
 // settingsRow is a row's content before it is padded and styled.
@@ -100,10 +103,15 @@ func (i settingsItem) key() string {
 	return i.entry.Key
 }
 
-// selectable reports whether the cursor stops here. Read-only settings are
-// included: being unable to change one is worth saying when somebody tries,
-// rather than by silently refusing to be reached.
-func (i settingsItem) selectable() bool { return i.entry != nil }
+// selectable reports whether the cursor stops here. Read-only settings and
+// keybindings are included: being unable to change one is worth saying when
+// somebody tries, rather than by silently refusing to be reached.
+func (i settingsItem) selectable() bool { return i.entry != nil || i.keybinding }
+
+// readOnly reports whether this row cannot be changed from the overlay.
+func (i settingsItem) readOnly() bool {
+	return i.keybinding || (i.entry != nil && i.entry.ReadOnly)
+}
 
 // NewSettingsModal builds the overlay from a store and the keymap in force.
 //
@@ -154,7 +162,7 @@ func (s *SettingsModal) build() {
 		items = append(items, settingsItem{blank: true},
 			settingsItem{heading: "keybindings." + string(ctx)})
 		for _, r := range rows {
-			items = append(items, settingsItem{row: r})
+			items = append(items, settingsItem{row: r, keybinding: true})
 		}
 	}
 

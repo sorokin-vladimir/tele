@@ -333,6 +333,13 @@ func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 			}
 		}
 	}
+	if rich, ok := msg.GetRichMessage(); ok {
+		// A rich message carries structured blocks (tables, headings, …) in
+		// addition to its plain text. Text stays populated — Telegram sends a
+		// plain rendering too, and every snippet reads it — while Rich holds the
+		// structure for the bubble to draw.
+		out.Rich = convertRichMessage(&rich)
+	}
 	return out, true
 }
 

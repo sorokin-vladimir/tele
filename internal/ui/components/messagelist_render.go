@@ -86,7 +86,13 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 
 	// Measure content width from text only.
 	actualW := 0
-	if msg.Text != "" {
+	switch {
+	case msg.Rich != nil && msg.Rich.HasContent():
+		// A rich message lays out its own blocks (paragraphs, tables, …) at the
+		// budget and hugs the widest row it produces, mirroring how the text
+		// path measures msg.Text below.
+		actualW = richMessageWidth(msg.Rich, maxContentW)
+	case msg.Text != "":
 		// canvas:ok measurement only — this render is measured and thrown away,
 		// so a background would cost work per bubble and reach no cell.
 		measureStyle := lipgloss.NewStyle().Width(maxContentW)
@@ -290,6 +296,8 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 // placeholder (if any), then the wrapped message text.
 func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) []string {
 	actualW, innerW, b, bs := m.actualW, m.innerW, m.b, m.bs
+	rich := msg.Rich != nil && msg.Rich.HasContent()
+	blankRow := func() string { return bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right) }
 
 	// Content lines: forward header (if any), reply quote block (if reply),
 	// photo art (if any), then text.
@@ -298,8 +306,8 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 	if msg.Forward != nil {
 		sideLines = append(sideLines, renderForwardLines(msg.Forward.From, actualW, bs)...)
 		// Separate the forward header from any following content with a blank line.
-		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+		if msg.ReplyToMsgID != 0 || msg.Text != "" || rich || msg.Media != nil {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -313,8 +321,8 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 			snippet = firstLine(orig.Text)
 		}
 		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
-		if msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+		if msg.Text != "" || rich || msg.Media != nil {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -322,7 +330,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		sideLines = append(sideLines, labelLine(localMediaLabel(msg.LocalMedia), actualW, b, bs))
 		sideLines = append(sideLines, labelLine(uploadStatusLine(msg.LocalMedia, actualW), actualW, b, bs))
 		if msg.Text != "" {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -338,7 +346,6 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				artLines = ml.renderer.Render(id, img, cols)
 			}
 		}
-		blankRow := bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)
 		switch {
 		case artLines != nil:
 			for _, al := range artLines {
@@ -357,7 +364,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				if i == 0 {
 					sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 				} else {
-					sideLines = append(sideLines, blankRow)
+					sideLines = append(sideLines, blankRow())
 				}
 			}
 			if overlay := ml.overlayLabelFor(msg); overlay != "" {
@@ -371,12 +378,25 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}
-		if msg.Text != "" {
-			sideLines = append(sideLines, blankRow)
+		if msg.Text != "" || rich {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
-	if msg.Text != "" {
+	switch {
+	case rich:
+		// Rich-message body: blocks are laid out to the content width in
+		// richrender.go and already carry their styling; frame each row like the
+		// text path does. Block separators arrive as empty rows.
+		for _, row := range richMessageLines(msg.Rich, actualW) {
+			if row == "" {
+				sideLines = append(sideLines, blankRow())
+				continue
+			}
+			row += theme.PadTo(lipgloss.Width(row), actualW)
+			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+row+theme.Pad(1)+bs.Render(b.Right))
+		}
+	case msg.Text != "":
 		rendered := RenderEntities(msg.Text, msg.Entities)
 		// canvas:ok this style only breaks lines. The text arrives painted run by
 		// run from RenderEntities, and giving the wrapper a background would drop
@@ -385,7 +405,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		wrapStyle := lipgloss.NewStyle().Width(actualW)
 		for _, part := range strings.Split(rendered, "\n") {
 			if part == "" {
-				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+				sideLines = append(sideLines, blankRow())
 				continue
 			}
 			for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
@@ -394,8 +414,10 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+wl+theme.Pad(1)+bs.Render(b.Right))
 			}
 		}
-	} else if len(sideLines) == 0 {
-		sideLines = []string{bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)}
+	default:
+		if len(sideLines) == 0 {
+			sideLines = []string{blankRow()}
+		}
 	}
 
 	return sideLines

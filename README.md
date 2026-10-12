@@ -106,6 +106,9 @@ deprecated, last touched in 2022), `arigram` (archived), `tg-tui` (2018),
 - **Full Telegram support** - private chats, groups, channels, forum topics,
   replies, reactions, edits, forwarding, and per-chat drafts synced with
   Telegram.
+- **Rich messages** - Telegram's structured messages render their layout:
+  headings, lists, tables with bold headers and bordered grids, block quotes,
+  detail blocks and dividers, rather than collapsing to their plain text.
 - **Photos inline** - full quality via the Kitty graphics protocol in kitty,
   Ghostty and iTerm2 3.7.0+, ANSI block art everywhere else. `o` opens the image
   in an in-app viewer.

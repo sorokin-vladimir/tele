@@ -9,6 +9,56 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
+// globalAction carries out an action bound in the global context, and reports
+// whether action was one. It is asked twice for every key: once for a single
+// key bound globally, and again for whatever a pane's matcher finished, since
+// a global chord such as g L is completed by the matcher of the pane it was
+// typed in and would otherwise be handed to that pane, which ignores it (#297).
+func (m RootModel) globalAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
+	switch action {
+	case keys.ActionFocusChatList:
+		next, cmd := m.focusPane(FocusChatList)
+		return next, cmd, true
+	case keys.ActionFocusChat:
+		next, cmd := m.focusPane(FocusChat)
+		return next, cmd, true
+	case keys.ActionFocusPrev:
+		next, cmd := m.focusPrev()
+		return next, cmd, true
+	case keys.ActionFocusNext:
+		next, cmd := m.focusNext()
+		return next, cmd, true
+	case keys.ActionFocusFolders:
+		if m.folderBar != nil && m.folderBar.HasFolders() {
+			next, cmd := m.focusPane(FocusFolders)
+			return next, cmd, true
+		}
+		return m, nil, true
+	case keys.ActionQuit:
+		if m.cfg != nil && m.cfg.UI.ConfirmQuit {
+			m.confirmQuit = components.NewConfirmModal("Quit", "Quit tele?", m.width, m.height)
+			return m, nil, true
+		}
+		return m, tea.Quit, true
+	case keys.ActionDismissToast:
+		m.toasts.DismissTop()
+		return m, nil, true
+	case keys.ActionShowHelp:
+		m.help = components.NewHelpModal(m.keyMap, m.width, m.height)
+		return m, nil, true
+	case keys.ActionShowSettings:
+		next, cmd := m.openSettings()
+		return next, cmd, true
+	case keys.ActionLogOut:
+		next, cmd := m.askLogOut()
+		return next, cmd, true
+	case keys.ActionReloadConfig, keys.ActionReloadThemes:
+		next, cmd := m.reloadFromDisk()
+		return next, cmd, true
+	}
+	return m, nil, false
+}
+
 func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.statusBar.SetStatus("")
 	// A log out confirmation owns all keys while it is open (#297).
@@ -171,38 +221,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// the key — a context-specific override (e.g. chatlist "confirm: l") must win
 	// over a conflicting global binding (issue #132).
 	if !m.matcher.ContextOwns(m.focusedContext(), keyStr) {
-		switch m.keyMap.Resolve(keys.ContextGlobal, keyStr) {
-		case keys.ActionFocusChatList:
-			return m.focusPane(FocusChatList)
-		case keys.ActionFocusChat:
-			return m.focusPane(FocusChat)
-		case keys.ActionFocusPrev:
-			return m.focusPrev()
-		case keys.ActionFocusNext:
-			return m.focusNext()
-		case keys.ActionFocusFolders:
-			if m.folderBar != nil && m.folderBar.HasFolders() {
-				return m.focusPane(FocusFolders)
-			}
-			return m, nil
-		case keys.ActionQuit:
-			if m.cfg != nil && m.cfg.UI.ConfirmQuit {
-				m.confirmQuit = components.NewConfirmModal("Quit", "Quit tele?", m.width, m.height)
-				return m, nil
-			}
-			return m, tea.Quit
-		case keys.ActionDismissToast:
-			m.toasts.DismissTop()
-			return m, nil
-		case keys.ActionShowHelp:
-			m.help = components.NewHelpModal(m.keyMap, m.width, m.height)
-			return m, nil
-		case keys.ActionShowSettings:
-			return m.openSettings()
-		case keys.ActionLogOut:
-			return m.askLogOut()
-		case keys.ActionReloadConfig, keys.ActionReloadThemes:
-			return m.reloadFromDisk()
+		if next, cmd, ok := m.globalAction(m.keyMap.Resolve(keys.ContextGlobal, keyStr)); ok {
+			return next, cmd
 		}
 	}
 
@@ -214,6 +234,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		action, res := m.matcher.Resolve(keys.ContextFolders, keyStr)
 		if res == keys.MatchPending {
 			return m, nil
+		}
+		if next, cmd, ok := m.globalAction(action); ok {
+			return next, cmd
 		}
 		if action != keys.ActionNone {
 			newPane, cmd := m.folderBar.Update(keys.ActionMsg{Action: action})
@@ -229,6 +252,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
 		if res == keys.MatchPending {
 			return m, nil
+		}
+		if next, cmd, ok := m.globalAction(action); ok {
+			return next, cmd
 		}
 		if action == keys.ActionOpenContextMenu {
 			return m.openTopicMenu()
@@ -246,6 +272,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		action, res := m.matcher.Resolve(keys.ContextChatList, keyStr)
 		if res == keys.MatchPending {
 			return m, nil
+		}
+		if next, cmd, ok := m.globalAction(action); ok {
+			return next, cmd
 		}
 		if action == keys.ActionShowProfile {
 			return m.openProfile(m.profileTargetUserID())
@@ -268,6 +297,9 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	action, res := m.matcher.Resolve(keys.ContextChat, keyStr)
 	if res == keys.MatchPending {
 		return m, nil
+	}
+	if next, cmd, ok := m.globalAction(action); ok {
+		return next, cmd
 	}
 	// Mode is a consequence of the resolved action.
 	switch action {

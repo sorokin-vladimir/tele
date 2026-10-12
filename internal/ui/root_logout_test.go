@@ -53,6 +53,26 @@ func TestLogOut_IsConfirmedFirstWithWhatGoesAndWhatStays(t *testing.T) {
 	assert.Empty(t, o.loggedOut, "nothing happens before it is confirmed")
 }
 
+// g L is a global chord, and the person presses it from whichever pane has
+// the focus. Each pane resolves its keys through the matcher, which finishes
+// the chord there; the log out it names was handed to the pane, which ignored
+// it, so the chord did nothing anywhere (#297).
+func TestLogOut_TheChordAsksFromEveryPane(t *testing.T) {
+	for name, focus := range map[string]Focus{"chat list": FocusChatList, "chat": FocusChat, "folders": FocusFolders} {
+		t.Run(name, func(t *testing.T) {
+			m, _ := logOutModel(t, 0)
+			m.focus = focus
+
+			model, _ := m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
+			_, cmd := model.(RootModel).Update(tea.KeyPressMsg{Code: 'L', Text: "L"})
+
+			require.NotNil(t, cmd, "g L did nothing")
+			_, ok := cmd().(logOutPreviewMsg)
+			assert.True(t, ok, "g L did not ask what a log out would take")
+		})
+	}
+}
+
 func TestLogOut_NothingUnsentIsNotMentioned(t *testing.T) {
 	m, _ := logOutModel(t, 0)
 
@@ -86,6 +106,24 @@ func TestLogOut_ConfirmedTellsTelegram(t *testing.T) {
 
 // Telegram out of reach leaves the session in the person's devices list, so
 // that is said, and logging out here anyway is theirs to choose.
+// Yes is the key under y on whatever layout is on, as every other key in tele
+// is: on a Russian layout that is н, at both questions.
+func TestLogOut_ConfirmedOnAnyLayout(t *testing.T) {
+	m, o := logOutModel(t, 0)
+	o.logOutErrs = []error{errors.New("connection refused")}
+	m = openLogOut(t, m)
+
+	m, cmd, _ := m.handleLogOutKey(tea.KeyPressMsg{Code: 'н', Text: "н"})
+	require.NotNil(t, cmd, "н did not confirm the log out")
+	m, _ = m.handleLogOutDone(cmd().(logOutDoneMsg))
+	require.Contains(t, screenText(m), "Log out here anyway?")
+
+	m, cmd, _ = m.handleLogOutKey(tea.KeyPressMsg{Code: 'н', Text: "н"})
+	require.NotNil(t, cmd, "н did not confirm a log out here only")
+	_, _ = m.handleLogOutDone(cmd().(logOutDoneMsg))
+	assert.Equal(t, []bool{true, false}, o.loggedOut)
+}
+
 func TestLogOut_TelegramOutOfReachAsksAgain(t *testing.T) {
 	m, o := logOutModel(t, 0)
 	o.logOutErrs = []error{errors.New("connection refused")}

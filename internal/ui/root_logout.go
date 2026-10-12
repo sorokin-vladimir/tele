@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 // Logging out from tele (#297). A log out removes what cannot be had back from
@@ -70,7 +71,9 @@ func (m RootModel) handleLogOutKey(msg tea.KeyPressMsg) (RootModel, tea.Cmd, boo
 		if m.logOut.step != logOutWorking {
 			m.logOut = nil
 		}
-	case msg.Text == "y" && m.logOut.step != logOutWorking:
+	// Read through the layout normalisation like every other key, so yes is
+	// the key under y on a Russian layout too.
+	case keys.NormalizeKey(msg.String()) == "y" && m.logOut.step != logOutWorking:
 		// After Telegram could not be reached, yes means here only.
 		tellTelegram := m.logOut.step == logOutAsking
 		d := *m.logOut

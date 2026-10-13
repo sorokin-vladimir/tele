@@ -11,6 +11,19 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- `ui.mouse_scroll_lines`: how many lines one notch of the mouse wheel moves,
+  in the message view, the chat list and a forum's topic list. It defaults to
+  3; set it to 1 to make the wheel as fine as the arrow keys or raise it to
+  cover more ground per notch.
+
+### Changed
+
+- The mouse wheel moves three lines per notch instead of one, in the message
+  view, the chat list and a forum's topic list. A notch used to move exactly
+  what an arrow key moves, which made scrolling a long chat crawl.
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

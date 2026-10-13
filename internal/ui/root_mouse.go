@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -70,6 +71,24 @@ func (m RootModel) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// defaultWheelStep is how many lines or rows one wheel notch moves when
+// ui.mouse_scroll_lines names nothing.
+const defaultWheelStep = 3
+
+// wheelApply applies action to a pane step times, returning the moved pane and
+// the last non-nil command - the one fetch a scroll may owe.
+func wheelApply[P layout.Pane](p P, action keys.Action, step int) (P, tea.Cmd) {
+	var cmd tea.Cmd
+	for i := 0; i < step; i++ {
+		next, c := p.Update(keys.ActionMsg{Action: action})
+		p = next.(P)
+		if c != nil {
+			cmd = c
+		}
+	}
+	return p, cmd
+}
+
 // handleMouseWheel scrolls the pane under the cursor by reusing the existing
 // up/down key actions, independent of which pane holds keyboard focus.
 func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
@@ -82,30 +101,34 @@ func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+	step := m.wheelStep
+	if step < 1 {
+		step = defaultWheelStep
+	}
 	r, _, _ := m.hitTest(mo.X, mo.Y)
 	switch r {
 	case regionChatList:
 		if m.forum != nil {
 			// A forum's topic list fills the pane (#275).
-			newPane, cmd := m.forum.Update(keys.ActionMsg{Action: action})
-			m.forum = newPane.(*screens.TopicListModel)
+			pane, cmd := wheelApply(m.forum, action, step)
+			m.forum = pane
 			m.syncTopicListWindow()
 			return m, cmd
 		}
-		newPane, cmd := m.chatList.Update(keys.ActionMsg{Action: action})
-		m.chatList = newPane.(*screens.ChatListModel)
+		pane, cmd := wheelApply(m.chatList, action, step)
+		m.chatList = pane
 		// The wheel moves the cursor as surely as a key does, so it has to ask
 		// for the next window just the same.
 		m.syncChatListWindow()
 		return m, cmd
 	case regionMessages:
-		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
-		m.chat = newPane.(*screens.ChatModel)
+		pane, cmd := wheelApply(m.chat, action, step)
+		m.chat = pane
 		return m, tea.Batch(cmd, m.markReadCmd())
 	case regionFolders:
 		if m.folderBar != nil {
-			newPane, cmd := m.folderBar.Update(keys.ActionMsg{Action: action})
-			m.folderBar = newPane.(*screens.FoldersModel)
+			pane, cmd := wheelApply(m.folderBar, action, step)
+			m.folderBar = pane
 			return m, cmd
 		}
 	}

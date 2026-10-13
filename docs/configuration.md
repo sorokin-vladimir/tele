@@ -45,6 +45,7 @@ What either finds wrong is said in the same notice, and one that will not take i
 
 ui:
   history_limit: 50 # messages fetched per chat on open
+  mouse_scroll_lines: 3 # lines per mouse-wheel notch; keys always move one
   confirm_quit: false # ask before q/ctrl+c/ctrl+q closes tele
   # theme: # omit for the built-in tele-dark / tele-light
   #   dark: my-dark # ~/.config/tele/themes/my-dark.yml

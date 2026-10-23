@@ -7,7 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -318,12 +317,12 @@ func rowBase(selected, active bool) lipgloss.Style {
 // inner cells, truncating the title to leave the indicators room.
 func rowContent(title, badge string, inner int, base lipgloss.Style, styleTitle func(string) string) string {
 	if badge == "" {
-		trunc := runewidth.Truncate(title, inner, "…")
+		trunc := layout.TruncateText(title, inner)
 		return styleTitle(trunc) + padRow(base, inner-lipgloss.Width(trunc))
 	}
 	badgeW := lipgloss.Width(badge)
 	maxTitleW := max(inner-badgeW-1, 0)
-	truncTitle := runewidth.Truncate(title, maxTitleW, "…")
+	truncTitle := layout.TruncateText(title, maxTitleW)
 	pad := max(inner-lipgloss.Width(truncTitle)-badgeW, 0)
 	return styleTitle(truncTitle) + padRow(base, pad) + badge
 }

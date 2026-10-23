@@ -9,6 +9,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -191,6 +192,24 @@ func (m RootModel) View() tea.View {
 		content = m.noticeView(content)
 	}
 	content = m.fillCanvas(content)
+	content = layout.TerminalSafeText(content)
+	// Sixel mode: the frame carries invisible markers on every inline image
+	// row, and this is the only place that sees the assembled screen. Hand it to
+	// the inline painter; while an overlay covers the chat, drop the painted
+	// bookkeeping instead, since the graphics under it are gone.
+	if m.imageMode == media.ModeSixel && m.sixelInline != nil {
+		content = m.sixelInline.clearPrefix() + content
+		if m.inlineSixelBlocked() {
+			m.sixelInline.forget()
+		} else {
+			m.sixelInline.record(strings.Split(content, "\n"))
+		}
+	}
+	if m.widthRepainted {
+		// A zero-width reset invalidates Bubble Tea's unchanged-view shortcut once.
+		// It remains constant after negotiation, so idle frames remain identical.
+		content = "\x1b[0m" + content
+	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	// Enable mouse reporting (clicks + wheel). CellMotion delivers button and

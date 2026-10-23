@@ -5,6 +5,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -36,6 +37,32 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.setDarkBackground(false)
 		return m, nil
 
+	// The cell pixel size, answered by the CSI 16 t query Init sends in sixel
+	// mode. A sixel is drawn one image pixel per terminal pixel, so it has to
+	// be encoded at the cell size the terminal actually uses; foot reports none
+	// through TIOCGWINSZ and only answers this query.
+	case uv.CellSizeEvent:
+		if !media.SetCellPx(float64(msg.Width), float64(msg.Height)) {
+			return m, nil
+		}
+		m.chat.InvalidateMediaGeometry()
+		// Encoded crops use pixel dimensions; cell geometry alone is insufficient
+		// after a font-size change, including when the cell count stays the same.
+		m.sixelInline.invalidatePaints()
+		m.sixelInline.forget() // Invalidate raw writes queued on the old state.
+		m.sixelInline = newInlineSixelState()
+		m.sixelInline.clearPending = m.imageMode == media.ModeSixel
+		// An open modal encoded before this reply was sized from the fallback
+		// cell, so encode it again against the real one.
+		if m.photoViewer != nil && m.photoViewer.img != nil {
+			b := m.photoViewer.img.Bounds()
+			m.photoViewer.cols, m.photoViewer.rows = m.modalImageBox(b.Dx(), b.Dy(), 0)
+			m.dropSixel()
+			return m, m.encodeSixelCmd(photoPlayerKey, m.photoViewer.img,
+				m.photoViewer.cols, m.photoViewer.rows)
+		}
+		return m, nil
+
 	// Fallback for terminals without mode 2031: re-read the background color
 	// when the window regains focus, so a theme change made while away is
 	// reflected (issue #148).
@@ -45,6 +72,9 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		if m.imageMode == media.ModeSixel {
+			m.sixelInline.resized(m.photoViewer != nil)
+		}
 		m.width = msg.Width
 		m.height = msg.Height
 		m.logo.SetWidth(msg.Width)
@@ -81,7 +111,15 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		if m.confirmQuit != nil {
 			m.confirmQuit.SetSize(msg.Width, msg.Height)
 		}
-		return m, tea.Batch(avatarCmd, m.retransmitOnColsChange())
+		// A resized window moves a centered modal, so a sixel painted before
+		// the resize is now in the wrong place - and the full repaint a resize
+		// forces has just erased it anyway.
+		sixelCmd := m.resizeSixelModal()
+		var cellSizeCmd tea.Cmd
+		if m.imageMode == media.ModeSixel {
+			cellSizeCmd = requestCellSizeCmd()
+		}
+		return m, tea.Batch(avatarCmd, m.retransmitOnColsChange(), sixelCmd, cellSizeCmd)
 
 	case retransmitTickMsg:
 		// Only the latest debounce tick performs the retransmit; earlier ones

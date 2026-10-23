@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
 )
 
@@ -53,6 +54,18 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// already grown), so the newest message could scroll out of view. SetImage
 		// writes to this same shared cache, so the image still lands in m.imageCache.
 		m.chat.SetImage(msg.PhotoID, msg.Image)
+		// A modal opened before the preview was cached is showing its spinner:
+		// hand it the image now, resizing the box to it and (in sixel mode)
+		// re-encoding at the new geometry.
+		if pv := m.photoViewer; pv != nil && pv.photoID == msg.PhotoID && pv.img == nil {
+			pv.img = msg.Image
+			b := msg.Image.Bounds()
+			pv.cols, pv.rows = m.modalImageBox(b.Dx(), b.Dy(), 0)
+			if m.imageMode == media.ModeSixel {
+				m.dropSixel()
+				return m, m.encodeSixelCmd(photoPlayerKey, msg.Image, pv.cols, pv.rows)
+			}
+		}
 		// Transmit is left to reconcile (after this update): the image is only
 		// placed on the terminal if it is currently visible. If this thumbnail
 		// belongs to the selected GIF, start its animation now (the default
@@ -78,6 +91,26 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// the image swaps in at the same height — no re-anchor needed.
 		m.kittyStore.MarkTransmitted(msg.photoID, msg.cols)
 		return m, nil
+
+	case sixelEncodedMsg:
+		// A sixel is painted by the terminal, not referenced by cells: store the
+		// sequence and paint it after the frame that first shows the modal's
+		// reserved blank cells.
+		return m.handleSixelEncoded(msg)
+
+	case sixelPaintMsg:
+		return m.handleSixelPaint(msg)
+
+	case inlineSixelTickMsg:
+		// Inline previews: paint the images the last frame left dirty, after the
+		// frame that rewrote their cells.
+		return m.handleInlineSixelTick()
+
+	case inlineSixelEncodedMsg:
+		return m.handleInlineSixelEncoded(msg)
+
+	case inlineSixelClearedMsg:
+		return m.handleInlineSixelCleared(msg)
 
 	case FullPhotoReadyMsg:
 		m.fullImageCache.Add(msg.PhotoID, msg.Image)

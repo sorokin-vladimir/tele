@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
+	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -86,7 +87,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 	// message outside the theme's reach — unpainted by the canvas, and not even
 	// taking the text token that shipped before it.
 	if len(entities) == 0 {
-		return theme.S().Body.Render(text)
+		return theme.S().Body.Render(layout.PresentationText(text))
 	}
 	runes := []rune(text)
 	n := len(runes)
@@ -122,7 +123,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		boundarySet[end] = struct{}{}
 	}
 	if len(spans) == 0 {
-		return theme.S().Body.Render(text)
+		return theme.S().Body.Render(layout.PresentationText(text))
 	}
 
 	bounds := make([]int, 0, len(boundarySet))
@@ -177,7 +178,7 @@ func RenderEntities(text string, entities []domain.MessageEntity) string {
 		}
 		b.WriteString(segment)
 	}
-	return b.String()
+	return layout.PresentationText(b.String())
 }
 
 // renderPerLine styles s one line at a time, because lipgloss.Style.Render

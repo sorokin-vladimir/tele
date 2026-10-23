@@ -104,9 +104,21 @@ func NewClient(c ClientConfig) *Client {
 		c.Log.Warn("no scratch directory for the client", zap.Error(err))
 		tmpDir = ""
 	}
+	mode := media.DetectMode(c.Store.Current().Photos.Mode, os.Getenv)
+	// The mode decides whether a photo modal can hold real pixels at all, and it
+	// is picked from the environment, so say which one won and on what evidence:
+	// "why is my photo block art" then has an answer in the log instead of a guess.
+	c.Log.Info("image mode",
+		zap.String("mode", mode.String()),
+		zap.String("photos.mode", c.Store.Current().Photos.Mode),
+		zap.String("TERM", os.Getenv("TERM")),
+		zap.String("TERM_PROGRAM", os.Getenv("TERM_PROGRAM")),
+		zap.Bool("tmux", os.Getenv("TMUX") != ""),
+		zap.Bool("kitty_window", os.Getenv("KITTY_WINDOW_ID") != ""),
+	)
 	return &Client{
 		c:         c,
-		imageMode: media.DetectMode(c.Store.Current().Photos.Mode, os.Getenv),
+		imageMode: mode,
 		tmpDir:    tmpDir,
 	}
 }

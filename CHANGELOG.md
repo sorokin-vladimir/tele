@@ -11,6 +11,39 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Sixel photo modals and inline previews, including clipped images and albums,
+  with automatic terminal detection and block-art fallback. Repeated image
+  placements stay separate, and malformed inline metadata is ignored safely.
+  Album badges crop only the covered cells; stale encodes and queued writes
+  are rejected after viewport changes, and removed images leave no pixels behind.
+
+### Fixed
+
+- Narrow virama conjuncts in titles and messages use non-joining display forms
+  before layout, preventing a Foot cell-width mismatch from shifting borders
+  during sidebar updates and resizing. Original text and link targets are kept.
+
+- Sixel previews clear reflowed pixels and reject queued writes on terminal
+  resize, coalescing resize bursts while retaining reusable encodings. Cell-size
+  changes also invalidate cached block art and message heights. Re-encoding
+  the same image preserves its palette colors. Photo modals fit the resized
+  window and reject obsolete queued raster writes.
+
+- One-cell joined symbols use a display-only `?` fallback to prevent terminal
+  width disagreements from shifting pane borders and inline images. Original
+  names and message contents remain intact.
+
+- Long attachment labels, sender names, reaction rows, and file albums stay
+  inside the message pane. Chat titles truncate on the same grapheme widths
+  used by layout, including ASCII-based keycaps.
+
+- Keycap characters in chat or folder names keep their combining marks and
+  cell width, so the adjacent pane border stays in its column. The renderer
+  dependency also fixes dropped rows and cursor drift when resizing a window.
+  Terminal windows redraw once after Unicode width negotiation, even when idle.
+
 ## [2.0.0] - 2026-10-23 — One tele for the account, and a service to keep it
 
 ### Upgrading from 1.11

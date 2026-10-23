@@ -79,6 +79,15 @@ func enableColorSchemeReportsCmd() tea.Cmd {
 	return tea.Raw(ansi.SetModeLightDark)
 }
 
+// requestCellSizeCmd asks the terminal for its cell size in pixels (CSI 16 t).
+// The reply arrives as a uv.CellSizeEvent. It is only needed for sixel: foot
+// answers the query but leaves the pixel fields of TIOCGWINSZ empty, so the
+// ioctl probe finds nothing there and a sixel sized from a guessed cell would
+// not line up with the cells it covers.
+func requestCellSizeCmd() tea.Cmd {
+	return tea.Raw("\x1b[16t")
+}
+
 func spinnerTickCmd() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
 		return components.SpinnerTickMsg{}

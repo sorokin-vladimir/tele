@@ -73,6 +73,7 @@ func setupDispatcher(
 		} else if msg.SenderID == 0 && !msg.IsOut {
 			// nil FromID: sender is the chat peer — try user first (private chat),
 			// then channel or group (anonymous post)
+			msg.SenderID = peerID
 			if user, ok := e.Users[peerID]; ok {
 				msg.SenderName = userDisplayName(user)
 			} else if ch, ok := e.Channels[peerID]; ok {

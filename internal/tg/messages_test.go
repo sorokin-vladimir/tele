@@ -479,6 +479,7 @@ func TestParseHistory_PrivateChat_IncomingNilFromID_SenderNameIsPeerName(t *test
 	msgs := parseHistory(raw, 42)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "Alice", msgs[0].SenderName)
+	assert.Equal(t, int64(42), msgs[0].SenderID)
 }
 
 func TestParseHistory_UserMessage_SenderNameFromUsers(t *testing.T) {

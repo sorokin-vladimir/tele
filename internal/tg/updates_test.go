@@ -210,6 +210,7 @@ func TestSetupDispatcher_PrivateMessage_NilFromID_SenderNameIsPeerName(t *testin
 	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Alice", evt.Message.SenderName)
+		assert.Equal(t, int64(42), evt.Message.SenderID)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}
@@ -322,6 +323,7 @@ func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T
 	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Tech News", evt.Message.SenderName)
+		assert.Equal(t, int64(500), evt.Message.SenderID)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}

@@ -6,6 +6,8 @@ import (
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -138,7 +140,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	// Measured with lipgloss.Width so wide emoji match placeholderLine's padding.
 	if msg.Media != nil {
 		if w := lipgloss.Width(placeholderFor(msg.Media)); w > actualW {
-			actualW = w
+			actualW = min(w, maxContentW)
 		}
 	}
 
@@ -232,6 +234,15 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		}
 	}
 
+	// Sender names and metadata may widen the usual text budget, but must
+	// leave room for both borders and padding inside the actual pane.
+	actualW = min(actualW, max(ml.viewWidth-4, 1))
+	innerW = actualW + 2
+	if reactW > innerW-tsW {
+		reactStr = xansi.Truncate(reactStr, max(innerW-tsW, 0), "…")
+		reactW = lipgloss.Width(reactStr)
+	}
+
 	return bubbleMetrics{
 		actualW:  actualW,
 		innerW:   innerW,
@@ -258,7 +269,7 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 			if name == "" {
 				name = "?"
 			}
-			senderStyled = ml.senderNameStyle(msg.SenderID).Render(name)
+			senderStyled = ml.senderNameStyle(msg.SenderID).Render(layout.TruncateText(name, m.innerW-3))
 		}
 		var titleStr string
 		if senderStyled != "" {
@@ -366,7 +377,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		case msg.Media.Kind == domain.MediaVoice && msg.Document != nil &&
 			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
-			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
+			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition, actualW)
 			sideLines = append(sideLines, paintedLabelLine(label, lipgloss.Width(label), actualW, b, bs))
 		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
@@ -663,9 +674,10 @@ func (ml *MessageList) renderGroupStack(parts []domain.Message, selected bool) [
 	// bubble), so the rendered caption line count matches groupHeight.
 	captionW := m.actualW
 
-	// Widen to fit the badge labels (labelLine does not truncate) and the
+	// Widen for badge labels, bounded by the pane, and the
 	// downscaled preview columns of any part whose bytes are known.
 	widen := func(cols int) {
+		cols = min(cols, max(ml.viewWidth-4, 1))
 		if cols > m.actualW {
 			m.actualW = cols
 			m.innerW = cols + 2
@@ -767,7 +779,7 @@ func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 	if labelW >= imgCols {
 		return painted // label spans the whole row; no image cells remain
 	}
-	return painted + xansi.TruncateLeft(artRow, labelW, "")
+	return painted + media.TruncateInlineLeft(artRow, labelW)
 }
 
 // captionLines wraps the album caption inside the bubble borders, matching the

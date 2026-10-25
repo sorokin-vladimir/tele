@@ -48,8 +48,7 @@ func TestLocalMediaLabelKeepsAConstantWidthThroughTheSend(t *testing.T) {
 	}
 }
 
-// The status line is drawn into a bubble sized by the label, and labelLine pads
-// but never truncates: a line wider than it was given tears the right border.
+// Keep upload progress readable without relying on label truncation to fit it.
 func TestUploadStatusLineNeverExceedsTheWidthItIsGiven(t *testing.T) {
 	for _, width := range []int{8, 12, 20, 40} {
 		lm := &domain.LocalMedia{Kind: domain.MediaPhoto, UploadProgress: 0.42, Part: 3, Parts: 5}

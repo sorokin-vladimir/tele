@@ -81,7 +81,7 @@ ui:
     max_visible: 3 # per corner; the rest are counted, not drawn
 
 photos:
-  mode: auto # auto | kitty | blocks - inline image renderer
+  mode: auto # auto | kitty | sixel | blocks - inline image renderer
   eager_full_quality: true # download full resolution in the background on chat open
   kitty_placement_cap: 16 # max inline images kept on the terminal at once
   max_long_side_px: 800 # cap a rendered image's long side; height also ≤ 2/3 pane

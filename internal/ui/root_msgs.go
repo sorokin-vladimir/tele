@@ -6,9 +6,25 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
+// widthRepaintMsg follows the renderer clear after Unicode width negotiation.
+type widthRepaintMsg struct{}
+
 type PhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image
+}
+
+// inlineSixelTickMsg asks the model to paint the inline message images that the
+// last frame left dirty. It carries no payload: the frame itself is the state.
+type inlineSixelTickMsg struct{}
+
+type inlineSixelClearedMsg struct{ state *inlineSixelState }
+
+type inlineSixelEncodedMsg struct {
+	state    *inlineSixelState
+	revision uint64
+	regions  []inlineRegion
+	seq      string
 }
 
 // gifFileReadyMsg carries the temp-file path of a downloaded GIF (the full MP4),
@@ -72,6 +88,22 @@ type kittyTransmittedMsg struct {
 	photoID int64
 	cols    int
 }
+
+// sixelEncodedMsg carries a photo modal's image encoded as a sixel sequence.
+// key is the store key the encode was started for (photoPlayerKey for the
+// modal); cols/rows are the geometry it was encoded at, so a result that
+// outlived its box can be dropped instead of painted.
+type sixelEncodedMsg struct {
+	gen  uint64
+	key  int64
+	cols int
+	rows int
+	seq  string
+}
+
+// sixelPaintMsg asks for the waiting sixel paint to run now that its frame is
+// on screen. gen drops ticks superseded by a newer image or geometry.
+type sixelPaintMsg struct{ gen uint64 }
 
 // voicePlayReadyMsg carries a downloaded voice file ready to be played.
 type voicePlayReadyMsg struct {

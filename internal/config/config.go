@@ -79,7 +79,7 @@ type ToastsConfig struct {
 
 type PhotosConfig struct {
 	EagerFullQuality bool   `mapstructure:"eager_full_quality"`
-	Mode             string `mapstructure:"mode"` // auto | kitty | blocks
+	Mode             string `mapstructure:"mode"` // auto | kitty | sixel | blocks
 	// KittyPlacementCap bounds how many Kitty image placements are kept on the
 	// terminal at once. Transmitting an entire heavy chat exceeds the terminal's
 	// limit and corrupts placements, so only on-screen images (plus a few

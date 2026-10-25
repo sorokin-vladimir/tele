@@ -86,6 +86,15 @@ func (m RootModel) openPhotoModal(ref domain.PhotoRef, msgID int, sender string,
 		id := m.kittyStore.IDFor(photoPlayerKey)
 		cmds = append(cmds, transmitFrameToID(id, pv.img, pv.cols, pv.rows))
 	}
+	// In sixel mode the modal is painted out of band. Drop whatever the previous
+	// modal left encoded, then encode this photo; the paint follows the frame
+	// that reserves the blank cells.
+	if m.imageMode == media.ModeSixel {
+		m.dropSixel()
+		if pv.img != nil {
+			cmds = append(cmds, m.encodeSixelCmd(photoPlayerKey, pv.img, pv.cols, pv.rows))
+		}
+	}
 	// Fetch full quality if we don't already have it and the photo has one.
 	if !pv.full && ref.FullThumbSize != "" {
 		cmds = append(cmds, saveFullPhotoCmd(m.ctx, m.owner, m.currentChatID, msgID, ref.ID, m.tmpDir, false))
@@ -170,6 +179,11 @@ func (m RootModel) closePhotoModal() (RootModel, tea.Cmd) {
 		id := m.kittyStore.IDFor(photoPlayerKey)
 		cmd = func() tea.Msg { return tea.Raw(media.DeleteSeq(id))() }
 	}
+	if m.imageMode == media.ModeSixel {
+		// The chat repaints the cells the modal covered, which erases the sixel
+		// there; forgetting the sequence also cancels a paint still in flight.
+		m.dropSixel()
+	}
 	m.imageCache.Remove(photoPlayerKey)
 	m.photoViewer = nil
 	return m, cmd
@@ -191,6 +205,12 @@ func (m RootModel) handleFullPhotoReady(msg FullPhotoReadyMsg) (RootModel, tea.C
 		m.imageCache.Add(photoPlayerKey, msg.Image)
 		id := m.kittyStore.IDFor(photoPlayerKey)
 		return m, transmitFrameToID(id, msg.Image, pv.cols, pv.rows)
+	}
+	if m.imageMode == media.ModeSixel {
+		// The box was resized to the full image, so drop the preview's sequence
+		// and encode at the new geometry.
+		m.dropSixel()
+		return m, m.encodeSixelCmd(photoPlayerKey, msg.Image, pv.cols, pv.rows)
 	}
 	return m, nil
 }
@@ -263,6 +283,21 @@ func (m RootModel) photoViewerView(base string) string {
 	case m.imageMode == media.ModeKitty:
 		id := m.kittyStore.IDFor(photoPlayerKey)
 		content = media.PlaceholderLines(id, cols, rows)
+	case m.imageMode == media.ModeSixel:
+		// Sixel is painted over these cells after the frame, so they must stay
+		// blank and, more importantly, unchanged: a reprint of any cell under the
+		// graphic makes foot drop that part of it. Once the sequence is ready the
+		// box holds nothing but spaces, the renderer stops rewriting these lines,
+		// and the painted image stays until something moves the modal.
+		if m.sixelSeqCols == cols && m.sixelSeqRows == rows && m.sixelSeq != "" {
+			blank := theme.Pad(cols)
+			content = make([]string, rows)
+			for i := range content {
+				content[i] = blank
+			}
+		} else {
+			content = media.RenderBlockArt(pv.img, cols)
+		}
 	default:
 		// Block-art: render at the box width; its line count sets the box height.
 		content = media.RenderBlockArt(pv.img, cols)

@@ -402,7 +402,7 @@ ui:
     preview: true # set false to send the sender's name and no message text
 
 photos:
-  mode: auto # auto | kitty | blocks - inline image renderer
+  mode: auto # auto | kitty | sixel | blocks - inline image renderer
   disk_cache_size: 268435456 # 256 MB of fetched chat media kept between runs
 ```
 

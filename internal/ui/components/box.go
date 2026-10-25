@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -19,6 +20,8 @@ import (
 // topSuffix). Pass "" to omit; when it does not fit, the bottom border falls back to plain.
 // borderFg sets the border foreground color; nil means no color.
 func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b lipgloss.Border, borderFg color.Color, w, h int, scrollbar ...*Scrollbar) string {
+	topTitle = layout.PresentationText(topTitle)
+	topSuffix = layout.PresentationText(topSuffix)
 	innerW := w - 2
 	innerH := h - 2
 

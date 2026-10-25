@@ -6,7 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -190,7 +189,7 @@ func (m FoldersModel) formatEntry(f domain.FolderFilter, active bool) string {
 	if nameWidth < 1 {
 		nameWidth = 1
 	}
-	name := runewidth.Truncate(f.Title, nameWidth, "…")
+	name := layout.TruncateText(f.Title, nameWidth)
 	line := prefix + padRight(name, nameWidth)
 	if badge != "" {
 		line += " " + badge

@@ -5,24 +5,45 @@ import "strings"
 // Mode is the selected image rendering strategy.
 type Mode int
 
+// String names the mode the way photos.mode spells it, so a log line and the
+// config file speak the same language.
+func (m Mode) String() string {
+	switch m {
+	case ModeKitty:
+		return "kitty"
+	case ModeSixel:
+		return "sixel"
+	default:
+		return "blocks"
+	}
+}
+
 const (
 	// ModeBlocks renders photos as ANSI half-block art (universal fallback).
 	ModeBlocks Mode = iota
 	// ModeKitty renders photos via the Kitty graphics protocol.
 	ModeKitty
+	// ModeSixel renders inline photo previews and the photo modal via DEC
+	// sixel, repainting graphics after text updates and retaining block art
+	// underneath as a fallback.
+	ModeSixel
 )
 
 // DetectMode picks a rendering mode. override is the config value
-// (photos.mode): "kitty" or "blocks" force a mode, "auto" (or empty) runs
-// heuristics. getenv is usually os.Getenv; it is injected for testing.
+// (photos.mode): "kitty", "sixel" or "blocks" force a mode, "auto" (or empty)
+// runs heuristics. getenv is usually os.Getenv; it is injected for testing.
 //
 // Kitty is enabled only for terminals with confirmed Unicode-placeholder
 // support (kitty, Ghostty, iTerm2 from 3.7.0) and never inside a tmux/screen
-// session (no passthrough this pass).
+// session (no passthrough this pass). Sixel is enabled for foot, which draws
+// sixel graphics and not Kitty ones, and for the other terminals that name
+// themselves in TERM.
 func DetectMode(override string, getenv func(string) string) Mode {
 	switch strings.ToLower(override) {
 	case "kitty":
 		return ModeKitty
+	case "sixel":
+		return ModeSixel
 	case "blocks":
 		return ModeBlocks
 	}
@@ -42,7 +63,24 @@ func DetectMode(override string, getenv func(string) string) Mode {
 	if isITerm2(getenv) && atLeastVersion(iterm2Version(getenv), 3, 7, 0) {
 		return ModeKitty
 	}
+	if isSixelTerminal(term, getenv) {
+		return ModeSixel
+	}
 	return ModeBlocks
+}
+
+// isSixelTerminal reports whether the environment names a terminal that draws
+// sixel graphics. foot is the reason this exists: it implements sixel and no
+// Kitty protocol at all. mlterm and WezTerm are the others that both speak
+// sixel and are recognisable from the environment; WezTerm has the Kitty
+// protocol but not the Unicode placeholders, so sixel is the better answer
+// there and it is deliberately not listed with the Kitty terminals above.
+func isSixelTerminal(term string, getenv func(string) string) bool {
+	term = strings.ToLower(term)
+	if strings.HasPrefix(term, "foot") || strings.HasPrefix(term, "mlterm") {
+		return true
+	}
+	return strings.EqualFold(getenv("TERM_PROGRAM"), "WezTerm")
 }
 
 // isITerm2 reports whether we are talking to iTerm2. LC_TERMINAL is the one

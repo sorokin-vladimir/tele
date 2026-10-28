@@ -350,6 +350,22 @@ func reactionsHaveUnread(mr tg.MessageReactions) bool {
 	return false
 }
 
+// normalizeReactionEmoji standardizes Telegram reaction emojis to emoji presentation.
+// Telegram delivers incoming heart (U+2764) and writing hand (U+270D) reactions
+// without variation selector U+FE0F, which defaults to text presentation. Standardizing
+// to emoji presentation ensures consistent emoji rendering and byte-for-byte comparisons
+// throughout the app.
+func normalizeReactionEmoji(emoji string) string {
+	switch emoji {
+	case "\u2764":
+		return "\u2764\ufe0f"
+	case "\u270d":
+		return "\u270d\ufe0f"
+	default:
+		return emoji
+	}
+}
+
 // newestUnreadReaction returns the emoji and timestamp of the most recent unread
 // reaction on the message that was not sent by us. ok is false when there is no
 // such reaction. A custom-emoji reaction yields ok=true with an empty emoji (it
@@ -370,7 +386,7 @@ func newestUnreadReaction(mr tg.MessageReactions) (emoji string, date time.Time,
 	}
 	date = time.Unix(int64(best.Date), 0)
 	if e, isEmoji := best.Reaction.(*tg.ReactionEmoji); isEmoji {
-		return e.Emoticon, date, true
+		return normalizeReactionEmoji(e.Emoticon), date, true
 	}
 	return "", date, true
 }
@@ -384,7 +400,7 @@ func convertReactions(mr tg.MessageReactions) []domain.Reaction {
 		}
 		_, isChosen := rc.GetChosenOrder()
 		out = append(out, domain.Reaction{
-			Emoji:    emoji.Emoticon,
+			Emoji:    normalizeReactionEmoji(emoji.Emoticon),
 			Count:    rc.Count,
 			IsChosen: isChosen,
 		})

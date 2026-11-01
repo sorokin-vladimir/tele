@@ -5,24 +5,44 @@ import "strings"
 // Mode is the selected image rendering strategy.
 type Mode int
 
+// String names the mode the way photos.mode spells it, so a log line and the
+// config file speak the same language.
+func (m Mode) String() string {
+	switch m {
+	case ModeKitty:
+		return "kitty"
+	case ModeSixel:
+		return "sixel"
+	default:
+		return "blocks"
+	}
+}
+
 const (
 	// ModeBlocks renders photos as ANSI half-block art (universal fallback).
 	ModeBlocks Mode = iota
 	// ModeKitty renders photos via the Kitty graphics protocol.
 	ModeKitty
+	// ModeSixel renders inline photo previews and the photo modal via DEC
+	// sixel, repainting graphics after text updates and retaining block art
+	// underneath as a fallback.
+	ModeSixel
 )
 
 // DetectMode picks a rendering mode. override is the config value
-// (photos.mode): "kitty" or "blocks" force a mode, "auto" (or empty) runs
-// heuristics. getenv is usually os.Getenv; it is injected for testing.
+// (photos.mode): "kitty", "sixel" or "blocks" force a mode, "auto" (or empty)
+// runs heuristics. getenv is usually os.Getenv; it is injected for testing.
 //
 // Kitty is enabled only for terminals with confirmed Unicode-placeholder
 // support (kitty, Ghostty, iTerm2 from 3.7.0) and never inside a tmux/screen
-// session (no passthrough this pass).
+// session (no passthrough this pass). Sixel is enabled for foot, which draws
+// sixel graphics and not Kitty ones, with an explicit override for other terminals.
 func DetectMode(override string, getenv func(string) string) Mode {
 	switch strings.ToLower(override) {
 	case "kitty":
 		return ModeKitty
+	case "sixel":
+		return ModeSixel
 	case "blocks":
 		return ModeBlocks
 	}
@@ -42,7 +62,16 @@ func DetectMode(override string, getenv func(string) string) Mode {
 	if isITerm2(getenv) && atLeastVersion(iterm2Version(getenv), 3, 7, 0) {
 		return ModeKitty
 	}
+	if isSixelTerminal(term) {
+		return ModeSixel
+	}
 	return ModeBlocks
+}
+
+// isSixelTerminal selects only foot, the directly validated Sixel terminal.
+// Other terminals can opt in with photos.mode: sixel.
+func isSixelTerminal(term string) bool {
+	return strings.HasPrefix(strings.ToLower(term), "foot")
 }
 
 // isITerm2 reports whether we are talking to iTerm2. LC_TERMINAL is the one

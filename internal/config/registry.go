@@ -242,10 +242,10 @@ var registry = []settings.Entry{
 		Process: settings.Client,
 		Group:   "photos",
 		Label:   "Image mode",
-		Help:    "How images are drawn: auto picks Kitty graphics when the terminal supports them and block art otherwise. Read once at startup, because the renderer and everything already transmitted to the terminal are chosen from it.",
+		Help:    "How images are drawn: auto picks Kitty graphics when the terminal supports them, sixel for a terminal that draws sixel and not Kitty (foot), and block art otherwise. Sixel draws inline photo previews, album tiles, and the photo modal, with block-art fallback. Read once at startup, because the renderer and everything already transmitted to the terminal are chosen from it.",
 		Widget:  settings.Choice,
 		Applies: settings.Startup,
-		Choices: []string{"auto", "kitty", "blocks"},
+		Choices: []string{"auto", "kitty", "sixel", "blocks"},
 	},
 	{
 		Key:     "photos.kitty_placement_cap",

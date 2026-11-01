@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -754,9 +754,8 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 // It drops the first labelW display columns of artRow and prepends the label, so
 // the label reads over the picture: for a Kitty placeholder row the dropped cells
 // leave a hole where the terminal draws no image; for block art the label
-// overwrites the blocks. xansi.TruncateLeft is width-aware, so it slices whole
-// placeholder cells (rune + diacritics) and re-emits the active foreground for the
-// remaining image cells.
+// overwrites the blocks. TruncateInlineLeft is width-aware and also preserves
+// Sixel inline markers while dropping the covered image cells.
 func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 	labelW := lipgloss.Width(label)
 	// Both callers hand over a plain badge — albumBadgeLabel and the space the
@@ -767,7 +766,7 @@ func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 	if labelW >= imgCols {
 		return painted // label spans the whole row; no image cells remain
 	}
-	return painted + xansi.TruncateLeft(artRow, labelW, "")
+	return painted + media.TruncateInlineLeft(artRow, labelW)
 }
 
 // captionLines wraps the album caption inside the bubble borders, matching the

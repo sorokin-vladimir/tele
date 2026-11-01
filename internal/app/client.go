@@ -129,9 +129,26 @@ func (c *Client) Run() error {
 	c.keyMap = km
 	c.noticeSeen, _ = notices.NewFileSeen(filepath.Join(c.c.StateDir, NoticesFile))
 
-	c.prog = tea.NewProgram(ui.NewShell(c.buildRoot(ctx, true), func() ui.RootModel {
-		return c.buildRoot(ctx, false)
-	}))
+	// Sixel requires a terminal raster surface. A redirected stream has no
+	// renderer hyperlink support, so retain the ordinary block-art path.
+	c.imageMode = imageModeForOutput(c.imageMode, term.IsTerminal(os.Stdout.Fd()) && os.Getenv("TERM") != "dumb" && os.Getenv("TERM") != "")
+	var outputOptions []tea.ProgramOption
+	var barrier *ui.SixelRenderBarrier
+	if c.imageMode == media.ModeSixel {
+		barrier = ui.NewSixelRenderBarrier(os.Stdout)
+		defer func() { _ = barrier.Close() }()
+		outputOptions = append(outputOptions, tea.WithOutput(barrier))
+	}
+	buildRoot := func(first bool) ui.RootModel {
+		root := c.buildRoot(ctx, first)
+		if barrier != nil {
+			root = root.WithSixelRenderBarrier(barrier)
+		}
+		return root
+	}
+	c.prog = tea.NewProgram(ui.NewShell(buildRoot(true), func() ui.RootModel {
+		return buildRoot(false)
+	}), outputOptions...)
 	c.send = c.prog.Send
 	go c.bridge(ctx)
 
@@ -337,4 +354,11 @@ func (c *Client) exitErr() error {
 		return nil
 	}
 	return c.ended
+}
+
+func imageModeForOutput(mode media.Mode, terminal bool) media.Mode {
+	if mode == media.ModeSixel && !terminal {
+		return media.ModeBlocks
+	}
+	return mode
 }

@@ -267,6 +267,7 @@ func (m *ChatModel) SetGifLoading(docID int64, spinner string) {
 }
 func (m *ChatModel) SetKnownImages(cache *imagecache.Cache) { m.msgList.SetKnownImages(cache) }
 func (m *ChatModel) SetRenderer(r media.Renderer)           { m.msgList.SetRenderer(r) }
+func (m *ChatModel) InvalidateMediaGeometry()               { m.msgList.InvalidateMediaGeometry() }
 func (m *ChatModel) VisiblePhotoIDs() []int64               { return m.msgList.VisiblePhotoIDs() }
 func (m *ChatModel) PhotoContentCols() int                  { return m.msgList.PhotoContentCols() }
 func (m *ChatModel) PhotoBox(imgW, imgH int) (int, int)     { return m.msgList.PhotoBox(imgW, imgH) }

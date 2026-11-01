@@ -16,6 +16,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - `tele chats` prints a chat's `@username` in its own column, between the id
   and the title, so the name a command takes is on screen. It is never cut
   short (#328).
+- Sixel photo previews and modals, including album tiles, automatic detection for foot and an explicit `photos.mode: sixel` override (#318).
+
 
 ## [2.0.2] - 2026-10-26
 

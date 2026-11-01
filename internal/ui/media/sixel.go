@@ -436,6 +436,14 @@ func nearestSixel(pal []sixelColor, r, g, b int) uint8 {
 
 func newPaletteBox(entries []paletteEntry) *paletteBox {
 	box := &paletteBox{entries: entries}
+	// Bounds must begin at an occupied color, not the black origin: offsets
+	// otherwise inflate the split range of channels with little actual spread.
+	if len(entries) > 0 {
+		first := entries[0]
+		box.rmin, box.rmax = first.r5, first.r5
+		box.gmin, box.gmax = first.g5, first.g5
+		box.bmin, box.bmax = first.b5, first.b5
+	}
 	for _, e := range entries {
 		box.count += e.count
 		if e.r5 < box.rmin {

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/auth/qrlogin"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"go.uber.org/zap"
@@ -30,11 +32,39 @@ const (
 	reasonAbandoned       = "The login was left unfinished in another window. Start again."
 )
 
+// The reasons the QR step shows no QR code, in its place.
+const (
+	reasonQRUnreachable = "Cannot reach Telegram. The QR code will appear once the connection is back."
+	reasonQRWait        = "Telegram asks to wait before a new QR code. It will appear by itself."
+)
+
+const (
+	// qrRenewAhead is how long before a token expires the next one is asked
+	// for, so the one on screen is always good while it is replaced.
+	qrRenewAhead = 5 * time.Second
+	// qrRetry is how long a token Telegram could not be reached for waits to
+	// be asked for again, when the link is not seen coming back first.
+	qrRetry = 10 * time.Second
+)
+
 // ErrLoginAbandoned answers a step when the client answering the login went
-// away in the middle of it. The login starts again from the number: a code is
+// away in the middle of it. The login starts again from the QR code: a code is
 // short-lived, and whoever answers next must not inherit one they never saw
 // (#211).
 var ErrLoginAbandoned = errors.New("the login was abandoned")
+
+// loginClient is what the login asks Telegram: gotd's calls for the number,
+// the code and the password, and the ones for the QR code it has no client
+// for.
+type loginClient interface {
+	auth.FlowClient
+	// ExportLoginToken issues a login token to show; an empty one means the
+	// last one was accepted, and ImportLoginToken finishes the login.
+	ExportLoginToken(ctx context.Context) (qrlogin.Token, error)
+	ImportLoginToken(ctx context.Context) error
+	// CancelCode tells Telegram the code sent will not be typed.
+	CancelCode(ctx context.Context, phone, hash string) error
+}
 
 // authorize returns the logged-in user, logging in first when there is no
 // session to speak of.
@@ -48,7 +78,7 @@ var ErrLoginAbandoned = errors.New("the login was abandoned")
 // starts the next one with no session (#297). Only a start with no session -
 // the first, or the one after an account ended - leads into the login.
 func (af *AuthFlow) authorize(ctx context.Context, self func(context.Context) (*tg.User, error),
-	client auth.FlowClient, hadSession bool) (*tg.User, error) {
+	client loginClient, hadSession bool) (*tg.User, error) {
 	user, err := self(ctx)
 	if telerr.Of(err) != telerr.Unauthorized || hadSession {
 		return user, err
@@ -59,23 +89,156 @@ func (af *AuthFlow) authorize(ctx context.Context, self func(context.Context) (*
 	return self(ctx)
 }
 
-// login logs in through client, asking the person through af. An attempt
-// abandoned in the middle is started again from the number, saying why.
-func (af *AuthFlow) login(ctx context.Context, client auth.FlowClient) error {
+// login logs in through client, asking the person through af. It starts at
+// the QR code, and the phone number is one step from it either way. An attempt
+// abandoned in the middle starts again from the QR code, saying why.
+func (af *AuthFlow) login(ctx context.Context, client loginClient) error {
 	reason := ""
+	byPhone := false
 	for {
-		err := af.attempt(ctx, client, reason)
-		if !errors.Is(err, ErrLoginAbandoned) {
+		var err error
+		if byPhone {
+			err = af.attempt(ctx, client)
+		} else {
+			err = af.qr(ctx, client, reason)
+		}
+		reason = ""
+		switch {
+		case errors.Is(err, ErrLoginByPhone):
+			byPhone = true
+		case errors.Is(err, ErrLoginBackToQR):
+			byPhone = false
+		case errors.Is(err, ErrLoginAbandoned):
+			byPhone, reason = false, reasonAbandoned
+		default:
 			return err
 		}
-		reason = reasonAbandoned
 	}
 }
 
-// attempt is one attempt at the login, from the number on; reason is why the
-// number is asked for, empty the first time.
-func (af *AuthFlow) attempt(ctx context.Context, client auth.FlowClient, reason string) error {
-	phone, sent, err := af.sendCode(ctx, client, reason)
+// qr shows login tokens until one is scanned, the person turns to the number,
+// or the attempt is abandoned; reason is why the step is asked, empty the
+// first time. A token is issued only while a window is there to show it, and
+// one that could not be replaced in time is taken off the screen rather than
+// left there expired (#330).
+func (af *AuthFlow) qr(ctx context.Context, client loginClient, reason string) error {
+	if err := af.show(ctx, AuthRequest{Step: AuthStepQR, Err: reason}); err != nil {
+		return err
+	}
+	var (
+		// issue is closed when a token is to be issued: set while one is
+		// wanted, it waits for a window.
+		issue = af.whenWatched()
+		// renew ends when the token on screen is to be replaced, or when a
+		// token that could not be issued is to be tried again.
+		renew <-chan time.Time
+		// shownUntil is when the token on screen expires; zero with none.
+		shownUntil time.Time
+		// unreachable is set while Telegram could not be reached, so the
+		// link coming back is a reason to try at once.
+		unreachable bool
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case resp := <-af.Responses:
+			if resp.Err != nil {
+				return resp.Err
+			}
+			// The step has no field, so a value answers nothing.
+		case <-af.accepted:
+			return af.importToken(ctx, client)
+		case <-af.ready:
+			if unreachable {
+				renew, issue = nil, af.whenWatched()
+			}
+		case <-renew:
+			renew = nil
+			if !af.isWatched() && !shownUntil.IsZero() {
+				// Nobody to show the next one to: the one on screen is taken
+				// off before it expires there.
+				shownUntil = time.Time{}
+				if err := af.show(ctx, AuthRequest{Step: AuthStepQR, Update: true}); err != nil {
+					return err
+				}
+			}
+			issue = af.whenWatched()
+		case <-issue:
+			issue = nil
+			token, err := af.export(ctx, client, shownUntil)
+			if err == nil && token.Empty() {
+				return af.importToken(ctx, client)
+			}
+			if err == nil {
+				renewIn := tokenRenewal(token)
+				shownUntil, unreachable = time.Now().Add(renewIn+qrRenewAhead), false
+				renew = af.after(renewIn)
+				af.log.Info("login token issued", zap.Duration("expires_in", renewIn+qrRenewAhead))
+				err := af.show(ctx, AuthRequest{Step: AuthStepQR, Update: true, Token: token.URL(), Expires: shownUntil})
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			af.refused(AuthStepQR, err)
+			var why string
+			switch e, _ := telerr.As(err); {
+			case telerr.Of(err) == telerr.RateLimited && e != nil:
+				why, unreachable, renew = reasonQRWait, false, af.after(e.RetryAfter)
+			case telerr.Of(err) == telerr.Network, errors.Is(err, context.DeadlineExceeded):
+				why, unreachable, renew = reasonQRUnreachable, true, af.after(qrRetry)
+			default:
+				return fmt.Errorf("export login token: %w", err)
+			}
+			shownUntil = time.Time{}
+			if err := af.show(ctx, AuthRequest{Step: AuthStepQR, Update: true, Err: why}); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// export issues a login token. While one is on screen, Telegram has until it
+// expires to answer: past that, the one on screen is no good, and the call is
+// taken as Telegram unreachable.
+func (af *AuthFlow) export(ctx context.Context, client loginClient, shownUntil time.Time) (qrlogin.Token, error) {
+	if !shownUntil.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, shownUntil)
+		defer cancel()
+	}
+	return client.ExportLoginToken(ctx)
+}
+
+// tokenRenewal is how long until the token is to be replaced. The expiry is
+// Telegram's clock read against ours, so it is kept within reason: a skewed
+// clock must neither replace a token at once nor leave one on screen long
+// after it expired (#277).
+func tokenRenewal(token qrlogin.Token) time.Duration {
+	d := time.Until(token.Expires()) - qrRenewAhead
+	return min(max(d, time.Second), time.Minute)
+}
+
+// importToken finishes a login whose token was scanned, asking for the 2FA
+// password when the account has one.
+func (af *AuthFlow) importToken(ctx context.Context, client loginClient) error {
+	af.log.Info("login token accepted")
+	err := client.ImportLoginToken(ctx)
+	switch {
+	case err == nil:
+		return nil
+	case tgerr.Is(err, "SESSION_PASSWORD_NEEDED"):
+		return af.password(ctx, client)
+	default:
+		af.refused(AuthStepQR, err)
+		return fmt.Errorf("import login token: %w", err)
+	}
+}
+
+// attempt is one attempt at the login by phone number.
+func (af *AuthFlow) attempt(ctx context.Context, client loginClient) error {
+	phone, sent, err := af.sendCode(ctx, client, "")
 	if err != nil {
 		return err
 	}
@@ -160,10 +323,17 @@ func (af *AuthFlow) refused(step AuthStep, err error) {
 
 // signIn asks for the code until Telegram accepts it, sending a new one when
 // the one asked about has expired.
-func (af *AuthFlow) signIn(ctx context.Context, client auth.FlowClient, phone string, sent *tg.AuthSentCode) error {
+func (af *AuthFlow) signIn(ctx context.Context, client loginClient, phone string, sent *tg.AuthSentCode) error {
 	reason := ""
 	for {
 		code, err := af.askCode(ctx, sent, reason)
+		if errors.Is(err, ErrLoginBackToQR) {
+			// Nobody will type the code now, so Telegram is told: what it
+			// answers changes nothing for the person.
+			if err := client.CancelCode(ctx, phone, sent.PhoneCodeHash); err != nil {
+				af.log.Info("login code not cancelled", zap.Error(err))
+			}
+		}
 		if err != nil {
 			return fmt.Errorf("get code: %w", err)
 		}

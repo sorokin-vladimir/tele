@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/auth/qrlogin"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +28,58 @@ type scriptedLogin struct {
 	// when it may be asked for; none by default.
 	next    tg.AuthCodeTypeClass
 	timeout int
+
+	// exports answers each ExportLoginToken with the next error, and with a
+	// fresh token t1, t2, ... once the script has nil or has run out; the call
+	// numbered accepted (from 1) finds the token accepted instead.
+	mu       sync.Mutex
+	exports  []error
+	exportN  int
+	accepted int
+	// imports answers each ImportLoginToken with the next error.
+	imports []error
+	importN int
+	// cancelled is the hash of every code cancelled, in order.
+	cancelled []string
 }
+
+// exported is how many tokens were asked for so far, read while the login runs.
+func (s *scriptedLogin) exported() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exportN
+}
+
+func (s *scriptedLogin) ExportLoginToken(context.Context) (qrlogin.Token, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.exportN++
+	if err := next(s.exports, s.exportN-1); err != nil {
+		return qrlogin.Token{}, err
+	}
+	if s.exportN == s.accepted {
+		return qrlogin.Token{}, nil
+	}
+	return tokenN(s.exportN), nil
+}
+
+func (s *scriptedLogin) ImportLoginToken(context.Context) error {
+	s.importN++
+	return next(s.imports, s.importN-1)
+}
+
+func (s *scriptedLogin) CancelCode(_ context.Context, _, hash string) error {
+	s.cancelled = append(s.cancelled, hash)
+	return nil
+}
+
+// tokenN is the n-th token the scripted login issues, valid for 30 seconds.
+func tokenN(n int) qrlogin.Token {
+	return qrlogin.NewToken([]byte(fmt.Sprint("t", n)), int(time.Now().Add(30*time.Second).Unix()))
+}
+
+// tokenURL is the URL of the n-th token, as the QR step shows it.
+func tokenURL(n int) string { return tokenN(n).URL() }
 
 func next(script []error, call int) error {
 	if call < len(script) {
@@ -85,23 +138,64 @@ type ask struct {
 	// abandon answers the step with ErrLoginAbandoned rather than a value: the
 	// client answering the login went away.
 	abandon bool
+	// byPhone answers the QR step by turning to the phone number, and back
+	// answers any other step by going back to the QR code.
+	byPhone, back bool
+	// update expects the step already asked with new content rather than a new
+	// asking, and answers nothing.
+	update bool
+	// token is the login token's URL the QR step is expected to show, empty
+	// when it shows none.
+	token string
+	// then runs once the request is seen and before it is answered: what
+	// happens on the other side while the step is on screen.
+	then func()
 }
 
+// turnToPhone is the QR step on screen with no window to issue a token for,
+// answered by turning to the phone number: how a login by number starts.
+var turnToPhone = ask{step: AuthStepQR, byPhone: true}
+
 // playScreen answers the login's requests the way the login screen would, and
-// checks each one is the step and the reason expected.
+// checks each one is the step and the reason expected. A login that ends
+// before every step expected was asked fails the test.
 func playScreen(t *testing.T, af *AuthFlow, asks []ask) {
 	t.Helper()
+	played := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-played:
+		case <-time.After(2 * time.Second):
+			t.Error("the login ended before every step expected was asked")
+		}
+	})
 	go func() {
+		defer close(played)
 		for _, a := range asks {
 			select {
 			case req := <-af.Requests:
 				assert.Equal(t, a.step, req.Step)
 				assert.Equal(t, a.reason, req.Err)
-				if a.abandon {
-					af.Responses <- AuthResponse{Err: ErrLoginAbandoned}
-					continue
+				assert.Equal(t, a.update, req.Update, "step %s asked anew or updated", a.step)
+				if a.step == AuthStepQR {
+					assert.Equal(t, a.token, req.Token)
 				}
-				af.Responses <- AuthResponse{Value: a.answer}
+				if a.then != nil {
+					a.then()
+				}
+				switch {
+				case a.update, a.step == AuthStepQR && !a.byPhone && !a.abandon:
+					// The QR step has no field: it is answered only by
+					// leaving it, and stays on screen until then.
+				case a.abandon:
+					af.Responses <- AuthResponse{Err: ErrLoginAbandoned}
+				case a.byPhone:
+					af.Responses <- AuthResponse{Err: ErrLoginByPhone}
+				case a.back:
+					af.Responses <- AuthResponse{Err: ErrLoginBackToQR}
+				default:
+					af.Responses <- AuthResponse{Value: a.answer}
+				}
 			case <-time.After(2 * time.Second):
 				assert.Fail(t, "login stopped asking", "expected step %d", a.step)
 				return
@@ -116,6 +210,7 @@ func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(400, "PHONE_CODE_INVALID")}}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "11111"},
 		{step: AuthStepCode, reason: reasonCodeInvalid, answer: "12345"},
@@ -126,16 +221,18 @@ func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
 	assert.Equal(t, 2, client.signIns)
 }
 
-// A login left in the middle starts again from the number, saying why, rather
+// A login left in the middle starts again from the QR code, saying why, rather
 // than ending the account: whoever answers next starts fresh instead of
-// inheriting a code they never saw (#211).
-func TestLogin_AnAbandonedLoginStartsAgainFromTheNumber(t *testing.T) {
+// inheriting a code they never saw (#211, #330).
+func TestLogin_AnAbandonedLoginStartsAgainFromTheQRCode(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, abandon: true},
-		{step: AuthStepPhone, reason: reasonAbandoned, answer: "+10000000000"},
+		{step: AuthStepQR, reason: reasonAbandoned, byPhone: true},
+		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "12345"},
 	})
 
@@ -149,6 +246,7 @@ func TestLogin_ExpiredCodeSendsANewOne(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(400, "PHONE_CODE_EXPIRED")}}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "11111"},
 		{step: AuthStepCode, reason: reasonCodeExpired, answer: "22222"},
@@ -162,6 +260,7 @@ func TestLogin_InvalidNumberIsAskedAgain(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_INVALID")}}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "12"},
 		{step: AuthStepPhone, reason: reasonNumberInvalid, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "12345"},
@@ -180,6 +279,7 @@ func TestLogin_WrongPasswordIsAskedAgain(t *testing.T) {
 		password: []error{auth.ErrPasswordInvalid},
 	}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "12345"},
 		{step: AuthStepPassword, answer: "wrong"},
@@ -197,6 +297,7 @@ func TestLogin_OtherRefusalEndsTheLogin(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(420, "FLOOD_WAIT")}}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "12345"},
 	})
@@ -215,6 +316,7 @@ func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
 		af := NewAuthFlow(zap.NewNop())
 		client := &scriptedLogin{sendCode: []error{flood}}
 		playScreen(t, af, []ask{
+			turnToPhone,
 			{step: AuthStepPhone, answer: "+10000000000"},
 			{step: AuthStepPhone, reason: reasonTooManyAttempts, answer: "+10000000000"},
 			{step: AuthStepCode, answer: "12345"},
@@ -230,7 +332,7 @@ func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
 func TestLogin_BannedNumberEndsTheLogin(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_BANNED")}}
-	playScreen(t, af, []ask{{step: AuthStepPhone, answer: "+10000000000"}})
+	playScreen(t, af, []ask{turnToPhone, {step: AuthStepPhone, answer: "+10000000000"}})
 
 	err := af.login(context.Background(), client)
 
@@ -301,6 +403,7 @@ func TestAuthorize_NoSessionLogsInWithoutACause(t *testing.T) {
 	af := NewAuthFlow(zap.NewNop())
 	self := &scriptedSelf{errs: []error{refused(401, "AUTH_KEY_UNREGISTERED")}}
 	playScreen(t, af, []ask{
+		turnToPhone,
 		{step: AuthStepPhone, answer: "+10000000000"},
 		{step: AuthStepCode, answer: "12345"},
 	})

@@ -208,7 +208,10 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
 	// Every update that arrives is a message the clock check let through, so it
 	// ends a clock skew (#277).
-	arrivals := c.skew.arrivals(hook)
+	//
+	// A scanned login token is reported by an update that comes before the
+	// login ends, so it is caught on the way in (#330).
+	arrivals := watchLoginToken(c.skew.arrivals(hook), af.TokenAccepted)
 
 	// resync forces a full catch-up (getDifference) on every reconnect after the
 	// first, so state missed during OS sleep/suspend is reconciled immediately on
@@ -227,7 +230,14 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 				}
 			}()
 		},
-		link: c.onLink,
+		// The login waiting to issue a QR code for want of Telegram tries again
+		// the moment the link is back (#330).
+		link: func(up bool) {
+			c.onLink(up)
+			if up {
+				af.LinkReady()
+			}
+		},
 	}
 
 	go func() {
@@ -313,7 +323,8 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// the first mistyped code (#285), and our own check of whether it is
 		// needed rather than auth.Client.Status, which sends a banned account
 		// into it too (#254).
-		self, err := af.authorize(ctx, tc.Self, tc.Auth(), hadSession)
+		login := newGotdLogin(tc, c.endpoint.Key.ID, c.endpoint.Key.Hash, c.log)
+		self, err := af.authorize(ctx, tc.Self, login, hadSession)
 		if err != nil {
 			c.log.Error("auth failed", zap.Error(err))
 			return err

@@ -8,8 +8,10 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 )
 
 type AuthRequestMsg struct {
@@ -19,6 +21,15 @@ type AuthRequestMsg struct {
 	Err string
 	// Seq names this asking of the step, for the answer to name back.
 	Seq int
+	// Token is the URL the QR step draws, empty while there is none (#330).
+	Token string
+}
+
+// LoginSwitchMsg leaves the step named by Seq for the other way to log in:
+// the number from the QR code, the QR code from any other step (#330).
+type LoginSwitchMsg struct {
+	Seq int
+	To  project.LoginStepKind
 }
 
 // LoginAnswerMsg is what was typed at a login step, for the root to hand to
@@ -68,7 +79,16 @@ type LoginModel struct {
 	notice string
 	// slow is set when SlowConnectMsg arrives while still connecting.
 	slow bool
+	// token is the URL the QR step draws.
+	token string
+	// roomW and roomH are the cells the screen's content may take; zero
+	// until the root says.
+	roomW, roomH int
 }
+
+// SetRoom sets the cells the screen's content may take: what decides whether
+// the QR code fits, and where its text goes.
+func (m *LoginModel) SetRoom(w, h int) { m.roomW, m.roomH = w, h }
 
 // SetNotice sets what is said under the number the first time it is asked for:
 // why the person is back at the login.
@@ -119,6 +139,10 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.step = msg.Step
 		m.seq = msg.Seq
 		m.err = msg.Err
+		m.token = msg.Token
+		// Only the password is masked: the login can come back from it to a
+		// step that is not (#330).
+		m.input.EchoMode = textinput.EchoNormal
 		if msg.Step == project.LoginPhone && m.notice != "" {
 			// Said once: a number asked for again has a reason of its own.
 			if m.err == "" {
@@ -159,6 +183,20 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return TransitionToMainMsg{} }
 
 	case tea.KeyPressMsg:
+		if m.step == project.LoginQR {
+			// The QR step has no field: p or Enter turn to the number, and
+			// every other key goes nowhere (#330).
+			if msg.Code == tea.KeyEnter || msg.Text == "p" {
+				turn := LoginSwitchMsg{Seq: m.seq, To: project.LoginPhone}
+				return m, func() tea.Msg { return turn }
+			}
+			return m, nil
+		}
+		if msg.Code == tea.KeyEscape && m.step >= 0 {
+			back := LoginSwitchMsg{Seq: m.seq, To: project.LoginQR}
+			m.input.Reset()
+			return m, func() tea.Msg { return back }
+		}
 		if msg.Code == tea.KeyEnter && m.step >= 0 {
 			val := m.input.Value()
 			// A copied number or code often brings a space or a line break
@@ -187,8 +225,81 @@ func (m LoginModel) View() tea.View {
 		s = m.err
 	case m.step < 0:
 		s = "Connecting...\n"
+	case m.step == project.LoginQR:
+		s = m.qrView()
 	default:
-		s = fmt.Sprintf("%s\n\n%s\n\n%s", m.prompt, m.input.View(), m.err)
+		s = fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s", m.prompt, m.input.View(), m.err, loginBackHint)
 	}
 	return tea.NewView(s)
+}
+
+// What the QR step says. The words for where to scan are Telegram's own, so
+// the person finds the menu item they name (#330).
+const (
+	qrInstruction  = "Open Telegram on your phone, go to Settings > Devices > Link Desktop Device, and scan this QR code."
+	qrPhoneHint    = "Press p or Enter to log in by phone number."
+	qrTooSmall     = "Make the window larger to show the QR code, or press p to log in by phone number."
+	qrWaiting      = "Getting a QR code..."
+	loginBackHint  = "Press Esc to go back to the QR code."
+	qrGap          = 3
+	qrMinTextWidth = 28
+)
+
+// qrView is the QR step in the room it has: the code with the text beside it
+// when there is width for both, under it when there is height, and otherwise
+// a request for more room. With no token there is no code, only why.
+func (m LoginModel) qrView() string {
+	if m.token == "" {
+		why := m.err
+		if why == "" {
+			why = qrWaiting
+		}
+		return m.wrap(qrInstruction+"\n\n"+why+"\n\n"+qrPhoneHint, m.roomW)
+	}
+	code, err := components.QRLines(m.token)
+	if err != nil {
+		return m.wrap(err.Error()+"\n\n"+qrPhoneHint, m.roomW)
+	}
+	codeW, codeH := ansi.StringWidth(code[0]), len(code)
+	text := func(w int) []string {
+		return strings.Split(m.wrap(qrInstruction+"\n\n"+qrPhoneHint, w), "\n")
+	}
+	if beside := m.roomW - codeW - qrGap; beside >= qrMinTextWidth && m.roomH >= codeH {
+		lines := text(beside)
+		if len(lines) <= codeH {
+			return joinBeside(code, lines, qrGap)
+		}
+	}
+	if m.roomW >= codeW {
+		lines := text(codeW)
+		if codeH+1+len(lines) <= m.roomH {
+			return strings.Join(code, "\n") + "\n\n" + strings.Join(lines, "\n")
+		}
+	}
+	return m.wrap(qrTooSmall, min(m.roomW, 2*qrMinTextWidth))
+}
+
+// wrap breaks text to width w, or leaves it whole when no room is known.
+func (m LoginModel) wrap(text string, w int) string {
+	if w <= 0 {
+		return text
+	}
+	return ansi.Wordwrap(text, w, "")
+}
+
+// joinBeside puts text to the right of code, gap cells apart, with the text
+// centred on the code's height.
+func joinBeside(code, text []string, gap int) string {
+	top := (len(code) - len(text)) / 2
+	// canvas:ok the login box renders these lines through a style that
+	// carries the canvas, as it does the rest of the screen's text.
+	pad := strings.Repeat(" ", gap)
+	out := make([]string, len(code))
+	for i, c := range code {
+		out[i] = c
+		if j := i - top; j >= 0 && j < len(text) {
+			out[i] += pad + text[j]
+		}
+	}
+	return strings.Join(out, "\n")
 }

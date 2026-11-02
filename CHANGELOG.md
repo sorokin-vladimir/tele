@@ -23,6 +23,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   would send the next one, and every refusal with Telegram's own error. Never
   the number, the code, the password or the QR code's token (#330).
 
+### Fixed
+
+- A reply quoting one contact in a private chat no longer changes colour from
+  one message to the next: a message Telegram sends without its sender now
+  counts as sent by the chat's user (#282, #316).
+
 ## [2.0.2] - 2026-10-26
 
 ### Fixed

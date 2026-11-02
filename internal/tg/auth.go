@@ -6,6 +6,7 @@ import (
 
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
+	"go.uber.org/zap"
 )
 
 type AuthStep int
@@ -15,6 +16,20 @@ const (
 	AuthStepCode
 	AuthStepPassword
 )
+
+// String names the step the way the log does.
+func (s AuthStep) String() string {
+	switch s {
+	case AuthStepPhone:
+		return "phone"
+	case AuthStepCode:
+		return "code"
+	case AuthStepPassword:
+		return "password"
+	default:
+		return fmt.Sprintf("step(%d)", int(s))
+	}
+}
 
 type AuthRequest struct {
 	Step AuthStep
@@ -37,18 +52,22 @@ type AuthFlow struct {
 	Responses chan AuthResponse
 	// Errors carries fatal auth errors to the UI (buffered 1 so Code() never blocks).
 	Errors chan string
+	// log records each step of the login, never what the person typed (#330).
+	log *zap.Logger
 }
 
-func NewAuthFlow() *AuthFlow {
+func NewAuthFlow(log *zap.Logger) *AuthFlow {
 	return &AuthFlow{
 		Requests:  make(chan AuthRequest),
 		Responses: make(chan AuthResponse),
 		Errors:    make(chan string, 1),
+		log:       log,
 	}
 }
 
 // request puts one step to the login screen and waits for the answer.
 func (af *AuthFlow) request(ctx context.Context, req AuthRequest) (string, error) {
+	af.log.Info("login step asked", zap.String("step", req.Step.String()), zap.Bool("again", req.Err != ""))
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()

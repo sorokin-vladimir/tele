@@ -8,6 +8,7 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
+	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
@@ -105,6 +106,9 @@ func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient, reason
 			return "", nil, fmt.Errorf("get phone: %w", err)
 		}
 		sent, err := client.SendCode(ctx, phone, auth.SendCodeOptions{})
+		if err != nil {
+			af.refused(AuthStepPhone, err)
+		}
 		if tgerr.Is(err, "PHONE_NUMBER_INVALID") {
 			reason = reasonNumberInvalid
 			continue
@@ -119,8 +123,39 @@ func (af *AuthFlow) sendCode(ctx context.Context, client auth.FlowClient, reason
 		if err != nil {
 			return "", nil, fmt.Errorf("send code: %w", err)
 		}
+		af.codeSent(sent)
 		return phone, sent, nil
 	}
+}
+
+// codeSent records how Telegram sent the code and how it would send the next
+// one, which is what a report of a code that never came turns on (#330).
+func (af *AuthFlow) codeSent(sent tg.AuthSentCodeClass) {
+	s, ok := sent.(*tg.AuthSentCode)
+	if !ok {
+		af.log.Info("login needs no code", zap.String("type", sent.TypeName()))
+		return
+	}
+	next := "none"
+	if t, ok := s.GetNextType(); ok {
+		next = t.TypeName()
+	}
+	timeout, _ := s.GetTimeout()
+	af.log.Info("login code sent",
+		zap.String("type", s.Type.TypeName()),
+		zap.String("next_type", next),
+		zap.Int("timeout", timeout))
+}
+
+// refused records what Telegram, or gotd for it, refused at step: the error
+// and, when it is Telegram's own, its type and code. The error never carries
+// what the person typed.
+func (af *AuthFlow) refused(step AuthStep, err error) {
+	fields := []zap.Field{zap.String("step", step.String()), zap.Error(err)}
+	if rpc, ok := tgerr.As(err); ok {
+		fields = append(fields, zap.String("rpc_error", rpc.Type), zap.Int("rpc_code", rpc.Code))
+	}
+	af.log.Info("login refused", fields...)
 }
 
 // signIn asks for the code until Telegram accepts it, sending a new one when
@@ -134,6 +169,9 @@ func (af *AuthFlow) signIn(ctx context.Context, client auth.FlowClient, phone st
 		}
 		_, err = client.SignIn(ctx, phone, code, sent.PhoneCodeHash)
 		var signUp *auth.SignUpRequired
+		if err != nil && !errors.Is(err, auth.ErrPasswordAuthNeeded) && !errors.As(err, &signUp) {
+			af.refused(AuthStepCode, err)
+		}
 		switch {
 		case err == nil:
 			return nil
@@ -144,8 +182,10 @@ func (af *AuthFlow) signIn(ctx context.Context, client auth.FlowClient, phone st
 		case tgerr.Is(err, "PHONE_CODE_EXPIRED"):
 			again, err := client.SendCode(ctx, phone, auth.SendCodeOptions{})
 			if err != nil {
+				af.refused(AuthStepCode, err)
 				return fmt.Errorf("send code again: %w", err)
 			}
+			af.codeSent(again)
 			next, ok := again.(*tg.AuthSentCode)
 			if !ok {
 				return fmt.Errorf("unexpected sent code type: %T", again)
@@ -170,6 +210,9 @@ func (af *AuthFlow) password(ctx context.Context, client auth.FlowClient) error 
 			return fmt.Errorf("get password: %w", err)
 		}
 		_, err = client.Password(ctx, pw)
+		if err != nil {
+			af.refused(AuthStepPassword, err)
+		}
 		if errors.Is(err, auth.ErrPasswordInvalid) {
 			reason = reasonPasswordInvalid
 			continue

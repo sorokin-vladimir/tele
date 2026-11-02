@@ -12,6 +12,7 @@ import (
 	"github.com/gotd/td/tgerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
@@ -21,6 +22,10 @@ import (
 type scriptedLogin struct {
 	sendCode, signIn, password []error
 	sends, signIns, passwords  int
+	// next and timeout are what each sent code says about the next way and
+	// when it may be asked for; none by default.
+	next    tg.AuthCodeTypeClass
+	timeout int
 }
 
 func next(script []error, call int) error {
@@ -35,7 +40,14 @@ func (s *scriptedLogin) SendCode(context.Context, string, auth.SendCodeOptions) 
 	if err := next(s.sendCode, s.sends-1); err != nil {
 		return nil, err
 	}
-	return &tg.AuthSentCode{Type: &tg.AuthSentCodeTypeApp{}, PhoneCodeHash: fmt.Sprint("hash", s.sends)}, nil
+	sent := &tg.AuthSentCode{Type: &tg.AuthSentCodeTypeApp{}, PhoneCodeHash: fmt.Sprint("hash", s.sends)}
+	if s.next != nil {
+		sent.SetNextType(s.next)
+	}
+	if s.timeout != 0 {
+		sent.SetTimeout(s.timeout)
+	}
+	return sent, nil
 }
 
 func (s *scriptedLogin) SignIn(context.Context, string, string, string) (*tg.AuthAuthorization, error) {
@@ -101,7 +113,7 @@ func playScreen(t *testing.T, af *AuthFlow, asks []ask) {
 // A mistyped code is asked for again, with the reason, and no new code is sent:
 // the one on the person's phone is still good (#285).
 func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(400, "PHONE_CODE_INVALID")}}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "+10000000000"},
@@ -118,7 +130,7 @@ func TestLogin_MistypedCodeIsAskedAgain(t *testing.T) {
 // than ending the account: whoever answers next starts fresh instead of
 // inheriting a code they never saw (#211).
 func TestLogin_AnAbandonedLoginStartsAgainFromTheNumber(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "+10000000000"},
@@ -134,7 +146,7 @@ func TestLogin_AnAbandonedLoginStartsAgainFromTheNumber(t *testing.T) {
 
 // An expired code is not the person's mistake: a new one is sent and asked for.
 func TestLogin_ExpiredCodeSendsANewOne(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(400, "PHONE_CODE_EXPIRED")}}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "+10000000000"},
@@ -147,7 +159,7 @@ func TestLogin_ExpiredCodeSendsANewOne(t *testing.T) {
 }
 
 func TestLogin_InvalidNumberIsAskedAgain(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_INVALID")}}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "12"},
@@ -162,7 +174,7 @@ func TestLogin_InvalidNumberIsAskedAgain(t *testing.T) {
 // gotd turns a wrong 2FA password into its own sentinel, so that is what marks
 // it rather than Telegram's error type.
 func TestLogin_WrongPasswordIsAskedAgain(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{
 		signIn:   []error{auth.ErrPasswordAuthNeeded},
 		password: []error{auth.ErrPasswordInvalid},
@@ -182,7 +194,7 @@ func TestLogin_WrongPasswordIsAskedAgain(t *testing.T) {
 // screen with its kind intact. A flood wait is Telegram's own limit on guesses,
 // which is why the login sets none of its own.
 func TestLogin_OtherRefusalEndsTheLogin(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{signIn: []error{refused(420, "FLOOD_WAIT")}}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "+10000000000"},
@@ -200,7 +212,7 @@ func TestLogin_OtherRefusalEndsTheLogin(t *testing.T) {
 // (#254). One is a 400 and the other a 406, which is why neither is a kind.
 func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
 	for _, flood := range []error{refused(400, "PHONE_NUMBER_FLOOD"), refused(406, "PHONE_PASSWORD_FLOOD")} {
-		af := NewAuthFlow()
+		af := NewAuthFlow(zap.NewNop())
 		client := &scriptedLogin{sendCode: []error{flood}}
 		playScreen(t, af, []ask{
 			{step: AuthStepPhone, answer: "+10000000000"},
@@ -216,7 +228,7 @@ func TestLogin_TooManyAttemptsAsksForTheNumberAgain(t *testing.T) {
 // A banned number is not the person's typing: asking again meets the same ban,
 // so the login ends with the kind the login screen names it by (#254).
 func TestLogin_BannedNumberEndsTheLogin(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	client := &scriptedLogin{sendCode: []error{refused(400, "PHONE_NUMBER_BANNED")}}
 	playScreen(t, af, []ask{{step: AuthStepPhone, answer: "+10000000000"}})
 
@@ -242,7 +254,7 @@ func (s *scriptedSelf) self(context.Context) (*tg.User, error) {
 }
 
 func TestAuthorize_ALoggedInSessionSkipsTheLogin(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	self := &scriptedSelf{}
 	client := &scriptedLogin{}
 
@@ -270,7 +282,7 @@ func TestAuthorize_ALogOutEndsTheAccountRatherThanLoggingIn(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			af := NewAuthFlow()
+			af := NewAuthFlow(zap.NewNop())
 			client := &scriptedLogin{}
 
 			_, err := af.authorize(context.Background(), (&scriptedSelf{errs: []error{tt.err}}).self, client, true)
@@ -286,7 +298,7 @@ func TestAuthorize_ALogOutEndsTheAccountRatherThanLoggingIn(t *testing.T) {
 
 // With no session there was nothing to log out of: a first start logs in.
 func TestAuthorize_NoSessionLogsInWithoutACause(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	self := &scriptedSelf{errs: []error{refused(401, "AUTH_KEY_UNREGISTERED")}}
 	playScreen(t, af, []ask{
 		{step: AuthStepPhone, answer: "+10000000000"},
@@ -302,7 +314,7 @@ func TestAuthorize_NoSessionLogsInWithoutACause(t *testing.T) {
 // as "not logged in" and walked the person through number and code into the
 // same ban (#254).
 func TestAuthorize_ABannedAccountIsOfferedNoLogin(t *testing.T) {
-	af := NewAuthFlow()
+	af := NewAuthFlow(zap.NewNop())
 	self := &scriptedSelf{errs: []error{refused(401, "USER_DEACTIVATED_BAN")}}
 	client := &scriptedLogin{}
 

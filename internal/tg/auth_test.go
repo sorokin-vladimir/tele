@@ -8,10 +8,11 @@ import (
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestAuthFlow_Phone(t *testing.T) {
-	af := internaltg.NewAuthFlow()
+	af := internaltg.NewAuthFlow(zap.NewNop())
 	ctx := context.Background()
 
 	go func() {
@@ -26,7 +27,7 @@ func TestAuthFlow_Phone(t *testing.T) {
 }
 
 func TestAuthFlow_ContextCancelled(t *testing.T) {
-	af := internaltg.NewAuthFlow()
+	af := internaltg.NewAuthFlow(zap.NewNop())
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 

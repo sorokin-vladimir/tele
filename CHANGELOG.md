@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-02
+
 ### Added
 
 - `tele chats` prints a chat's `@username` in its own column, between the id

@@ -49,6 +49,7 @@ func (c *Clients) Add(att *core.Attachment) (remove func()) {
 			c.mu.Lock()
 			delete(c.all, att)
 			delete(c.kinds, att)
+			c.tellWatched()
 			c.mu.Unlock()
 			close(gone)
 		})
@@ -79,6 +80,16 @@ func (c *Clients) Join(o *core.Owner) {
 	c.owner = o
 	for att := range c.all {
 		att.Join(o)
+	}
+	c.tellWatched()
+}
+
+// tellWatched tells the owner of the moment whether a window is attached,
+// which is when its login issues a QR code (#330). The host is the one to
+// say: only it heard what each client is. Called with c.mu held.
+func (c *Clients) tellWatched() {
+	if c.owner != nil {
+		c.owner.SetWatched(c.countedLocked(wire.KindWindow) > 0)
 	}
 }
 
@@ -120,6 +131,7 @@ func (c *Clients) introduce(att *core.Attachment, kind wire.ClientKind) {
 	defer c.mu.Unlock()
 	if _, ok := c.all[att]; ok {
 		c.kinds[att] = kind
+		c.tellWatched()
 	}
 }
 
@@ -132,6 +144,10 @@ func (c *Clients) Commands() int { return c.counted(wire.KindCommand) }
 func (c *Clients) counted(kind wire.ClientKind) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.countedLocked(kind)
+}
+
+func (c *Clients) countedLocked(kind wire.ClientKind) int {
 	n := 0
 	for _, k := range c.kinds {
 		if k == kind {

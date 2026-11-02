@@ -36,19 +36,28 @@ const (
 	LoginPhone LoginStepKind = iota
 	LoginCode
 	LoginPassword
+	// LoginQR shows a QR code for an app already logged in to scan (#330).
+	LoginQR
 )
 
 // LoginStep is the step of the login waiting for an answer. It is state, not a
 // question put to one client: whoever attaches while it waits sees it, and
-// whoever answers first moves it on. It carries no secret, only what the
-// screen says about the step.
+// whoever answers first moves it on. It carries nothing the person typed, only
+// what the screen says about the step, and on the QR step the login token to
+// draw: shown to whoever looks, and never logged.
 type LoginStep struct {
 	Kind LoginStepKind
 	// Hint is how the code was sent, for the code step.
 	Hint string
 	// Err says why the step is asked again: the answer given last time was
-	// refused. Empty the first time (#285).
+	// refused. Empty the first time (#285). On the QR step it says why no QR
+	// code is shown.
 	Err string
+	// Token is the URL the QR code draws, and Expires when it stops being
+	// good; empty while there is none to draw. A new token is new content of
+	// the same asking, under the same Seq.
+	Token   string
+	Expires time.Time
 	// Seq tells one asking of a step from the next, so an answer names the
 	// asking it answers and one for an asking already gone is refused.
 	Seq int

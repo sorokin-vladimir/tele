@@ -80,6 +80,10 @@ func (a *Attachment) AnswerLogin(ctx context.Context, seq int, value string) err
 	return do(a, ctx, "AnswerLogin", seq, value)
 }
 
+func (a *Attachment) SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error {
+	return do(a, ctx, "SwitchLogin", seq, to)
+}
+
 func (a *Attachment) SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error {
 	return do(a, ctx, "SetMuted", h, muted)
 }

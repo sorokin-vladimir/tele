@@ -152,6 +152,8 @@ func (o *testOwner) EndAccount(core.EndReason) {}
 
 func (o *testOwner) AnswerLogin(context.Context, int, string) error { return nil }
 
+func (o *testOwner) SwitchLogin(context.Context, int, project.LoginStepKind) error { return nil }
+
 func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
 	o.moves = append(o.moves, w)
 	o.reg.MoveWindow(id, w)

@@ -20,6 +20,7 @@ var surface = map[string]any{
 	"LogOut":           core.Surface.LogOut,
 	"EndAccount":       core.Surface.EndAccount,
 	"AnswerLogin":      core.Surface.AnswerLogin,
+	"SwitchLogin":      core.Surface.SwitchLogin,
 	"SetMuted":         core.Surface.SetMuted,
 	"SetArchived":      core.Surface.SetArchived,
 	"SetUnreadMark":    core.Surface.SetUnreadMark,
@@ -71,7 +72,7 @@ var (
 		"AwaitSend",
 	)
 	Writes = set(
-		"LogOut", "EndAccount", "AnswerLogin",
+		"LogOut", "EndAccount", "AnswerLogin", "SwitchLogin",
 		"SetMuted", "SetArchived", "SetUnreadMark", "AddToFolder",
 		"MarkRead", "SetFocus", "ReadReactions", "ReadMentions",
 		"EditMessage", "DeleteMessages", "SendReaction", "Forward", "SetTyping", "SaveDraft",

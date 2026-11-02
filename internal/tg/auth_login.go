@@ -128,7 +128,7 @@ func (af *AuthFlow) qr(ctx context.Context, client loginClient, reason string) e
 	var (
 		// issue is closed when a token is to be issued: set while one is
 		// wanted, it waits for a window.
-		issue = af.whenWatched()
+		issue = af.Watched()
 		// renew ends when the token on screen is to be replaced, or when a
 		// token that could not be issued is to be tried again.
 		renew <-chan time.Time
@@ -151,7 +151,7 @@ func (af *AuthFlow) qr(ctx context.Context, client loginClient, reason string) e
 			return af.importToken(ctx, client)
 		case <-af.ready:
 			if unreachable {
-				renew, issue = nil, af.whenWatched()
+				renew, issue = nil, af.Watched()
 			}
 		case <-renew:
 			renew = nil
@@ -163,7 +163,7 @@ func (af *AuthFlow) qr(ctx context.Context, client loginClient, reason string) e
 					return err
 				}
 			}
-			issue = af.whenWatched()
+			issue = af.Watched()
 		case <-issue:
 			issue = nil
 			token, err := af.export(ctx, client, shownUntil)

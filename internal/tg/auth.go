@@ -120,8 +120,8 @@ func (af *AuthFlow) SetWatched(on bool) {
 	}
 }
 
-// whenWatched is closed while a window is there, or once one comes.
-func (af *AuthFlow) whenWatched() <-chan struct{} {
+// Watched is closed while a window is there, or once one comes.
+func (af *AuthFlow) Watched() <-chan struct{} {
 	af.watchMu.Lock()
 	defer af.watchMu.Unlock()
 	return af.watched
@@ -129,7 +129,7 @@ func (af *AuthFlow) whenWatched() <-chan struct{} {
 
 func (af *AuthFlow) isWatched() bool {
 	select {
-	case <-af.whenWatched():
+	case <-af.Watched():
 		return true
 	default:
 		return false

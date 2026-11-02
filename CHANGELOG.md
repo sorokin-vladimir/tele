@@ -16,6 +16,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - `tele chats` prints a chat's `@username` in its own column, between the id
   and the title, so the name a command takes is on screen. It is never cut
   short (#328).
+- Logging in starts with a QR code to scan with Telegram on a phone, so a
+  login no longer waits on a code that may not arrive. `p` turns to the phone
+  number, and Esc goes back to the QR code from any step after it (#330).
+- The log records each step of the login: how Telegram sent the code, how it
+  would send the next one, and every refusal with Telegram's own error. Never
+  the number, the code, the password or the QR code's token (#330).
 
 ## [2.0.2] - 2026-10-26
 

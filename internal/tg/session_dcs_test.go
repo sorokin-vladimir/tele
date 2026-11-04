@@ -55,7 +55,6 @@ func dialledOnStart(t *testing.T, sessionFile string) map[string]bool {
 	}})
 
 	c := internaltg.NewGotdClient(zap.NewNop(), internaltg.Endpoint{SessionFile: sessionFile, Resolver: resolver}, nil, false)
-	c.SetOnLink(func(bool) {})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = c.Connect(ctx, internaltg.NewAuthFlow(zap.NewNop()), make(chan struct{}), nil)

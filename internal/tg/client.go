@@ -237,7 +237,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// The login waiting to issue a QR code for want of Telegram tries again
 		// the moment the link is back (#330).
 		link: func(up bool) {
-			c.onLink(up)
+			if c.onLink != nil {
+				c.onLink(up)
+			}
 			if up {
 				af.LinkReady()
 			}

@@ -30,7 +30,7 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 ## Workarounds
 
-| Workaround | Where | Issue | Retired by | Status (gotd v0.162.0) |
+| Workaround | Where | Issue | Retired by | Status (gotd v0.163.0) |
 |---|---|---|---|---|
 | Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1852](https://github.com/gotd/td/issues/1852) | open, no fix yet |
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |

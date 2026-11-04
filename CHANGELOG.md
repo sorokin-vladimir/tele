@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-04
+
 ### Fixed
 
 - tele connects again after a restart on networks where some of Telegram's

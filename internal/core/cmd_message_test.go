@@ -145,6 +145,42 @@ func TestSendReaction_SecondTimeRetracts(t *testing.T) {
 	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions)
 }
 
+// Picking the heart emoji again when it has been normalized to emoji presentation
+// retracts it, sending an empty reaction to Telegram (#294).
+func TestSendReaction_HeartReactionRetracts(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Date: time.Unix(1, 0),
+		Reactions: []domain.Reaction{{Emoji: "❤️", Count: 1, IsChosen: true}},
+	}})
+
+	_, err := o.SendReaction(context.Background(), 1, 5, "❤️")
+	require.NoError(t, err)
+
+	require.True(t, c.reactionSent)
+	assert.Empty(t, c.reactedWith, "retracting sends an empty reaction")
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions)
+}
+
+// Picking the writing hand emoji again when it has been normalized to emoji presentation
+// retracts it, sending an empty reaction to Telegram.
+func TestSendReaction_WritingHandReactionRetracts(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Date: time.Unix(1, 0),
+		Reactions: []domain.Reaction{{Emoji: "✍️", Count: 1, IsChosen: true}},
+	}})
+
+	_, err := o.SendReaction(context.Background(), 1, 5, "✍️")
+	require.NoError(t, err)
+
+	require.True(t, c.reactionSent)
+	assert.Empty(t, c.reactedWith, "retracting sends an empty reaction")
+	assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1})[0].Reactions)
+}
+
 func TestSendReaction_RestoresThePreviousReactionsOnFailure(t *testing.T) {
 	c := &stubClient{err: &telerr.Error{Kind: telerr.RateLimited}}
 	o, st := newCmdOwner(t, c)
@@ -188,6 +224,7 @@ func TestSendReaction_JudgesTheSetTheReplyStates(t *testing.T) {
 		{"retracted but still ours", chosen("👍"), "👍", chosen("👍"), false},
 		{"empty set stated", nil, "👍", []domain.Reaction{}, false},
 		{"kept without the variation selector", nil, "❤️", chosen("❤"), true},
+		{"writing hand kept without the variation selector", nil, "✍️", chosen("✍"), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -227,6 +264,18 @@ func TestOptimisticReactions(t *testing.T) {
 			name:    "retracting the only reaction drops it",
 			current: []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}},
 			emoji:   "👍",
+			want:    []domain.Reaction{},
+		},
+		{
+			name:    "retracting normalized heart reaction drops it",
+			current: []domain.Reaction{{Emoji: "❤️", Count: 1, IsChosen: true}},
+			emoji:   "❤️",
+			want:    []domain.Reaction{},
+		},
+		{
+			name:    "retracting normalized writing hand reaction drops it",
+			current: []domain.Reaction{{Emoji: "✍️", Count: 1, IsChosen: true}},
+			emoji:   "✍️",
 			want:    []domain.Reaction{},
 		},
 		{

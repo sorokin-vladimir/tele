@@ -36,7 +36,7 @@ Each workaround below closes one place where gotd lets an update fall through.
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
 | Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1856](https://github.com/gotd/td/issues/1856) | open, no fix yet |
-| Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | not reported yet | not reported yet |
+| Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
 
 ### Channel difference cooldown stripped
 

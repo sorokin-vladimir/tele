@@ -11,6 +11,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- tele connects again after a restart on networks where some of Telegram's
+  addresses are unreachable. It used to dial a built-in list of addresses
+  instead of the ones Telegram sent at login, and retry them forever (#312).
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

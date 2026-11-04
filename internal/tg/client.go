@@ -127,6 +127,10 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	// ends the account or a start with nothing to log out of (#297).
 	stored, _ := sess.LoadSession(ctx)
 	hadSession := len(stored) > 0
+	dcList := savedDCList(ctx, sess)
+	if !dcList.Zero() {
+		c.log.Info("dc addresses from the session", zap.Int("count", len(dcList.Options)))
+	}
 
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, c.mustDeliver, c.droppable, c.log, func(id int) bool {
@@ -266,6 +270,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	tc := telegram.NewClient(c.endpoint.Key.ID, c.endpoint.Key.Hash, telegram.Options{
 		UpdateHandler:  arrivals,
 		SessionStorage: sess,
+		// The addresses Telegram sent last time rather than gotd's static
+		// list, which can name ones no longer served (#312).
+		DCList: dcList,
 		// One resolver for every data centre this client ever reaches, so a
 		// photo from a media DC takes the same route as the message it came
 		// with. It is built from the proxy section the process started with

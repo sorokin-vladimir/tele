@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -103,12 +104,12 @@ func (p *OpenPicker) View() string {
 
 	innerW := 0
 	for _, r := range rows {
-		if w := lipgloss.Width(r); w > innerW {
+		if w := textwidth.Width(r); w > innerW {
 			innerW = w
 		}
 	}
 	innerW++ // right padding
-	if hintW := lipgloss.Width(" " + hint + " "); hintW+2 > innerW {
+	if hintW := textwidth.Width(" " + hint + " "); hintW+2 > innerW {
 		innerW = hintW + 2
 	}
 

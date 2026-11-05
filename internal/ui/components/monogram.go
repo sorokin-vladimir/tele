@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -42,12 +43,12 @@ func monogramLines(user domain.User, cols, rows int) []string {
 
 	innerW := cols - 2
 	label := monogramInitials(user)
-	if lipgloss.Width(label) > innerW {
+	if textwidth.Width(label) > innerW {
 		// A name starting with a wide rune can outgrow a narrow block. One
 		// letter says less than two and still says something; none at all is
 		// the last resort, and an empty frame is still the right size.
 		label = firstRune(label)
-		if lipgloss.Width(label) > innerW {
+		if textwidth.Width(label) > innerW {
 			label = ""
 		}
 	}

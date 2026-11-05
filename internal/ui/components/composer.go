@@ -14,6 +14,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -460,8 +461,8 @@ func (c *Composer) chipLine(name, sizePart, suffix string) string {
 	const prefix = "📎 "
 	inner := c.width - 2
 	// Width left for the filename once the fixed parts (icon, size, toggle) are placed.
-	nameBudget := inner - runewidth.StringWidth(prefix) - runewidth.StringWidth(sizePart) - runewidth.StringWidth(suffix)
-	if nameBudget < runewidth.StringWidth(name) {
+	nameBudget := inner - textwidth.Width(prefix) - textwidth.Width(sizePart) - textwidth.Width(suffix)
+	if nameBudget < textwidth.Width(name) {
 		if nameBudget < 1 {
 			// Even an empty filename overflows (extremely narrow pane or a very
 			// long toggle): truncate the assembled line as a whole.

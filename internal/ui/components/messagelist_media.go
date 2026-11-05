@@ -10,6 +10,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -323,7 +324,7 @@ func videoOverlayLabel(m *domain.MediaRef) string {
 }
 
 // labelLine renders one bordered, right-padded content line for a label.
-// Width is measured with lipgloss.Width so wide emoji pad correctly.
+// Width is measured with textwidth.Width so wide emoji pad correctly.
 //
 // The label arrives as plain text and is painted here rather than by whoever
 // produced it. Every producer of one — placeholderFor, localMediaLabel,
@@ -333,7 +334,7 @@ func videoOverlayLabel(m *domain.MediaRef) string {
 // and the clarification in ADR 0002). Measured before rendering, since the
 // padding is owed on the label's width and not on its escapes.
 func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
-	return paintedLabelLine(theme.S().Body.Render(label), lipgloss.Width(label), actualW, b, bs)
+	return paintedLabelLine(theme.S().Body.Render(label), textwidth.Width(label), actualW, b, bs)
 }
 
 // paintedLabelLine is the same line for a label that arrived already painted.

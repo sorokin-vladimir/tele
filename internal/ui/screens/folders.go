@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -183,7 +183,7 @@ func (m FoldersModel) formatEntry(f domain.FolderFilter, active bool) string {
 	if active {
 		prefix = "▶ "
 	}
-	nameWidth := m.width - lipgloss.Width(prefix) - lipgloss.Width(badge)
+	nameWidth := m.width - textwidth.Width(prefix) - textwidth.Width(badge)
 	if badge != "" {
 		nameWidth-- // reserve 1 col for separator space
 	}
@@ -199,7 +199,7 @@ func (m FoldersModel) formatEntry(f domain.FolderFilter, active bool) string {
 }
 
 func padRight(s string, width int) string {
-	w := lipgloss.Width(s)
+	w := textwidth.Width(s)
 	if w >= width {
 		return s
 	}

@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	xansi "github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -243,7 +243,7 @@ func wrapHelpDesc(desc string, width int) []string {
 	if width <= 0 {
 		return []string{desc}
 	}
-	return strings.Split(xansi.Wrap(desc, width, ""), "\n")
+	return strings.Split(textwidth.Wrap(desc, width), "\n")
 }
 
 func (h *HelpModal) build(km keys.KeyMap) {
@@ -252,7 +252,7 @@ func (h *HelpModal) build(km keys.KeyMap) {
 	keyCol := 3
 	for _, s := range secs {
 		for _, r := range s.Rows {
-			if w := xansi.StringWidth(r.Key); w > keyCol {
+			if w := textwidth.Width(r.Key); w > keyCol {
 				keyCol = w
 			}
 		}
@@ -271,7 +271,7 @@ func (h *HelpModal) build(km keys.KeyMap) {
 		lines = append(lines, theme.S().HelpSection.Render(s.Title))
 		for _, r := range s.Rows {
 			key := r.Key
-			keyW := xansi.StringWidth(key)
+			keyW := textwidth.Width(key)
 			// canvas:ok key padding is styled through HelpBg below to carry the modal background
 			pad := strings.Repeat(" ", max(0, keyCol-keyW))
 

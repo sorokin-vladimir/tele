@@ -10,6 +10,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -421,7 +422,7 @@ func wrapPlain(s string, width int) []string {
 		}
 		line := words[0]
 		for _, w := range words[1:] {
-			if lipgloss.Width(line)+1+lipgloss.Width(w) > width {
+			if textwidth.Width(line)+1+textwidth.Width(w) > width {
 				out = append(out, line)
 				line = w
 				continue
@@ -435,14 +436,14 @@ func wrapPlain(s string, width int) []string {
 
 // truncate cuts s to width cells, marking the cut with an ellipsis.
 func truncate(s string, width int) string {
-	if width <= 0 || lipgloss.Width(s) <= width {
+	if width <= 0 || textwidth.Width(s) <= width {
 		return s
 	}
 	if width == 1 {
 		return "…"
 	}
 	runes := []rune(s)
-	for len(runes) > 0 && lipgloss.Width(string(runes))+1 > width {
+	for len(runes) > 0 && textwidth.Width(string(runes))+1 > width {
 		runes = runes[:len(runes)-1]
 	}
 	return string(runes) + "…"
@@ -481,15 +482,15 @@ func (p *Profile) contentWidth(avatarW int) int {
 	// The identity block is measured with the avatar in front of it: those are
 	// the lines the picture shares a row with, and the phone and the actions
 	// below it start at the overlay's left edge either way.
-	want := lipgloss.Width(p.user.DisplayName())
+	want := textwidth.Width(p.user.DisplayName())
 	if p.user.Username != "" {
-		want = maxInt(want, lipgloss.Width("@"+p.user.Username))
+		want = maxInt(want, textwidth.Width("@"+p.user.Username))
 	}
 	if avatarW > 0 {
 		want += avatarW + avatarGap
 	}
 	if p.user.Phone != "" {
-		want = maxInt(want, lipgloss.Width(formatPhone(p.user.Phone)))
+		want = maxInt(want, textwidth.Width(formatPhone(p.user.Phone)))
 	}
 	// The bottom border names the actions, and a border cannot be narrower than
 	// what is written on it.
@@ -521,7 +522,7 @@ func (p *Profile) hint() string {
 // action. RenderBox draws the hint or drops it whole, and an overlay that opens
 // without naming a single action is a broken screen rather than an answer, so
 // this is a floor on the overlay's width rather than something to hope for.
-func (p *Profile) hintWidth() int { return lipgloss.Width(p.hint()) }
+func (p *Profile) hintWidth() int { return textwidth.Width(p.hint()) }
 
 // TooSmall reports that the viewport cannot hold the overlay. The caller says
 // so rather than drawing a broken box.
@@ -567,7 +568,7 @@ func (p *Profile) View() string {
 	// surface rather than a ragged one: an unpainted cell inside a box reads as
 	// a hole (#227).
 	for i, l := range lines {
-		if w := lipgloss.Width(l); w < innerW {
+		if w := textwidth.Width(l); w < innerW {
 			lines[i] = l + theme.PadTo(w, innerW)
 		}
 	}

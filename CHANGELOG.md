@@ -22,6 +22,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   its bytes still come through the classic media pipeline, and details always
   render expanded, as a terminal has no collapse control.
 
+### Fixed
+
+- Rows carrying an emoji made of a base glyph and a variation selector (✍️,
+  ❤️) keep their right border. Text is measured, wrapped and sliced by the
+  terminal's rule.
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

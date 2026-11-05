@@ -8,10 +8,10 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 )
 
 type AuthRequestMsg struct {
@@ -260,7 +260,7 @@ func (m LoginModel) qrView() string {
 	if err != nil {
 		return m.wrap(err.Error()+"\n\n"+qrPhoneHint, m.roomW)
 	}
-	codeW, codeH := ansi.StringWidth(code[0]), len(code)
+	codeW, codeH := textwidth.Width(code[0]), len(code)
 	text := func(w int) []string {
 		return strings.Split(m.wrap(qrInstruction+"\n\n"+qrPhoneHint, w), "\n")
 	}
@@ -284,7 +284,7 @@ func (m LoginModel) wrap(text string, w int) string {
 	if w <= 0 {
 		return text
 	}
-	return ansi.Wordwrap(text, w, "")
+	return textwidth.Wordwrap(text, w, "")
 }
 
 // joinBeside puts text to the right of code, gap cells apart, with the text

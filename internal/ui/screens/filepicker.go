@@ -11,6 +11,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -245,7 +246,7 @@ func (m *FilePickerModel) View() string {
 }
 
 func truncatePath(p string, max int) string {
-	if lipgloss.Width(p) <= max {
+	if textwidth.Width(p) <= max {
 		return p
 	}
 	r := []rune(p)

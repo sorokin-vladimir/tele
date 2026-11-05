@@ -3,8 +3,8 @@ package components
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 )
 
 // richContent reports whether a message carries rich block content worth the
@@ -25,14 +25,13 @@ func wrappedLineCount(text string, entities []domain.MessageEntity, contentW int
 	rendered := RenderEntities(text, entities)
 	// canvas:ok measurement only — the render is counted, never emitted, so a
 	// background here would cost work on the height path and reach no cell.
-	wrapStyle := lipgloss.NewStyle().Width(contentW)
 	n := 0
 	for _, part := range strings.Split(rendered, "\n") {
 		if part == "" {
 			n++ // blank line preserved as one row
 			continue
 		}
-		n += len(strings.Split(wrapStyle.Render(part), "\n"))
+		n += len(strings.Split(textwidth.Wrap(part, contentW), "\n"))
 	}
 	return n
 }

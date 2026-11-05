@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -319,11 +320,11 @@ func rowBase(selected, active bool) lipgloss.Style {
 func rowContent(title, badge string, inner int, base lipgloss.Style, styleTitle func(string) string) string {
 	if badge == "" {
 		trunc := runewidth.Truncate(title, inner, "…")
-		return styleTitle(trunc) + padRow(base, inner-lipgloss.Width(trunc))
+		return styleTitle(trunc) + padRow(base, inner-textwidth.Width(trunc))
 	}
-	badgeW := lipgloss.Width(badge)
+	badgeW := textwidth.Width(badge)
 	maxTitleW := max(inner-badgeW-1, 0)
 	truncTitle := runewidth.Truncate(title, maxTitleW, "…")
-	pad := max(inner-lipgloss.Width(truncTitle)-badgeW, 0)
+	pad := max(inner-textwidth.Width(truncTitle)-badgeW, 0)
 	return styleTitle(truncTitle) + padRow(base, pad) + badge
 }

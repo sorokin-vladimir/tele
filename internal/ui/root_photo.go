@@ -5,13 +5,13 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	vmedia "github.com/sorokin-vladimir/tele/internal/media"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -254,10 +254,10 @@ func (m RootModel) photoViewerView(base string) string {
 		}
 		if rows > 0 {
 			line := theme.S().Body.Render(videoSpinnerGlyph(pv.spinnerIdx) + " loading…")
-			if lp := (cols - lipgloss.Width(line)) / 2; lp > 0 {
+			if lp := (cols - textwidth.Width(line)) / 2; lp > 0 {
 				line = theme.Pad(lp) + line
 			}
-			line += theme.PadTo(lipgloss.Width(line), cols)
+			line += theme.PadTo(textwidth.Width(line), cols)
 			content[rows/2] = line
 		}
 	case m.imageMode == media.ModeKitty:

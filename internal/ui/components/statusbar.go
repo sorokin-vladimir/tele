@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -155,7 +156,7 @@ func (sb *StatusBar) View() string {
 	// space. It is dropped first when the bar runs out of room: hints and
 	// transfer progress are worth more than the build number.
 	if ver := versionLabel(sb.version); ver != "" {
-		if gap := sb.width - lipgloss.Width(left) - lipgloss.Width(ver); gap >= 1 {
+		if gap := sb.width - textwidth.Width(left) - textwidth.Width(ver); gap >= 1 {
 			// Filler and version each set their own colors: the segments before
 			// them end with a reset, so an enclosing style would not survive.
 			// canvas:ok rendered through Bar, which paints the status-bar surface.

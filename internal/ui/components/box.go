@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -52,11 +53,11 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 	var top string
 	if topTitle != "" {
 		titleStr := " " + topTitle + " "
-		titleW := lipgloss.Width(titleStr)
+		titleW := textwidth.Width(titleStr)
 		fillW := innerW - titleW
 		if fillW >= 2 {
 			if topSuffix != "" {
-				suffixW := lipgloss.Width(topSuffix)
+				suffixW := textwidth.Width(topSuffix)
 				remaining := fillW - suffixW - 4
 				if remaining >= 0 {
 					top = cb(b.TopLeft+b.Top) + paint(topTitle) + cb(b.Top) + theme.Pad(1) + topSuffix + theme.Pad(1) + cb(strings.Repeat(b.Top, remaining)+b.TopRight)
@@ -80,7 +81,7 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 	case bottomSuffix == "":
 		// Hint only — unchanged existing behavior (left-aligned after one border char).
 		hintStr := " " + bottomHint + " "
-		hintW := lipgloss.Width(hintStr)
+		hintW := textwidth.Width(hintStr)
 		fillW := innerW - hintW
 		if fillW >= 2 {
 			// The hint arrives styled by the caller; only the spaces framing it
@@ -97,7 +98,7 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 		}
 		rightStr := " " + bottomSuffix + " "
 		// One leading border char after the corner, then fill, then the labels.
-		fillW := innerW - 1 - lipgloss.Width(leftStr) - lipgloss.Width(rightStr)
+		fillW := innerW - 1 - textwidth.Width(leftStr) - textwidth.Width(rightStr)
 		if fillW >= 1 {
 			// Both labels arrive styled; the box paints only the spaces it puts
 			// around them, which is why the widths above are measured on the
@@ -127,7 +128,7 @@ func RenderBox(content, topTitle, topSuffix, bottomHint, bottomSuffix string, b 
 		// The pad goes after the line, which is after whatever reset the line
 		// ends in — the only position from which a background survives. This is
 		// the interior of every panel, and the largest area of colour on screen.
-		l += theme.PadTo(lipgloss.Width(l), innerW)
+		l += theme.PadTo(textwidth.Width(l), innerW)
 		rightChar := b.Right
 		if showThumb && sb != nil && ri >= sb.TrackTop && ri < sb.TrackTop+sb.TrackLen {
 			tr := ri - sb.TrackTop

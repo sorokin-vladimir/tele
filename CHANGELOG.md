@@ -111,6 +111,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   holds the connection, and a mention it has none for is sent as plain text
   (#208).
 
+### Fixed
+
+- A red heart or writing hand reaction from Telegram is drawn as the emoji, not as a text symbol, and picking it again takes it back (#294).
+
 ## [1.11.13] - 2026-10-13
 
 ### Fixed

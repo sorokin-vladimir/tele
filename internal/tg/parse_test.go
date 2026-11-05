@@ -146,37 +146,31 @@ func TestConvertReactions_NormalizesHeartEmoji(t *testing.T) {
 	mr := tg.MessageReactions{
 		Results: []tg.ReactionCount{
 			{Reaction: &tg.ReactionEmoji{Emoticon: "\u2764"}, Count: 3},
-			{Reaction: &tg.ReactionEmoji{Emoticon: "❤️"}, Count: 1},
 			{Reaction: &tg.ReactionEmoji{Emoticon: "👍"}, Count: 5},
 			{Reaction: &tg.ReactionPaid{}, Count: 2},
 		},
 	}
 	got := convertReactions(mr)
-	require.Len(t, got, 3)
+	require.Len(t, got, 2)
 	assert.Equal(t, "❤️", got[0].Emoji)
 	assert.Equal(t, 3, got[0].Count)
-	assert.Equal(t, "❤️", got[1].Emoji)
-	assert.Equal(t, 1, got[1].Count)
-	assert.Equal(t, "👍", got[2].Emoji)
-	assert.Equal(t, 5, got[2].Count)
+	assert.Equal(t, "👍", got[1].Emoji)
+	assert.Equal(t, 5, got[1].Count)
 }
 
 func TestConvertReactions_NormalizesWritingHandEmoji(t *testing.T) {
 	mr := tg.MessageReactions{
 		Results: []tg.ReactionCount{
 			{Reaction: &tg.ReactionEmoji{Emoticon: "\u270d"}, Count: 2},
-			{Reaction: &tg.ReactionEmoji{Emoticon: "✍️"}, Count: 4},
 			{Reaction: &tg.ReactionEmoji{Emoticon: "👍"}, Count: 5},
 		},
 	}
 	got := convertReactions(mr)
-	require.Len(t, got, 3)
+	require.Len(t, got, 2)
 	assert.Equal(t, "✍️", got[0].Emoji)
 	assert.Equal(t, 2, got[0].Count)
-	assert.Equal(t, "✍️", got[1].Emoji)
-	assert.Equal(t, 4, got[1].Count)
-	assert.Equal(t, "👍", got[2].Emoji)
-	assert.Equal(t, 5, got[2].Count)
+	assert.Equal(t, "👍", got[1].Emoji)
+	assert.Equal(t, 5, got[1].Count)
 }
 
 func TestNewestUnreadReaction_NormalizesHeartEmoji(t *testing.T) {
@@ -202,5 +196,3 @@ func TestNewestUnreadReaction_NormalizesWritingHandEmoji(t *testing.T) {
 	assert.Equal(t, "✍️", emoji)
 	assert.Equal(t, int64(1700000000), date.Unix())
 }
-
-

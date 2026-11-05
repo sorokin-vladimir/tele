@@ -703,6 +703,20 @@ func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, en
 	s.markMsgDirtyLocked(chatID, msgID)
 }
 
+// UpdateMessageRich replaces a message's rich block content. A nil clears it:
+// an edit carries the message's whole current state, so a new version without
+// blocks must not keep drawing the old ones.
+func (s *SQLiteStore) UpdateMessageRich(chatID int64, msgID int, rich *domain.RichMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, i, ok := s.findLocked(chatID, msgID)
+	if !ok {
+		return
+	}
+	s.messages[h][i].Rich = rich
+	s.markMsgDirtyLocked(chatID, msgID)
+}
+
 // MarkMessageEdited records the edit time and whether the label is hidden.
 func (s *SQLiteStore) MarkMessageEdited(chatID int64, msgID int, editDate time.Time, hidden bool) {
 	s.mu.Lock()

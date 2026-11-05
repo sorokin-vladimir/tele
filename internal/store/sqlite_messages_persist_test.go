@@ -57,6 +57,31 @@ func TestSQLite_AppendMessage_PersistsSurvivesReopen(t *testing.T) {
 	assert.Equal(t, "appended", got[0].Text)
 }
 
+func TestSQLite_MessageWithRich_PersistsSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	rich := &domain.RichMessage{Blocks: []domain.RichBlock{
+		{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+		{Kind: domain.RichTable, Bordered: true, Rows: [][]domain.RichCell{
+			{{Text: domain.RichText{Kind: domain.RichTextPlain, Text: "Name"}}},
+		}},
+	}}
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 11, Peer: domain.Peer{ID: 11, Type: domain.PeerUser}})
+	s.SetMessages(11, []domain.Message{{
+		ID: 5, ChatID: 11, Text: "fallback", Date: time.Unix(3000, 0), Rich: rich,
+	}})
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(domain.HistoryKey{ChatID: 11})
+	got := s2.Messages(domain.HistoryKey{ChatID: 11})
+
+	require.Len(t, got, 1)
+	assert.Equal(t, rich, got[0].Rich, "the structured blocks survive a save and a load")
+}
+
 func TestSQLite_CapTrim_DeletesOldestOnDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 

@@ -93,6 +93,41 @@ func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
 	assert.Equal(t, "after", st.Messages(domain.HistoryKey{ChatID: 1})[0].Text)
 }
 
+// An edit carries the message's whole current state, so its rich blocks replace
+// the stored ones, and a later plain edit clears them.
+func TestApplyEdit_ReplacesAndClearsRichContent(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "before", Rich: &domain.RichMessage{
+		Blocks: []domain.RichBlock{{Kind: domain.RichParagraph, Text: paraRich("old")}},
+	}})
+	when := time.Now()
+	editedRich := &domain.RichMessage{
+		Blocks: []domain.RichBlock{{Kind: domain.RichParagraph, Text: paraRich("new")}},
+	}
+
+	_, ok := s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "edited", Rich: editedRich,
+		EditDate: &when, AppliedPosition: 10,
+	})
+	require.True(t, ok)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Equal(t, editedRich, got.Rich, "the edit replaces the old blocks")
+
+	when = when.Add(time.Minute)
+	_, ok = s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "plain",
+		EditDate: &when, AppliedPosition: 11,
+	})
+	require.True(t, ok)
+	got = st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Nil(t, got.Rich, "an edit with no blocks clears the old ones")
+}
+
+func paraRich(text string) domain.RichText {
+	return domain.RichText{Kind: domain.RichTextPlain, Text: text}
+}
+
 // A reaction on a message that was genuinely edited earlier arrives with a
 // non-nil EditDate: edit_date still carries the original edit time and
 // edit_hide is false, because the "edited" label genuinely should show. The

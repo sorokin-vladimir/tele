@@ -31,6 +31,37 @@ func TestEditMessage_ShowsTheNewTextBeforeTheServerAnswers(t *testing.T) {
 	assert.Equal(t, "after", c.editedTo)
 }
 
+func TestEditMessage_ClearsRichContentBeforeTheServerAnswers(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Text: "before", Date: time.Unix(1, 0),
+		Rich: &domain.RichMessage{Blocks: []domain.RichBlock{
+			{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+		}},
+	}})
+
+	require.NoError(t, o.EditMessage(context.Background(), 1, 5, "after", nil))
+
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Nil(t, got.Rich, "a plain-text edit must stop drawing the old blocks")
+}
+
+func TestEditMessage_RestoresRichContentOnFailure(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}}
+	o, st := newCmdOwner(t, c)
+	rich := &domain.RichMessage{Blocks: []domain.RichBlock{
+		{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+	}}
+	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "before", Date: time.Unix(1, 0), Rich: rich}})
+
+	err := o.EditMessage(context.Background(), 1, 5, "after", nil)
+
+	require.Error(t, err)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Equal(t, rich, got.Rich, "a refused edit puts the old blocks back")
+}
+
 // A refused edit must leave no trace: neither the new text, nor the "edited"
 // marker the optimistic version set (#118).
 func TestEditMessage_RestoresTheOldTextOnFailure(t *testing.T) {

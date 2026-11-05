@@ -11,6 +11,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -457,14 +458,14 @@ const searchCaret = "█"
 // hidden head. Adding caret movement would require a real scroll offset here.
 func inputLine(text string, inner int) string {
 	const prompt = "> "
-	budget := inner - runewidth.StringWidth(prompt) - runewidth.StringWidth(searchCaret)
+	budget := inner - textwidth.Width(prompt) - textwidth.Width(searchCaret)
 	if budget < 1 {
 		// Too narrow for any text at all: keep the frame intact regardless.
 		return runewidth.Truncate(prompt+searchCaret, max(inner, 0), "")
 	}
 	// TruncateLeft pads the prefix when a wide grapheme straddles the cut, so the
 	// result is exactly budget cells wide for CJK/emoji too.
-	if w := runewidth.StringWidth(text); w > budget {
+	if w := textwidth.Width(text); w > budget {
 		text = runewidth.TruncateLeft(text, w-budget+1, "…")
 	}
 	// The query text and the caret follow a styled prompt, so each ends up its
@@ -480,7 +481,7 @@ func (m *SearchModel) View() string {
 	}
 
 	hint := m.hint()
-	if hintW := lipgloss.Width(" " + hint + " "); hintW+2 > w-2 {
+	if hintW := textwidth.Width(" " + hint + " "); hintW+2 > w-2 {
 		w = hintW + 4
 	}
 

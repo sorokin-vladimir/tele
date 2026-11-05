@@ -9,6 +9,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -300,12 +301,12 @@ func (cm *ChatContextMenu) View() string {
 
 	innerW := 0
 	for _, r := range rows {
-		if w := lipgloss.Width(r); w > innerW {
+		if w := textwidth.Width(r); w > innerW {
 			innerW = w
 		}
 	}
 	innerW++
-	if hintW := lipgloss.Width(" " + hint + " "); hintW+2 > innerW {
+	if hintW := textwidth.Width(" " + hint + " "); hintW+2 > innerW {
 		innerW = hintW + 2
 	}
 

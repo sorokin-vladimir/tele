@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -52,7 +53,7 @@ func richMessageWidth(r *domain.RichMessage, maxW int) int {
 	for i := range r.Blocks {
 		rows := richBlockLines(&r.Blocks[i], maxW, 0)
 		for _, row := range rows {
-			if lw := lipgloss.Width(strings.TrimRight(row, " ")); lw > w {
+			if lw := textwidth.Width(strings.TrimRight(row, " ")); lw > w {
 				w = lw
 			}
 		}
@@ -160,7 +161,7 @@ func authorDateLines(b *domain.RichBlock, w int) []string {
 		stamped := theme.S().Timestamp.Render("  " + date)
 		last := name[len(name)-1]
 		joined := last + stamped
-		if lipgloss.Width(joined) <= w {
+		if textwidth.Width(joined) <= w {
 			name[len(name)-1] = joined
 			return name
 		}
@@ -193,11 +194,11 @@ func preformattedLines(b *domain.RichBlock, w int) []string {
 // nested quote blocks.
 func blockquoteLines(b *domain.RichBlock, w int, depth int) []string {
 	prefix := quotePrefix(depth)
-	if lipgloss.Width(prefix) >= w {
+	if textwidth.Width(prefix) >= w {
 		// No room for the glyph: the quote's content still gets the whole width.
 		prefix = ""
 	}
-	innerW := w - lipgloss.Width(prefix)
+	innerW := w - textwidth.Width(prefix)
 	if innerW < 1 {
 		innerW = 1
 	}
@@ -275,14 +276,14 @@ func listLines(b *domain.RichBlock, w int) []string {
 		} else {
 			markers[i] = "• "
 		}
-		if lw := lipgloss.Width(markers[i]); lw > markerW {
+		if lw := textwidth.Width(markers[i]); lw > markerW {
 			markerW = lw
 		}
 	}
 	// Pad the markers into one column, then paint them: a marker is a cell on
 	// screen and must carry the body style like the text that follows it.
 	for i := range markers {
-		markers[i] += theme.Pad(markerW - lipgloss.Width(markers[i]))
+		markers[i] += theme.Pad(markerW - textwidth.Width(markers[i]))
 		markers[i] = theme.S().Body.Render(markers[i])
 	}
 	if markerW >= w {
@@ -336,11 +337,11 @@ func detailsLines(b *domain.RichBlock, w int, depth int) []string {
 			rows = append(rows, "")
 		}
 		prefix := theme.Pad(2)
-		if lipgloss.Width(prefix) >= w {
+		if textwidth.Width(prefix) >= w {
 			// No room for the indent: the body gets the whole width.
 			prefix = ""
 		}
-		innerW := w - lipgloss.Width(prefix)
+		innerW := w - textwidth.Width(prefix)
 		if innerW < 1 {
 			innerW = 1
 		}
@@ -490,7 +491,7 @@ func tableLines(b *domain.RichBlock, w int) []string {
 	for _, row := range b.Rows {
 		for ci := range row {
 			if ci < cols {
-				if lw := lipgloss.Width(row[ci].Text.Plain()); lw > natural[ci] {
+				if lw := textwidth.Width(row[ci].Text.Plain()); lw > natural[ci] {
 					natural[ci] = lw
 				}
 			}
@@ -564,7 +565,7 @@ func tableLines(b *domain.RichBlock, w int) []string {
 				}
 				// Pad the wrapped line out to the column width so separators
 				// and the next line line up across rows, then frame the slot.
-				cell += theme.PadTo(lipgloss.Width(cell), widths[ci])
+				cell += theme.PadTo(textwidth.Width(cell), widths[ci])
 				if padW > 0 {
 					sb.WriteString(theme.Pad(1))
 				}
@@ -694,15 +695,13 @@ func wrapStyled(s string, w int) []string {
 	if w < 1 {
 		w = 1
 	}
-	// canvas:ok this style only breaks lines; it never paints a cell.
-	wrap := lipgloss.NewStyle().Width(w)
 	var rows []string
 	for _, part := range strings.Split(s, "\n") {
 		if part == "" {
 			rows = append(rows, "")
 			continue
 		}
-		for _, line := range strings.Split(wrap.Render(part), "\n") {
+		for _, line := range strings.Split(textwidth.Wrap(part, w), "\n") {
 			rows = append(rows, strings.TrimRight(line, " "))
 		}
 	}

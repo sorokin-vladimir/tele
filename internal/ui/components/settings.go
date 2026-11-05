@@ -6,10 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	xansi "github.com/charmbracelet/x/ansi"
-
 	"github.com/sorokin-vladimir/tele/internal/settings"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 )
 
 // SettingsModal shows everything tele can be configured with, in the order the
@@ -444,15 +443,15 @@ func equalKeys(a, b []string) bool {
 // than its end: the last part is what names the thing, and the first part is
 // what says where it lives, so the part worth dropping is between them.
 func fitValue(value string, room int) string {
-	if room < 8 || xansi.StringWidth(value) <= room {
+	if room < 8 || textwidth.Width(value) <= room {
 		return value
 	}
 	if !strings.ContainsAny(value, "/\\") {
-		return xansi.Truncate(value, room, "…")
+		return textwidth.Truncate(value, room, "…")
 	}
 	head := room/2 - 1
 	tail := room - head - 1
-	return xansi.Truncate(value, head, "") + "…" + value[len(value)-tail:]
+	return textwidth.Truncate(value, head, "") + "…" + value[len(value)-tail:]
 }
 
 // shortenPath writes a path the way a person says it, so that the interesting

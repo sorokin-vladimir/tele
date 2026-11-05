@@ -6,11 +6,11 @@ import (
 	"unicode"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -32,11 +32,11 @@ func (m *MessageSearchModel) renderResult(f project.FoundMessage, inner int, sel
 
 	date := searchDate(f.Message.Date, m.now())
 	who := m.who(f, selected)
-	if room := width - lipgloss.Width(date) - 1; lipgloss.Width(who) > room {
+	if room := width - textwidth.Width(date) - 1; textwidth.Width(who) > room {
 		// The ellipsis is a run of its own, painted like the rest of the row.
-		who = ansi.Truncate(who, max(room, 1), plain.Render("…"))
+		who = textwidth.Truncate(who, max(room, 1), plain.Render("…"))
 	}
-	gap := width - lipgloss.Width(who) - lipgloss.Width(date)
+	gap := width - textwidth.Width(who) - textwidth.Width(date)
 
 	mark := theme.NewStyle().Foreground(theme.T().Accent).Bold(true)
 	if selected {
@@ -47,11 +47,11 @@ func (m *MessageSearchModel) renderResult(f project.FoundMessage, inner int, sel
 		said = snippet(text, m.shown, width, plain, mark)
 	} else {
 		label := f.Message.Media.Label()
-		said = dim.Render(ansi.Truncate(strings.ToUpper(label[:1])+label[1:], width, "…"))
+		said = dim.Render(textwidth.Truncate(strings.ToUpper(label[:1])+label[1:], width, "…"))
 	}
 
 	first := pad(1) + who + pad(gap) + dim.Render(date) + pad(1)
-	second := pad(1) + said + pad(width-lipgloss.Width(said)) + pad(1)
+	second := pad(1) + said + pad(width-textwidth.Width(said)) + pad(1)
 	return first + "\n" + second
 }
 
@@ -191,12 +191,12 @@ func (m *MessageSearchModel) who(f project.FoundMessage, selected bool) string {
 // too long for the line shows its tail, as inputLine does.
 func selectedInputLine(text string, inner int) string {
 	const prompt = "> "
-	budget := inner - lipgloss.Width(prompt)
-	if w := runewidth.StringWidth(text); w > budget {
-		text = runewidth.TruncateLeft(text, w-budget+1, "…")
+	budget := inner - textwidth.Width(prompt)
+	if w := textwidth.Width(text); w > budget {
+		text = textwidth.TruncateLeft(text, w-budget+1, "…")
 	}
 	line := theme.S().SearchPrompt.Render(prompt) + theme.S().SearchActiveRow.Render(text)
-	return line + theme.Pad(inner-lipgloss.Width(line))
+	return line + theme.Pad(inner-textwidth.Width(line))
 }
 
 // searchDate is when a message was sent as a result says it: the time for

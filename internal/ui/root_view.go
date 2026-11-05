@@ -10,6 +10,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -34,7 +35,7 @@ func (m RootModel) View() tea.View {
 			loginContentH := len(loginLines)
 			loginContentW := 0
 			for _, l := range loginLines {
-				if w := lipgloss.Width(l); w > loginContentW {
+				if w := textwidth.Width(l); w > loginContentW {
 					loginContentW = w
 				}
 			}
@@ -231,7 +232,7 @@ func joinPanes(blocks ...string) string {
 			rows = len(split[i])
 		}
 		for _, l := range split[i] {
-			if lw := lipgloss.Width(l); lw > widths[i] {
+			if lw := textwidth.Width(l); lw > widths[i] {
 				widths[i] = lw
 			}
 		}
@@ -246,7 +247,7 @@ func joinPanes(blocks ...string) string {
 				line = lines[r]
 			}
 			sb.WriteString(line)
-			sb.WriteString(theme.PadTo(lipgloss.Width(line), widths[i]))
+			sb.WriteString(theme.PadTo(textwidth.Width(line), widths[i]))
 		}
 		out[r] = sb.String()
 	}
@@ -274,12 +275,12 @@ func joinCentred(blocks ...string) string {
 	}
 	w := 0
 	for _, l := range lines {
-		if lw := lipgloss.Width(l); lw > w {
+		if lw := textwidth.Width(l); lw > w {
 			w = lw
 		}
 	}
 	for i, l := range lines {
-		gap := w - lipgloss.Width(l)
+		gap := w - textwidth.Width(l)
 		left := gap / 2
 		lines[i] = theme.Pad(left) + l + theme.Pad(gap-left)
 	}
@@ -309,7 +310,7 @@ func (m RootModel) fillCanvas(content string) string {
 		lines = append(lines, "")
 	}
 	for i, l := range lines {
-		lines[i] = l + theme.PadTo(lipgloss.Width(l), m.width)
+		lines[i] = l + theme.PadTo(textwidth.Width(l), m.width)
 	}
 	return strings.Join(lines, "\n")
 }

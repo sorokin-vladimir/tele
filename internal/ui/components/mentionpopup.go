@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -121,7 +122,7 @@ func (p *MentionPopup) View() string {
 		if !p.loading {
 			text = "no matches"
 		}
-		return p.box([]string{theme.S().MentionStatus.Render(" " + text + " ")}, lipgloss.Width(text)+2)
+		return p.box([]string{theme.S().MentionStatus.Render(" " + text + " ")}, textwidth.Width(text)+2)
 	}
 
 	// Render only the visible window [offset, offset+maxRows) so the cursor stays
@@ -141,9 +142,9 @@ func (p *MentionPopup) View() string {
 		}
 		rows = append(rows, r)
 		// " name  @handle " with one-space gutters and a two-space separator.
-		w := 1 + lipgloss.Width(r.name) + 1
+		w := 1 + textwidth.Width(r.name) + 1
 		if r.handle != "" {
-			w += 1 + lipgloss.Width(r.handle)
+			w += 1 + textwidth.Width(r.handle)
 		}
 		if w > innerW {
 			innerW = w
@@ -165,11 +166,11 @@ func (p *MentionPopup) renderRow(r mentionRow, selected bool, innerW int) string
 		base, dim = theme.S().MentionSel, theme.S().MentionSelDim
 	}
 	// Compose the visible text, padding to innerW with the row background.
-	used := 1 + lipgloss.Width(r.name) // leading space + name
+	used := 1 + textwidth.Width(r.name) // leading space + name
 	handle := ""
 	if r.handle != "" {
 		handle = dim.Render(r.handle)
-		used += 1 + lipgloss.Width(r.handle) // separator space + handle
+		used += 1 + textwidth.Width(r.handle) // separator space + handle
 	}
 	pad := innerW - used - 1 // trailing space
 	if pad < 0 {

@@ -67,6 +67,10 @@ type Store interface {
 	// without appending to its message slice (e.g. a forward target).
 	BumpChatLastMessage(chatID int64, msg domain.Message)
 	UpdateMessageText(chatID int64, msgID int, text string, entities []domain.MessageEntity)
+	// UpdateMessageRich replaces a message's structured rich content. It takes a
+	// nil for a message whose new version has no blocks, so an edit can clear
+	// the old structure as well as replace it.
+	UpdateMessageRich(chatID int64, msgID int, rich *domain.RichMessage)
 	// MarkMessageEdited records when a message was last edited and whether
 	// Telegram asked for the "edited" label to be hidden. It is separate from
 	// the text write because a hidden edit changes the text without earning the

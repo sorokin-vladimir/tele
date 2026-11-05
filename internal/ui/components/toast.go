@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	xansi "github.com/charmbracelet/x/ansi"
 
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -441,8 +441,8 @@ func (s *ToastStack) Zones() []ZoneRender {
 func truncateLinesToWidth(lines []string, w int) []string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
-		if lipgloss.Width(l) > w {
-			out[i] = xansi.Truncate(l, w, "")
+		if textwidth.Width(l) > w {
+			out[i] = textwidth.Truncate(l, w, "")
 		} else {
 			out[i] = l
 		}
@@ -496,7 +496,7 @@ func layoutActionRegions(t toast, left, row int) []ClickRegion {
 	x := left
 	for _, a := range t.actions {
 		text, _ := hintLayout(a.Key, a.Label)
-		w := lipgloss.Width(text)
+		w := textwidth.Width(text)
 		out = append(out, ClickRegion{
 			Rect: Rect{Top: row, Left: x, Height: 1, Width: w},
 			Msg:  a.Msg,

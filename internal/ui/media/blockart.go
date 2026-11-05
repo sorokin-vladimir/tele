@@ -5,10 +5,10 @@ import (
 	"image"
 	"strings"
 
-	xansi "github.com/charmbracelet/x/ansi"
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/nfnt/resize"
 
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -25,10 +25,10 @@ func SliceArtWindow(lines []string, hOff, vOff, winCols, winRows int) []string {
 		if i := vOff + r; i >= 0 && i < len(lines) {
 			src = lines[i]
 		}
-		sliced := xansi.Cut(src, hOff, hOff+winCols)
+		sliced := textwidth.Cut(src, hOff, hOff+winCols)
 		// The art window is padded out to its full width; those cells sit inside
 		// a bubble, on the canvas, and are painted by nothing else.
-		sliced += theme.PadTo(xansi.StringWidth(sliced), winCols)
+		sliced += theme.PadTo(textwidth.Width(sliced), winCols)
 		out[r] = sliced
 	}
 	return out

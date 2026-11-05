@@ -3,10 +3,9 @@ package components
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
-	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -288,7 +287,7 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 				art := ml.renderer.RenderWindow(id, img, g.FitCols, g.FitRows, 0, 0, g.FitCols, g.FitRows)
 				for r := 0; r < len(art) && g.PadTop+r < g.TileRows; r++ {
 					line := theme.Pad(g.PadLeft) + art[r]
-					line += theme.PadTo(lipgloss.Width(line), g.TileW)
+					line += theme.PadTo(textwidth.Width(line), g.TileW)
 					lines[g.PadTop+r] = line
 				}
 			default: // tileCover
@@ -296,7 +295,7 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 				art := ml.renderer.RenderWindow(id, img, coverC, coverR, g.HOff, g.VOff, g.TileW, g.TileRows)
 				for r := 0; r < len(art) && r < g.TileRows; r++ {
 					al := art[r]
-					al += theme.PadTo(lipgloss.Width(al), g.TileW)
+					al += theme.PadTo(textwidth.Width(al), g.TileW)
 					lines[r] = al
 				}
 			}
@@ -305,11 +304,11 @@ func (ml *MessageList) renderMosaicTile(gm groupMedia, g tileGeom, badge string)
 	lines[0] = overlayBadgeOnArtRow(lines[0], badge, g.TileW)
 	// A badge wider than a narrow tile returns as plain text past TileW; clamp it
 	// (safe: only the pure-text overflow case exceeds TileW).
-	if lipgloss.Width(lines[0]) > g.TileW {
-		lines[0] = xansi.Truncate(lines[0], g.TileW, "")
+	if textwidth.Width(lines[0]) > g.TileW {
+		lines[0] = textwidth.Truncate(lines[0], g.TileW, "")
 	}
 	for i, ln := range lines {
-		lines[i] = ln + theme.PadTo(lipgloss.Width(ln), g.TileW)
+		lines[i] = ln + theme.PadTo(textwidth.Width(ln), g.TileW)
 	}
 	return lines
 }
@@ -341,7 +340,7 @@ func (ml *MessageList) composeMosaicRow(tiles [][]string, widths []int, m bubble
 			sb.WriteString(cell)
 		}
 		line := sb.String()
-		line += theme.PadTo(lipgloss.Width(line), m.actualW)
+		line += theme.PadTo(textwidth.Width(line), m.actualW)
 		out[r] = bs.Render(b.Left) + theme.Pad(1) + line + theme.Pad(1) + bs.Render(b.Right)
 	}
 	return out

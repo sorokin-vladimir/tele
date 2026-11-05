@@ -61,6 +61,9 @@ func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 		return Change{}, false
 	}
 	s.st.UpdateMessageText(msg.ChatID, msg.ID, msg.Text, msg.Entities)
+	// The edit carries the whole current version, so its blocks replace the
+	// stored ones too — including clearing them when the new version has none.
+	s.st.UpdateMessageRich(msg.ChatID, msg.ID, msg.Rich)
 	if msg.EditDate != nil {
 		s.st.MarkMessageEdited(msg.ChatID, msg.ID, *msg.EditDate, msg.EditHidden)
 	}

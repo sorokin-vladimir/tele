@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -86,16 +86,21 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 
 	// Measure content width from text only.
 	actualW := 0
-	if msg.Text != "" {
+	switch {
+	case richContent(msg):
+		// A rich message lays out its own blocks (paragraphs, tables, …) at the
+		// budget and hugs the widest row it produces, mirroring how the text
+		// path measures msg.Text below.
+		actualW = richMessageWidth(msg.Rich, maxContentW)
+	case msg.Text != "":
 		// canvas:ok measurement only — this render is measured and thrown away,
 		// so a background would cost work per bubble and reach no cell.
-		measureStyle := lipgloss.NewStyle().Width(maxContentW)
 		for _, part := range strings.Split(msg.Text, "\n") {
 			if part == "" {
 				continue
 			}
-			for _, wl := range strings.Split(measureStyle.Render(part), "\n") {
-				if w := lipgloss.Width(strings.TrimRight(wl, " ")); w > actualW {
+			for _, wl := range strings.Split(textwidth.Wrap(part, maxContentW), "\n") {
+				if w := textwidth.Width(strings.TrimRight(wl, " ")); w > actualW {
 					actualW = w
 				}
 			}
@@ -135,9 +140,9 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	}
 
 	// Ensure bubble is wide enough for a media placeholder label.
-	// Measured with lipgloss.Width so wide emoji match placeholderLine's padding.
+	// Measured with textwidth.Width so wide emoji match placeholderLine's padding.
 	if msg.Media != nil {
-		if w := lipgloss.Width(placeholderFor(msg.Media)); w > actualW {
+		if w := textwidth.Width(placeholderFor(msg.Media)); w > actualW {
 			actualW = w
 		}
 	}
@@ -145,7 +150,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	// Optimistic outgoing media bubble: reserve room for the file label and a
 	// reasonable progress-bar width.
 	if msg.LocalMedia != nil {
-		if w := lipgloss.Width(localMediaLabel(msg.LocalMedia)); w > actualW {
+		if w := textwidth.Width(localMediaLabel(msg.LocalMedia)); w > actualW {
 			actualW = w
 		}
 		const minUploadBarW = 24
@@ -171,7 +176,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		if orig != nil {
 			minW = measurePreviewBlock(replyName(orig), firstLine(orig.Text), maxContentW)
 		} else {
-			w := lipgloss.Width(quoteGlyph + theme.S().Quote.Render("Original not available"))
+			w := textwidth.Width(quoteGlyph + theme.S().Quote.Render("Original not available"))
 			if w > maxContentW {
 				w = maxContentW
 			}
@@ -203,13 +208,13 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	// The spaces framing the stamp sit on the bubble's bottom border, between
 	// runs that each end in a reset, so they carry the canvas themselves.
 	tsStr := theme.Pad(1) + editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr + theme.Pad(1)
-	tsW := lipgloss.Width(tsStr)
+	tsW := textwidth.Width(tsStr)
 	if innerW < tsW {
 		innerW = tsW
 		actualW = innerW - 2
 	}
 	reactStr := buildReactStr(msg.Reactions)
-	reactW := lipgloss.Width(reactStr)
+	reactW := textwidth.Width(reactStr)
 	if innerW < reactW+tsW+1 {
 		innerW = reactW + tsW + 1
 		actualW = innerW - 2
@@ -225,7 +230,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		// canvas:ok measured, never drawn — this asks how wide the title will be
 		// so innerW can be widened to hold it. The line itself is composed below
 		// with theme.Pad, which is the same width.
-		titleW := lipgloss.Width(" " + ml.senderNameStyle(msg.SenderID).Render(name) + " ")
+		titleW := textwidth.Width(" " + ml.senderNameStyle(msg.SenderID).Render(name) + " ")
 		if innerW < titleW+1 {
 			innerW = titleW + 1
 			actualW = innerW - 2
@@ -266,7 +271,7 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 			// that each end in a reset, so they carry the canvas themselves.
 			titleStr = theme.Pad(1) + senderStyled + theme.Pad(1)
 		}
-		titleW := lipgloss.Width(titleStr)
+		titleW := textwidth.Width(titleStr)
 		rightFill := m.innerW - titleW - 1 // 1 fill char on the left
 		if rightFill < 0 {
 			rightFill = 0
@@ -290,6 +295,8 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 // placeholder (if any), then the wrapped message text.
 func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) []string {
 	actualW, innerW, b, bs := m.actualW, m.innerW, m.b, m.bs
+	rich := richContent(msg)
+	blankRow := func() string { return bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right) }
 
 	// Content lines: forward header (if any), reply quote block (if reply),
 	// photo art (if any), then text.
@@ -298,8 +305,8 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 	if msg.Forward != nil {
 		sideLines = append(sideLines, renderForwardLines(msg.Forward.From, actualW, bs)...)
 		// Separate the forward header from any following content with a blank line.
-		if msg.ReplyToMsgID != 0 || msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+		if msg.ReplyToMsgID != 0 || msg.Text != "" || rich || msg.Media != nil {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -313,8 +320,8 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 			snippet = firstLine(orig.Text)
 		}
 		sideLines = append(sideLines, ml.renderPreviewLines(origSenderID, name, snippet, actualW, bs)...)
-		if msg.Text != "" || msg.Media != nil {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+		if msg.Text != "" || rich || msg.Media != nil {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -322,7 +329,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		sideLines = append(sideLines, labelLine(localMediaLabel(msg.LocalMedia), actualW, b, bs))
 		sideLines = append(sideLines, labelLine(uploadStatusLine(msg.LocalMedia, actualW), actualW, b, bs))
 		if msg.Text != "" {
-			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
@@ -338,11 +345,10 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				artLines = ml.renderer.Render(id, img, cols)
 			}
 		}
-		blankRow := bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)
 		switch {
 		case artLines != nil:
 			for _, al := range artLines {
-				al += theme.PadTo(lipgloss.Width(al), actualW)
+				al += theme.PadTo(textwidth.Width(al), actualW)
 				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+al+theme.Pad(1)+bs.Render(b.Right))
 			}
 			if overlay := ml.overlayLabelFor(msg); overlay != "" {
@@ -357,7 +363,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 				if i == 0 {
 					sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 				} else {
-					sideLines = append(sideLines, blankRow)
+					sideLines = append(sideLines, blankRow())
 				}
 			}
 			if overlay := ml.overlayLabelFor(msg); overlay != "" {
@@ -367,35 +373,49 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
 			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
-			sideLines = append(sideLines, paintedLabelLine(label, lipgloss.Width(label), actualW, b, bs))
+			sideLines = append(sideLines, paintedLabelLine(label, textwidth.Width(label), actualW, b, bs))
 		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
 		}
-		if msg.Text != "" {
-			sideLines = append(sideLines, blankRow)
+		if msg.Text != "" || rich {
+			sideLines = append(sideLines, blankRow())
 		}
 	}
 
-	if msg.Text != "" {
+	switch {
+	case rich:
+		// Rich-message body: blocks are laid out to the content width in
+		// richrender.go and already carry their styling; frame each row like the
+		// text path does. Block separators arrive as empty rows.
+		for _, row := range richMessageLines(msg.Rich, actualW) {
+			if row == "" {
+				sideLines = append(sideLines, blankRow())
+				continue
+			}
+			row += theme.PadTo(textwidth.Width(row), actualW)
+			sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+row+theme.Pad(1)+bs.Render(b.Right))
+		}
+	case msg.Text != "":
 		rendered := RenderEntities(msg.Text, msg.Entities)
 		// canvas:ok this style only breaks lines. The text arrives painted run by
 		// run from RenderEntities, and giving the wrapper a background would drop
 		// it at the first reset inside the very text it is wrapping. Its own
 		// padding is taken off below and re-emitted carrying the canvas.
-		wrapStyle := lipgloss.NewStyle().Width(actualW)
 		for _, part := range strings.Split(rendered, "\n") {
 			if part == "" {
-				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(innerW)+bs.Render(b.Right))
+				sideLines = append(sideLines, blankRow())
 				continue
 			}
-			for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
+			for _, wl := range strings.Split(textwidth.Wrap(part, actualW), "\n") {
 				wl = strings.TrimRight(wl, " ")
-				wl += theme.PadTo(lipgloss.Width(wl), actualW)
+				wl += theme.PadTo(textwidth.Width(wl), actualW)
 				sideLines = append(sideLines, bs.Render(b.Left)+theme.Pad(1)+wl+theme.Pad(1)+bs.Render(b.Right))
 			}
 		}
-	} else if len(sideLines) == 0 {
-		sideLines = []string{bs.Render(b.Left) + theme.Pad(innerW) + bs.Render(b.Right)}
+	default:
+		if len(sideLines) == 0 {
+			sideLines = []string{blankRow()}
+		}
 	}
 
 	return sideLines
@@ -436,7 +456,7 @@ func trailingIndicator() string {
 func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool) []string {
 	// Outgoing bubbles are right-aligned; incoming stay at the left margin.
 	if isOut {
-		bubbleW := lipgloss.Width(allLines[0])
+		bubbleW := textwidth.Width(allLines[0])
 		leftPad := ml.viewWidth - bubbleW
 		if leftPad < 0 {
 			leftPad = 0
@@ -456,7 +476,7 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 	} else {
 		// Draw indicator bar on every content line to the right of the bubble.
 		if selected && ml.showIndicator && len(allLines) > 2 {
-			bubbleW := lipgloss.Width(allLines[0])
+			bubbleW := textwidth.Width(allLines[0])
 			available := ml.viewWidth - bubbleW
 			if available >= indicatorGap+1 {
 				bar := trailingIndicator()
@@ -502,9 +522,9 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 
 	// Block width: widest of the art, the meta line, and (in groups) the name.
 	blockW := cols
-	metaW := lipgloss.Width(tsStr)
+	metaW := textwidth.Width(tsStr)
 	if reactStr != "" {
-		metaW += lipgloss.Width(reactStr) + 1
+		metaW += textwidth.Width(reactStr) + 1
 	}
 	if metaW > blockW {
 		blockW = metaW
@@ -516,12 +536,12 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 			name = "?"
 		}
 		nameStr = ml.senderNameStyle(msg.SenderID).Render(name)
-		if w := lipgloss.Width(nameStr); w > blockW {
+		if w := textwidth.Width(nameStr); w > blockW {
 			blockW = w
 		}
 	}
 
-	pad := func(s string) string { return s + theme.PadTo(lipgloss.Width(s), blockW) }
+	pad := func(s string) string { return s + theme.PadTo(textwidth.Width(s), blockW) }
 
 	lines := make([]string, 0, rows+2)
 	if nameStr != "" {
@@ -541,7 +561,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 	if overlay := ml.overlayLabelFor(msg); overlay != "" {
 		lines = append(lines, pad(overlay)) // ▶ duration / GIF badge under the thumbnail
 	}
-	fill := blockW - lipgloss.Width(reactStr) - lipgloss.Width(tsStr)
+	fill := blockW - textwidth.Width(reactStr) - textwidth.Width(tsStr)
 	if fill < 0 {
 		fill = 0
 	}
@@ -582,7 +602,7 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 }
 
 func (ml *MessageList) renderSeparator(label string) []string {
-	labelW := lipgloss.Width(label)
+	labelW := textwidth.Width(label)
 	fill := (ml.viewWidth - labelW - 2) / 2
 	if fill < 0 {
 		fill = 0
@@ -600,7 +620,7 @@ func (ml *MessageList) renderSeparator(label string) []string {
 
 func (ml *MessageList) renderUnreadSeparator() []string {
 	const label = "New Messages"
-	labelW := lipgloss.Width(label)
+	labelW := textwidth.Width(label)
 	fill := (ml.viewWidth - labelW - 2) / 2
 	if fill < 0 {
 		fill = 0
@@ -675,7 +695,7 @@ func (ml *MessageList) renderGroupStack(parts []domain.Message, selected bool) [
 	for _, gm := range media {
 		// +1 for the one-column gap the folded badge adds (badge+" "); without it a
 		// badge wider than a narrow preview overflows actualW and tears the border.
-		widen(lipgloss.Width(albumBadgeLabel(gm.Index, gm.Msg)) + 1)
+		widen(textwidth.Width(albumBadgeLabel(gm.Index, gm.Msg)) + 1)
 		if id, ok := ml.PreviewImageID(gm.Msg); ok {
 			if img, has := ml.cachedImage(id); has {
 				b := img.Bounds()
@@ -744,7 +764,7 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 		if i == 0 {
 			al = overlayBadgeOnArtRow(al, badge, cols)
 		}
-		al += theme.PadTo(lipgloss.Width(al), m.actualW)
+		al += theme.PadTo(textwidth.Width(al), m.actualW)
 		out = append(out, bs.Render(b.Left)+theme.Pad(1)+al+theme.Pad(1)+bs.Render(b.Right))
 	}
 	return out
@@ -754,11 +774,11 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 // It drops the first labelW display columns of artRow and prepends the label, so
 // the label reads over the picture: for a Kitty placeholder row the dropped cells
 // leave a hole where the terminal draws no image; for block art the label
-// overwrites the blocks. xansi.TruncateLeft is width-aware, so it slices whole
+// overwrites the blocks. textwidth.TruncateLeft is width-aware, so it slices whole
 // placeholder cells (rune + diacritics) and re-emits the active foreground for the
 // remaining image cells.
 func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
-	labelW := lipgloss.Width(label)
+	labelW := textwidth.Width(label)
 	// Both callers hand over a plain badge — albumBadgeLabel and the space the
 	// mosaic appends to it — so this is the one place either reaches a cell, and
 	// the place the canvas and a colour are put on it (#227). Measured first: the
@@ -767,7 +787,7 @@ func overlayBadgeOnArtRow(artRow, label string, imgCols int) string {
 	if labelW >= imgCols {
 		return painted // label spans the whole row; no image cells remain
 	}
-	return painted + xansi.TruncateLeft(artRow, labelW, "")
+	return painted + textwidth.TruncateLeft(artRow, labelW, "")
 }
 
 // captionLines wraps the album caption inside the bubble borders, matching the
@@ -777,16 +797,15 @@ func (ml *MessageList) captionLines(text string, entities []domain.MessageEntity
 	rendered := RenderEntities(text, entities)
 	// canvas:ok breaks lines only; see the text path of bubbleContentLines for
 	// why a wrapper of painted text cannot carry the canvas itself.
-	wrapStyle := lipgloss.NewStyle().Width(wrapW)
 	var out []string
 	for _, part := range strings.Split(rendered, "\n") {
 		if part == "" {
 			out = append(out, bs.Render(b.Left)+theme.Pad(m.innerW)+bs.Render(b.Right))
 			continue
 		}
-		for _, wl := range strings.Split(wrapStyle.Render(part), "\n") {
+		for _, wl := range strings.Split(textwidth.Wrap(part, wrapW), "\n") {
 			wl = strings.TrimRight(wl, " ")
-			wl += theme.PadTo(lipgloss.Width(wl), m.actualW)
+			wl += theme.PadTo(textwidth.Width(wl), m.actualW)
 			out = append(out, bs.Render(b.Left)+theme.Pad(1)+wl+theme.Pad(1)+bs.Render(b.Right))
 		}
 	}
@@ -852,8 +871,8 @@ func (ml *MessageList) View() string {
 			selTopRaw = len(allLines)
 			selHeight = len(itemLines)
 			trimmed := strings.TrimLeft(selFirstFull, " ")
-			selLeft = lipgloss.Width(selFirstFull) - lipgloss.Width(trimmed)
-			selWidth = lipgloss.Width(trimmed)
+			selLeft = textwidth.Width(selFirstFull) - textwidth.Width(trimmed)
+			selWidth = textwidth.Width(trimmed)
 			ml.selRectOK = true
 		}
 

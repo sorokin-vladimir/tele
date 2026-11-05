@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -41,7 +42,7 @@ func RenderDialog(title, body, footer string, maxW int) string {
 	lines := strings.Split(content, "\n")
 	contentW := 0
 	for _, l := range lines {
-		if w := lipgloss.Width(l); w > contentW {
+		if w := textwidth.Width(l); w > contentW {
 			contentW = w
 		}
 	}

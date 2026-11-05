@@ -55,6 +55,7 @@ The same `tele` answers on the command line: you, or an AI agent you let run it,
 - **One account, many windows.**
   A second `tele` joins the running one instead of connecting again.
 - **Chats, groups, channels and forums**, with folders, replies, reactions, edits, forwards, and drafts synced with Telegram.
+- **Rich messages** render headings, lists, tables, block quotes and detail blocks with their layout intact.
 - **Photos inline** at full quality in kitty, Ghostty and iTerm2 3.7.0+, as block art everywhere else.
 - **Voice messages play in the app**, with a waveform and a moving playhead.
 - **Video, round notes (кружки) and GIFs** as inline previews.

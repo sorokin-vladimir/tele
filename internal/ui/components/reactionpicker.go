@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -116,7 +117,7 @@ func (p *ReactionPicker) View() string {
 		{"enter", DescribeShort(keys.ContextContextMenu, keys.ActionReact)},
 		{"esc", DescribeShort(keys.ContextContextMenu, keys.ActionCancel)},
 	}, OverlayMenuBg())
-	hintW := lipgloss.Width(" " + hint + " ")
+	hintW := textwidth.Width(" " + hint + " ")
 	if innerW < hintW {
 		innerW = hintW
 	}

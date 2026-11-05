@@ -15,6 +15,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -345,8 +346,8 @@ func videoProgressRow(posFrames, totalFrames, width int) string {
 // left label, a mid-char fill, an optional right label, and the closing corner.
 // Labels are dropped (right first, then left) when they would exceed innerW.
 func modalBorder(cornerL, mid, cornerR, leftLabel, rightLabel string, innerW int) string {
-	ll := lipgloss.Width(leftLabel)
-	rl := lipgloss.Width(rightLabel)
+	ll := textwidth.Width(leftLabel)
+	rl := textwidth.Width(rightLabel)
 	if ll+rl > innerW {
 		rightLabel, rl = "", 0
 	}
@@ -405,10 +406,10 @@ func (m RootModel) videoPlayerView(base string) string {
 		if vp.rows > 0 {
 			// Center "loading…" both vertically (middle row) and horizontally.
 			line := theme.S().Body.Render(videoSpinnerGlyph(vp.spinnerIdx) + " loading…")
-			if lp := (vp.cols - lipgloss.Width(line)) / 2; lp > 0 {
+			if lp := (vp.cols - textwidth.Width(line)) / 2; lp > 0 {
 				line = theme.Pad(lp) + line
 			}
-			line += theme.PadTo(lipgloss.Width(line), vp.cols)
+			line += theme.PadTo(textwidth.Width(line), vp.cols)
 			content[vp.rows/2] = line
 		}
 	}

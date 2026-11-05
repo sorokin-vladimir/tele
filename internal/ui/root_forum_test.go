@@ -192,6 +192,8 @@ func TestForum_TheMouseWorksTheTopicList(t *testing.T) {
 
 	nm, _ := m.Update(tea.MouseWheelMsg(tea.Mouse{X: 3, Y: 2, Button: tea.MouseWheelDown}))
 	m = nm.(RootModel)
+	// The notch moves more than one row but the fixture has only two topics, so
+	// the cursor stops on the last one.
 	assert.Equal(t, 1, m.forum.Cursor())
 
 	_, cmd := m.Update(tea.MouseClickMsg(tea.Mouse{X: 3, Y: 1, Button: tea.MouseLeft}))

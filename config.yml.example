@@ -36,6 +36,10 @@ telegram:
 ui:
   history_limit: 50
 
+  # How many lines one notch of the mouse wheel moves, in the message view, the
+  # chat list and a forum's topic list. The arrow keys always move one line.
+  mouse_scroll_lines: 3
+
   # Ask before quitting. With this on, q, ctrl+c and ctrl+q open a small
   # confirmation instead of closing tele at once; y or enter quits, n, esc or q
   # cancels, and a modifier quit binding (ctrl+c, ctrl+q) pressed again quits

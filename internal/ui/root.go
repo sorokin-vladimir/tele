@@ -98,8 +98,10 @@ type RootModel struct {
 	// list's first Reset, which is when there are rows to place the cursor on.
 	forumCursorPending bool
 	historyLimit       int
-	verbose            bool
-	log                *zap.Logger
+	// wheelStep is how many lines one wheel notch moves, from ui.mouse_scroll_lines.
+	wheelStep int
+	verbose   bool
+	log       *zap.Logger
 	// logPath is where this run's log is written, named on the login screen
 	// when something goes wrong there. Empty in tests.
 	logPath string
@@ -264,6 +266,7 @@ func NewRootModel(verbose bool) RootModel {
 		keyMap:         km,
 		matcher:        keys.NewMatcher(km),
 		verbose:        verbose,
+		wheelStep:      defaultWheelStep,
 		imageCache:     imagecache.New(thumbCacheCap),
 		fullImageCache: imagecache.New(fullCacheCap),
 		avatars:        newAvatarStore(),
@@ -382,6 +385,10 @@ func (m RootModel) applyConfig(cfg *config.Config) RootModel {
 	// Immediate.
 	m.toasts.SetZones(parseToastZone(cfg.UI.Toasts.ErrorZone), parseToastZone(cfg.UI.Toasts.NotifyZone))
 	m.toasts.SetMaxVisible(cfg.UI.Toasts.MaxVisible)
+	m.wheelStep = cfg.UI.MouseScrollLines
+	if m.wheelStep < 1 {
+		m.wheelStep = defaultWheelStep
+	}
 
 	// Next-use: what is drawn stays as it was drawn, and the new value is what
 	// the next image is drawn at. How much history a window holds is not here:

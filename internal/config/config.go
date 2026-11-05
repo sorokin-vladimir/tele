@@ -32,13 +32,14 @@ type UIConfig struct {
 	// Theme is kept as written because its two spellings mean different things:
 	// a name puts that theme in both slots, a map fills the slots it names. Read
 	// ThemeSlots instead; resolveTheme fills it.
-	Theme         any                 `mapstructure:"theme"`
-	ThemeSlots    ThemeSlots          `mapstructure:"-"`
-	DateFormat    string              `mapstructure:"date_format"`
-	HistoryLimit  int                 `mapstructure:"history_limit"`
-	ConfirmQuit   bool                `mapstructure:"confirm_quit"`
-	Notifications NotificationsConfig `mapstructure:"notifications"`
-	Toasts        ToastsConfig        `mapstructure:"toasts"`
+	Theme            any                 `mapstructure:"theme"`
+	ThemeSlots       ThemeSlots          `mapstructure:"-"`
+	DateFormat       string              `mapstructure:"date_format"`
+	HistoryLimit     int                 `mapstructure:"history_limit"`
+	MouseScrollLines int                 `mapstructure:"mouse_scroll_lines"`
+	ConfirmQuit      bool                `mapstructure:"confirm_quit"`
+	Notifications    NotificationsConfig `mapstructure:"notifications"`
+	Toasts           ToastsConfig        `mapstructure:"toasts"`
 }
 
 // NotificationsConfig governs the one decision that an event deserves the

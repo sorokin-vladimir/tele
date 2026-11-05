@@ -77,6 +77,13 @@ func TestTakesHold_ui_toasts_max_visible(t *testing.T) {
 		func(m RootModel) any { return m.toasts.MaxVisible() }, 7)
 }
 
+// The wheel reads the step at each notch, so a reload is felt on the next
+// scroll.
+func TestTakesHold_ui_mouse_scroll_lines(t *testing.T) {
+	takesHoldOnReload(t, "ui.mouse_scroll_lines", 7,
+		func(m RootModel) any { return m.wheelStep }, 7)
+}
+
 func TestTakesHold_ui_theme(t *testing.T) {
 	takesHoldOnReload(t, "ui.theme", "nord",
 		func(RootModel) any { return theme.T().Name }, "nord")

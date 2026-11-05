@@ -155,6 +155,18 @@ var registry = []settings.Entry{
 		Applies: settings.Immediate,
 	},
 	{
+		Key:     "ui.mouse_scroll_lines",
+		Process: settings.Client,
+		Group:   "ui",
+		Label:   "Mouse scroll step",
+		Help:    "How many lines one notch of the mouse wheel moves, in the message view, the chat list and a forum's topic list. The arrow keys always move one line. Raise it if a notch feels slow, or lower it to 1 to make the wheel as fine as the keys.",
+		Widget:  settings.Number,
+		Applies: settings.Immediate,
+		Unit:    "lines",
+		Min:     1,
+		Max:     20,
+	},
+	{
 		// Last of the ui keys, where every template tele has ever written puts
 		// it, so the overlay and the file read in the same order.
 		Key:     "ui.theme",

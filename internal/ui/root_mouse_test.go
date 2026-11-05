@@ -2,6 +2,7 @@ package ui
 
 import (
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
@@ -60,13 +61,56 @@ func TestWheel_OverMessages_ScrollsChatPane(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestWheel_OverMessages_AppliesTheStepAsKeyPresses(t *testing.T) {
+	msgs := make([]domain.Message, 40)
+	for i := range msgs {
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1, Text: "a message", Date: time.Now()}
+	}
+
+	m := newSizedRoot(t, 100, 30)
+	m.chat.SetMessages(msgs)
+	step := m.wheelStep
+	require.Greater(t, step, 1, "the default step should be more than a line")
+	before := m.chat.ScrollInfo().Offset
+	require.Greater(t, before, step,
+		"the chat must have room above the bottom to scroll into")
+
+	next, _ := m.Update(tea.MouseWheelMsg(tea.Mouse{X: 40, Y: 2, Button: tea.MouseWheelUp}))
+	wheeled := next.(RootModel)
+
+	keyed := newSizedRoot(t, 100, 30)
+	keyed.chat.SetMessages(msgs)
+	for i := 0; i < step; i++ {
+		p, _ := keyed.chat.Update(keys.ActionMsg{Action: keys.ActionUp})
+		keyed.chat = p.(*screens.ChatModel)
+	}
+
+	assert.Less(t, wheeled.chat.ScrollInfo().Offset, before,
+		"one notch must move further than a single key press")
+	assert.Equal(t, keyed.chat.ScrollInfo().Offset, wheeled.chat.ScrollInfo().Offset,
+		"one notch is the same as wheelStep up presses")
+}
+
 func TestWheel_OverChatList_MovesCursorDown(t *testing.T) {
 	m := newSizedRoot(t, 100, 30)
 	m.focus = FocusChatList
+	step := m.wheelStep
 	before := m.chatList.Cursor()
 	next, _ := m.Update(tea.MouseWheelMsg(tea.Mouse{X: 3, Y: 2, Button: tea.MouseWheelDown}))
 	rm := next.(RootModel)
-	assert.Equal(t, before+1, rm.chatList.Cursor())
+	assert.Equal(t, before+step, rm.chatList.Cursor(),
+		"one notch should move the cursor by the wheel step, not one row")
+}
+
+func TestWheel_UsesTheModelsStep(t *testing.T) {
+	for _, step := range []int{1, 2} {
+		m := newSizedRoot(t, 100, 30)
+		m.wheelStep = step
+		before := m.chatList.Cursor()
+		next, _ := m.Update(tea.MouseWheelMsg(tea.Mouse{X: 3, Y: 2, Button: tea.MouseWheelDown}))
+		rm := next.(RootModel)
+		assert.Equal(t, before+step, rm.chatList.Cursor(), "step %d", step)
+	}
 }
 
 func TestClick_ChatList_OpensChatAndFocuses(t *testing.T) {

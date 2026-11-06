@@ -24,6 +24,8 @@ type commands struct {
 	// script answers a command whose line starts with its key, one answer per
 	// call, the last one repeated; it is asked before fail.
 	script map[string][]error
+	// prints is what a command run for its output prints; see output.
+	prints map[string][]string
 	// read keeps, for a command naming a file, what the file said then.
 	read map[string]string
 	// file is the argument after which a command names a file to read.
@@ -58,6 +60,27 @@ func (c *commands) run(name string, args ...string) error {
 	}
 	return nil
 }
+
+// output is a command run for what it prints, as a test plays it: recorded
+// with the rest, it prints the answers of prints for the first key its line
+// starts with, one per call, the last one repeated, and fails with none.
+func (c *commands) output(name string, args ...string) ([]byte, error) {
+	line := strings.Join(append([]string{name}, args...), " ")
+	c.ran = append(c.ran, line)
+	for prefix, answers := range c.prints {
+		if strings.HasPrefix(line, prefix) && len(answers) > 0 {
+			printed := answers[0]
+			if len(answers) > 1 {
+				c.prints[prefix] = answers[1:]
+			}
+			return []byte(printed), nil
+		}
+	}
+	return nil, errors.New("exit status 1")
+}
+
+// taskState is the line asking Task Scheduler what state the task tele is in.
+const taskState = "powershell -NoProfile -NonInteractive -Command (Get-ScheduledTask -TaskName 'tele').State"
 
 // clock is time as a test plays it: it stands still until something sleeps.
 type clock struct {
@@ -364,23 +387,60 @@ func TestSystemd_Uninstall(t *testing.T) {
 // now; one still running is ended first, so it starts on the new command.
 func TestTaskScheduler_InstallCreatesTheTaskAndRunsIt(t *testing.T) {
 	cmds := &commands{file: "/XML", fail: map[string]error{"schtasks /End": errors.New("not running")}}
-	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run}
+	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run, Output: cmds.output}
 
 	require.NoError(t, m.Install(mine))
 
-	require.Len(t, cmds.ran, 3)
+	require.Len(t, cmds.ran, 4)
 	assert.Equal(t, "schtasks /End /TN tele", cmds.ran[0])
-	assert.True(t, strings.HasPrefix(cmds.ran[1], "schtasks /Create /TN tele /XML "), cmds.ran[1])
-	assert.True(t, strings.HasSuffix(cmds.ran[1], " /F"), cmds.ran[1])
-	assert.Equal(t, string(service.TaskXML(mine)), cmds.read[cmds.ran[1]], "the task is created from the unit")
-	assert.Equal(t, "schtasks /Run /TN tele", cmds.ran[2])
+	assert.Equal(t, taskState, cmds.ran[1])
+	assert.True(t, strings.HasPrefix(cmds.ran[2], "schtasks /Create /TN tele /XML "), cmds.ran[2])
+	assert.True(t, strings.HasSuffix(cmds.ran[2], " /F"), cmds.ran[2])
+	assert.Equal(t, string(service.TaskXML(mine)), cmds.read[cmds.ran[2]], "the task is created from the unit")
+	assert.Equal(t, "schtasks /Run /TN tele", cmds.ran[3])
 }
 
-// Uninstalling ends the task and deletes it; with no task there is nothing to
-// do.
-func TestTaskScheduler_Uninstall(t *testing.T) {
-	cmds := &commands{}
-	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run}
+// A task still running when it is started again is not started: Task
+// Scheduler ignores the start and says it went fine. So the new one is
+// started only once the old one has stopped (#327).
+func TestTaskScheduler_InstallWaitsForTheOldTaskToStop(t *testing.T) {
+	tick := &clock{}
+	cmds := &commands{file: "/XML", prints: map[string][]string{taskState: {"Running\r\n", "Running\r\n", "Ready\r\n"}}}
+	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run, Output: cmds.output, Sleep: tick.sleep, Now: tick.now}
+
+	require.NoError(t, m.Install(mine))
+
+	require.Len(t, cmds.ran, 6)
+	assert.Equal(t, []string{"schtasks /End /TN tele", taskState, taskState, taskState}, cmds.ran[:4])
+	assert.True(t, strings.HasPrefix(cmds.ran[4], "schtasks /Create /TN tele /XML "), cmds.ran[4])
+	assert.Equal(t, "schtasks /Run /TN tele", cmds.ran[5])
+	assert.Equal(t, []time.Duration{500 * time.Millisecond, 500 * time.Millisecond}, tick.slept)
+}
+
+// A task that outlasts the wait is not started again, since the start would
+// be ignored and said to have worked; the new task is written, for the next
+// install to start, and the error says why (#327).
+func TestTaskScheduler_AnOldTaskThatStaysIsSaid(t *testing.T) {
+	tick := &clock{}
+	cmds := &commands{file: "/XML", prints: map[string][]string{taskState: {"Running"}}}
+	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run, Output: cmds.output, Sleep: tick.sleep, Now: tick.now}
+
+	err := m.Install(mine)
+
+	require.ErrorIs(t, err, service.ErrStillRunning)
+	last := cmds.ran[len(cmds.ran)-1]
+	assert.True(t, strings.HasPrefix(last, "schtasks /Create /TN tele /XML "), last)
+	assert.NotContains(t, cmds.ran, "schtasks /Run /TN tele")
+	assert.Equal(t, 30*time.Second, tick.at.Sub(time.Time{}))
+}
+
+// Uninstalling returns only once the task has stopped, so that the service is
+// gone when it says so; one that outlasts the wait is deleted all the same,
+// and said (#327).
+func TestTaskScheduler_UninstallWaitsForTheTaskToStop(t *testing.T) {
+	tick := &clock{}
+	cmds := &commands{prints: map[string][]string{taskState: {"Running", "Ready"}}}
+	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run, Output: cmds.output, Sleep: tick.sleep, Now: tick.now}
 
 	removed, err := m.Uninstall("tele")
 
@@ -389,6 +449,33 @@ func TestTaskScheduler_Uninstall(t *testing.T) {
 	assert.Equal(t, []string{
 		"schtasks /Query /TN tele",
 		"schtasks /End /TN tele",
+		taskState,
+		taskState,
+		"schtasks /Delete /TN tele /F",
+	}, cmds.ran)
+
+	stays := &commands{prints: map[string][]string{taskState: {"Running"}}}
+	m.Run, m.Output = stays.run, stays.output
+	removed, err = m.Uninstall("tele")
+	require.ErrorIs(t, err, service.ErrStillRunning)
+	assert.True(t, removed)
+	assert.Equal(t, "schtasks /Delete /TN tele /F", stays.ran[len(stays.ran)-1])
+}
+
+// Uninstalling ends the task and deletes it; with no task there is nothing to
+// do.
+func TestTaskScheduler_Uninstall(t *testing.T) {
+	cmds := &commands{}
+	m := service.TaskScheduler{TempDir: t.TempDir(), Run: cmds.run, Output: cmds.output}
+
+	removed, err := m.Uninstall("tele")
+
+	require.NoError(t, err)
+	assert.True(t, removed)
+	assert.Equal(t, []string{
+		"schtasks /Query /TN tele",
+		"schtasks /End /TN tele",
+		taskState,
 		"schtasks /Delete /TN tele /F",
 	}, cmds.ran)
 

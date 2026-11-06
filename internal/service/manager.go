@@ -337,6 +337,28 @@ type TaskScheduler struct {
 	Run     Runner
 	// Output runs a command for what it prints.
 	Output func(name string, args ...string) ([]byte, error)
+	// Waiting, Sleep and Now are as a wait's.
+	Waiting func() (done func())
+	Sleep   func(time.Duration)
+	Now     func() time.Time
+}
+
+// PowerShell starts slowly, so the state is asked for less often than
+// launchd's.
+func (m TaskScheduler) wait() wait {
+	return wait{waiting: m.Waiting, sleep: m.Sleep, now: m.Now, every: 500 * time.Millisecond}
+}
+
+// running says whether the task named name is running. Its State is the name
+// of an enum, the same in every language, where what schtasks prints is
+// translated; a task that cannot be asked about is not running. With
+// MultipleInstancesPolicy IgnoreNew, a task started while running is not
+// started, and nothing says so (#327).
+func (m TaskScheduler) running(name string) bool {
+	quoted := "'" + strings.ReplaceAll(name, "'", "''") + "'"
+	printed, err := m.Output("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"(Get-ScheduledTask -TaskName "+quoted+").State")
+	return err == nil && strings.TrimSpace(string(printed)) == "Running"
 }
 
 func (m TaskScheduler) Installed(name string) (string, bool, error) {
@@ -385,8 +407,13 @@ func (m TaskScheduler) Install(u Unit) error {
 	// Ended first, so the task starts on the command it is given now. One not
 	// running has nothing to end.
 	_ = m.Run("schtasks", "/End", "/TN", u.Name)
+	stopped := m.wait().untilGone(func() bool { return !m.running(u.Name) })
 	if err := m.Run("schtasks", "/Create", "/TN", u.Name, "/XML", f.Name(), "/F"); err != nil {
 		return err
+	}
+	if !stopped {
+		// Started now, it would be ignored and said to have started.
+		return ErrStillRunning
 	}
 	return m.Run("schtasks", "/Run", "/TN", u.Name)
 }
@@ -396,8 +423,12 @@ func (m TaskScheduler) Uninstall(name string) (bool, error) {
 		return false, nil
 	}
 	_ = m.Run("schtasks", "/End", "/TN", name)
+	stopped := m.wait().untilGone(func() bool { return !m.running(name) })
 	if err := m.Run("schtasks", "/Delete", "/TN", name, "/F"); err != nil {
 		return false, err
+	}
+	if !stopped {
+		return true, ErrStillRunning
 	}
 	return true, nil
 }

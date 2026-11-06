@@ -6,9 +6,13 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
 
 // screenPlay runs a model as the program would, one message at a time, and
@@ -102,6 +106,49 @@ func idsDrawn(screen string) []uint32 {
 		}
 	}
 	return ids
+}
+
+// A frame of an inline GIF is never written under the image id the chat draws
+// while it is written, for the same reason as the modal's (#331).
+func TestInlineGIF_AFrameIsNeverWrittenUnderTheIDOnScreen(t *testing.T) {
+	m := NewRootModel(false)
+	m.imageMode = media.ModeKitty
+	m.screen = ScreenMain
+	m.chat.SetRenderer(media.NewKittyRenderer(m.kittyStore))
+	m.chat.SetSize(80, 24)
+	const gif = 77
+	m.imageCache.Add(gif, image.NewNRGBA(image.Rect(0, 0, 320, 240)))
+	m.chat.SetMessages([]domain.Message{{
+		ID: 1, ChatID: 1, Date: time.Now(),
+		Media:    &domain.MediaRef{Kind: domain.MediaGIF},
+		Document: &domain.DocumentRef{ID: gif, MimeType: "video/mp4", ThumbSize: "m"},
+	}})
+	m.chat.SetKnownImages(m.imageCache)
+	writes := 0
+	var check func(id uint32, screen string)
+	p := &screenPlay{m: m, wrote: func(id uint32, screen string) { check(id, screen) }}
+	// The still thumbnail goes out first, as when the chat opens.
+	check = func(uint32, string) {}
+	p.update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	require.NotEmpty(t, idsDrawn(p.m.View().Content), "the chat draws the GIF")
+
+	p.m.gifFrames[gif] = []image.Image{
+		image.NewNRGBA(image.Rect(0, 0, 320, 240)),
+		image.NewNRGBA(image.Rect(0, 0, 320, 240)),
+		image.NewNRGBA(image.Rect(0, 0, 320, 240)),
+	}
+	p.m.gifActiveID = gif
+	p.m.gifGen++
+	check = func(id uint32, screen string) {
+		writes++
+		require.NotContains(t, idsDrawn(screen), id, "frame %d went under the id on screen", writes)
+	}
+	for range 5 {
+		p.update(gifTickMsg{gen: p.m.gifGen})
+	}
+
+	require.GreaterOrEqual(t, writes, 4, "every tick writes a frame")
+	require.NotEmpty(t, idsDrawn(p.m.View().Content), "the chat still draws the GIF")
 }
 
 // stillFrames is a frame source of n small frames.

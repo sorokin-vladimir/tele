@@ -173,6 +173,11 @@ type RootModel struct {
 	lastPhotoCols  int
 	lastPaneHeight int
 	retransmitGen  int
+
+	// gifBehind is the frame sent under the active GIF's back id, shown at
+	// the next tick once it is written (#331).
+	gifBehind image.Image
+
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
 	// photo ids currently transmitted (or in flight); kittyLRU orders them by last

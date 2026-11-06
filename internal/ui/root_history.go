@@ -65,17 +65,22 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		// only painted once the placement exists. A failed encode never reaches
 		// here, so the image is never falsely marked ready (#95).
 		seq := msg.seq
-		photoID, cols := msg.photoID, msg.cols
+		done := kittyTransmittedMsg{photoID: msg.photoID, cols: msg.cols, behind: msg.behind}
 		return m, tea.Sequence(
 			func() tea.Msg { return tea.Raw(seq)() },
-			func() tea.Msg { return kittyTransmittedMsg{photoID: photoID, cols: cols} },
+			func() tea.Msg { return done },
 		)
 
 	case kittyTransmittedMsg:
 		// Placement is now on the terminal; advertise it so the next render emits
 		// the placeholder grid over an existing placement. The bubble already
 		// reserved the image's full footprint (rendered as a placeholder box), so
-		// the image swaps in at the same height — no re-anchor needed.
+		// the image swaps in at the same height — no re-anchor needed. A frame
+		// written behind waits for its animation's next tick instead (#331).
+		if msg.behind {
+			m.kittyStore.MarkBackTransmitted(msg.photoID, msg.cols)
+			return m, nil
+		}
 		m.kittyStore.MarkTransmitted(msg.photoID, msg.cols)
 		return m, nil
 

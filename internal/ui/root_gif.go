@@ -170,8 +170,11 @@ func (m RootModel) handleGifFramesReady(msg gifFramesReadyMsg) (RootModel, tea.C
 	return m, gifTickCmd(m.gifGen)
 }
 
-// handleGifTick advances the active animation by one frame and re-transmits it to
-// the same Kitty id, then re-arms. Stale ticks (older gen) are ignored.
+// handleGifTick shows the frame written behind on the last tick, sends the
+// next one behind, and re-arms. A frame is never written under the id on
+// screen: Ghostty drops the image under an id as soon as new data for it
+// arrives and draws nothing until that data is decoded, which blanked the GIF
+// at every frame (#331). Stale ticks (older gen) are ignored.
 func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	if msg.gen != m.gifGen || m.gifActiveID == 0 {
 		return m, nil
@@ -180,10 +183,14 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	if len(frames) == 0 {
 		return m, nil
 	}
+	if m.kittyStore.BackReady(m.gifActiveID) && m.gifBehind != nil {
+		m.kittyStore.Swap(m.gifActiveID)
+		m.imageCache.Add(m.gifActiveID, m.gifBehind)
+	}
 	m.gifIdx = (m.gifIdx + 1) % len(frames)
 	frame := frames[m.gifIdx]
-	m.imageCache.Add(m.gifActiveID, frame)
-	transmit := m.transmitPhotoCmd(m.gifActiveID, frame)
+	m.gifBehind = frame
+	transmit := m.transmitFrameBehindCmd(m.gifActiveID, frame)
 	return m, tea.Batch(transmit, gifTickCmd(m.gifGen))
 }
 

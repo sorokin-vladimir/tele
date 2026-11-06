@@ -74,6 +74,9 @@ type kittyEncodedMsg struct {
 	photoID int64
 	cols    int
 	seq     string
+	// behind says the frame goes under the photo's back id, to be swapped in
+	// at the next tick of its animation (#331).
+	behind bool
 }
 
 // kittyTransmittedMsg is emitted after a photo's Kitty virtual placement has
@@ -82,6 +85,7 @@ type kittyEncodedMsg struct {
 type kittyTransmittedMsg struct {
 	photoID int64
 	cols    int
+	behind  bool
 }
 
 // voicePlayReadyMsg carries a downloaded voice file ready to be played.

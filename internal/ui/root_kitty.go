@@ -12,10 +12,23 @@ import (
 // transmitPhotoCmd transmits one photo to the terminal at the chat's current
 // photo width and creates its virtual placement. No-op unless in Kitty mode.
 func (m RootModel) transmitPhotoCmd(photoID int64, img image.Image) tea.Cmd {
+	return m.transmitPhotoUnder(photoID, img, false)
+}
+
+// transmitFrameBehindCmd transmits the next frame of an animated photo under
+// its back id, off screen, for its next tick to swap in (#331).
+func (m RootModel) transmitFrameBehindCmd(photoID int64, img image.Image) tea.Cmd {
+	return m.transmitPhotoUnder(photoID, img, true)
+}
+
+func (m RootModel) transmitPhotoUnder(photoID int64, img image.Image, behind bool) tea.Cmd {
 	if m.imageMode != media.ModeKitty || img == nil {
 		return nil
 	}
 	id := m.kittyStore.IDFor(photoID)
+	if behind {
+		id = m.kittyStore.BackIDFor(photoID)
+	}
 	b := img.Bounds()
 	// Use the message-aware box (sticker cap vs photo cap) so the transmitted
 	// width matches the rendered placeholder width; otherwise the Kitty placement
@@ -32,7 +45,7 @@ func (m RootModel) transmitPhotoCmd(photoID int64, img image.Image) tea.Cmd {
 		if err != nil {
 			return nil
 		}
-		return kittyEncodedMsg{photoID: photoID, cols: cols, seq: seq}
+		return kittyEncodedMsg{photoID: photoID, cols: cols, seq: seq, behind: behind}
 	}
 }
 

@@ -23,6 +23,7 @@ func TestTitlesStayWithinRow(t *testing.T) {
 		}
 	}
 }
+
 func TestFolderTitlesStayWithinRow(t *testing.T) {
 	for width := 12; width <= 30; width++ {
 		m := NewFoldersModel()

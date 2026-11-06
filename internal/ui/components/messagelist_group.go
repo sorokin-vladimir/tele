@@ -48,11 +48,7 @@ func groupMediaParts(parts []domain.Message) []groupMedia {
 // albumContentW is the caption/text content width for an album bubble: the same
 // three-quarter-viewport budget the single-message path uses.
 func (ml *MessageList) albumContentW() int {
-	w := ml.viewWidth*3/4 - 4
-	if w < 4 {
-		w = 4
-	}
-	return w
+	return ml.maxContentWidth()
 }
 
 // albumImageRows returns the scaled art-row count for each image part of an

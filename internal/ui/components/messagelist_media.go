@@ -333,7 +333,7 @@ func videoOverlayLabel(m *domain.MediaRef) string {
 // and the clarification in ADR 0002). Measured before rendering, since the
 // padding is owed on the label's width and not on its escapes.
 func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
-	label = truncateMetadata(label, actualW)
+	label = TruncateText(label, actualW)
 	return paintedLabelLine(theme.S().Body.Render(label), lipgloss.Width(label), actualW, b, bs)
 }
 
@@ -345,7 +345,7 @@ func labelLine(label string, actualW int, b lipgloss.Border, bs lipgloss.Style) 
 // that shape: its played run takes a colour of its own.
 func paintedLabelLine(label string, labelW, actualW int, b lipgloss.Border, bs lipgloss.Style) string {
 	if labelW > actualW {
-		label = truncateMetadata(label, actualW)
+		label = TruncateText(label, actualW)
 		labelW = lipgloss.Width(label)
 	}
 	padding := theme.PadTo(labelW, actualW)
@@ -358,17 +358,7 @@ func placeholderLine(m *domain.MediaRef, actualW int, b lipgloss.Border, bs lipg
 }
 
 func (ml *MessageList) photoContentCols() int {
-	maxBubbleW := ml.viewWidth * 3 / 4
-	if maxBubbleW < 10 {
-		maxBubbleW = 10
-	}
-	maxContentW := maxBubbleW - 4
-	if maxContentW > 60 {
-		maxContentW = 60
-	}
-	if maxContentW < 4 {
-		maxContentW = 4
-	}
+	maxContentW := min(ml.maxContentWidth(), 60)
 	return maxContentW
 }
 

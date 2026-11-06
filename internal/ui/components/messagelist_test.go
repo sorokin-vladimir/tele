@@ -558,15 +558,18 @@ func TestMessageList_GroupChat_LongSenderName_NoBubbleOverflow(t *testing.T) {
 	}
 	ml.SetMessages([]domain.Message{msg})
 	view := stripANSI(ml.View())
-	// The top border must contain the sender name and end with the corner glyph.
+	// The top border keeps a truncated sender name inside the bubble budget.
 	var topLine string
 	for _, l := range strings.Split(view, "\n") {
-		if strings.Contains(l, "VeryLongSenderNameThatExceedsText") {
+		if strings.Contains(l, "VeryLongSender") {
 			topLine = l
 			break
 		}
 	}
 	require.NotEmpty(t, topLine, "sender name not found in view")
+	assert.NotContains(t, topLine, msg.SenderName)
+	assert.Contains(t, topLine, "…")
+	assert.LessOrEqual(t, lipgloss.Width(topLine), 40*3/4)
 	assert.True(t, strings.HasSuffix(strings.TrimRight(topLine, " "), "╮"), "top border must end with ╮, got: %q", topLine)
 }
 

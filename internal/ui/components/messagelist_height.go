@@ -98,6 +98,13 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		}
 	}
 
+	if msg.LocalMedia != nil {
+		h += 2 // attachment label and upload status, as in bubbleContentLines
+		if msg.Text != "" {
+			h++
+		}
+	}
+
 	if msg.Media != nil {
 		// Reserve the full image footprint as soon as the image bytes are known,
 		// regardless of whether a Kitty placement has been transmitted yet. The

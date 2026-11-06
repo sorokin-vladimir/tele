@@ -6,10 +6,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// truncateMetadata bounds plain or already styled labels without splitting
-// clusters. The pinned ansi.Truncate counts ASCII-based keycaps as a lone
-// digit; segment those too so its result agrees with lipgloss.Width.
-func truncateMetadata(text string, width int) string {
+// TruncateText bounds plain or styled text without splitting grapheme clusters.
+// Work around charmbracelet/x#1020: ansi.Truncate undercounts ASCII-based
+// keycaps. Reconsider this helper when that upstream issue is fixed.
+func TruncateText(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}

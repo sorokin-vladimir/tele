@@ -2,12 +2,14 @@ package components
 
 import (
 	"fmt"
+	"image"
 	"strings"
 	"testing"
 	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/ui/media"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,12 +46,13 @@ func TestAttachmentAndSenderRowsStayInsideViewport(t *testing.T) {
 					second.ID = 2
 					second.Document = &domain.DocumentRef{ID: 2, FileName: filename}
 					lines = ml.renderGroupBubble([]domain.Message{msg, second}, true)
-				} else if kind != "local-file" {
+					require.Equal(t, len(lines), ml.groupHeight([]domain.Message{msg, second}), "album height matches rendered rows")
+				} else {
 					require.Equal(t, len(lines), ml.msgHeight(msg), "height must match the rendered rows")
 				}
 				require.Contains(t, strings.Join(lines, "\n"), msg.Date.Format("15:04"), "timestamp remains visible")
 				for row, line := range lines {
-					require.LessOrEqual(t, lipgloss.Width(line), width, "row %d crosses the pane", row)
+					require.LessOrEqual(t, lipgloss.Width(line), ml.maxContentWidth()+bubbleFrameWidth, "row %d crosses the pane", row)
 				}
 			})
 		}
@@ -65,16 +68,39 @@ func TestMetadataWithKeycapsStaysWithinPane(t *testing.T) {
 			msg.Reactions = append(msg.Reactions, domain.Reaction{Emoji: "2\ufe0f\u20e3", Count: i + 1, IsChosen: true})
 		}
 		for _, line := range ml.renderMessage(msg, true) {
-			require.LessOrEqual(t, lipgloss.Width(line), width)
+			require.LessOrEqual(t, lipgloss.Width(line), ml.maxContentWidth()+bubbleFrameWidth)
 		}
 	}
 }
+
 func TestTruncateMetadataPreservesStylesAndClusters(t *testing.T) {
 	text := "\x1b[31m2\ufe0f\u20e3abc\x1b[m"
-	require.Equal(t, "\x1b[31m2\ufe0f\u20e3…\x1b[m", truncateMetadata(text, 3))
-	require.Equal(t, text, truncateMetadata(text, 10))
-	require.Empty(t, truncateMetadata(text, 0))
+	require.Equal(t, "\x1b[31m2\ufe0f\u20e3…\x1b[m", TruncateText(text, 3))
+	require.Equal(t, text, TruncateText(text, 10))
+	require.Empty(t, TruncateText(text, 0))
 	const open = "\x1b]8;;https://example.org\x1b\\"
 	const close = "\x1b]8;;\x1b\\"
-	require.Equal(t, open+"ab…"+close, truncateMetadata(open+"abcdef"+close, 3))
+	require.Equal(t, open+"ab…"+close, TruncateText(open+"abcdef"+close, 3))
+}
+
+func TestBareMediaMetadataUsesContentBudget(t *testing.T) {
+	for _, kind := range []domain.MediaKind{domain.MediaSticker, domain.MediaVideoNote} {
+		for _, width := range []int{30, 40, 80} {
+			ml := NewMessageList(20, width)
+			ml.SetIsGroup(true)
+			ml.SetImageMode(media.ModeKitty)
+			msg := domain.Message{ID: 1, SenderName: strings.Repeat("Sender ", 30), Date: time.Unix(0, 0), Media: &domain.MediaRef{Kind: kind, Duration: 12}, Document: &domain.DocumentRef{ID: 42, MimeType: "image/webp", ThumbSize: "m"}}
+			for i := 0; i < 12; i++ {
+				msg.Reactions = append(msg.Reactions, domain.Reaction{Emoji: "2\ufe0f\u20e3", Count: 123456 + i})
+			}
+			ml.imageCache.Add(42, image.NewRGBA(image.Rect(0, 0, 50, 50)))
+			require.True(t, ml.isBareMedia(msg))
+			lines := ml.renderBareMedia(msg, false)
+			require.Len(t, lines, ml.msgHeight(msg))
+			for _, line := range lines {
+				require.LessOrEqual(t, lipgloss.Width(line), ml.maxContentWidth())
+			}
+			require.Contains(t, strings.Join(lines, "\n"), msg.Date.Format("15:04"))
+		}
+	}
 }

@@ -37,7 +37,7 @@ func voicePlayingLabel(m *domain.MediaRef, progress float64, posSecs, width int)
 	barsWidth := min(maxWaveformBars, max(width-ansi.StringWidth(prefix+tail), 0))
 	bars := renderWaveformProgress(decodeWaveform(m.Waveform), barsWidth, progress)
 	if bars == "" {
-		return theme.S().Body.Render(truncateMetadata("🎤 voice "+formatDuration(posSecs), width))
+		return theme.S().Body.Render(TruncateText("🎤 voice "+formatDuration(posSecs), width))
 	}
 	// Painted here rather than by the line that lays it out: bars holds a reset
 	// between the played run and the rest, so the glyphs either side of it have

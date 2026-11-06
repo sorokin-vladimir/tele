@@ -322,7 +322,7 @@ AUR and Snap packages are planned but not published yet.
 
 ## Getting started
 
-Run `tele` and log in with your phone number, the code Telegram sends you and your 2FA password, if you have one.
+Run `tele` and scan the QR code it shows with Telegram on your phone, or log in with your phone number, the code Telegram sends you and your 2FA password, if you have one.
 `tele` then asks once whether to keep running as a service.
 
 The first launch, the service, the app key and upgrading from 1.11: [docs/getting-started.md](docs/getting-started.md)

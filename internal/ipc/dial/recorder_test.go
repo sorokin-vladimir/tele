@@ -125,6 +125,9 @@ func (r *recorder) EndAccount(reason core.EndReason) { _ = r.took("EndAccount", 
 func (r *recorder) AnswerLogin(_ context.Context, seq int, value string) error {
 	return r.took("AnswerLogin", seq, value)
 }
+func (r *recorder) SwitchLogin(_ context.Context, seq int, to project.LoginStepKind) error {
+	return r.took("SwitchLogin", seq, to)
+}
 func (r *recorder) SetMuted(_ context.Context, h domain.HistoryKey, muted bool) error {
 	return r.took("SetMuted", h, muted)
 }

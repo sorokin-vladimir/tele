@@ -21,7 +21,7 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 1. Check the upstream status of every entry below.
    An entry is retired only when its fix is in a release, not just merged.
-2. Diff `telegram/updates` and `mtproto/read.go` between the current and the new version.
+2. Diff `telegram/updates`, `mtproto/read.go` and `telegram/session.go` between the current and the new version.
    If neither changed, no entry below changed either.
 3. Run the tripwire tests: `go test ./internal/tg/ -run 'TestStand_Without'`.
    Each one reproduces its defect against the real manager and asserts that the defect is still there.
@@ -30,12 +30,13 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 ## Workarounds
 
-| Workaround | Where | Issue | Retired by | Status (gotd v0.162.0) |
+| Workaround | Where | Issue | Retired by | Status (gotd v0.163.0) |
 |---|---|---|---|---|
 | Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1852](https://github.com/gotd/td/issues/1852) | open, no fix yet |
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
 | Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1856](https://github.com/gotd/td/issues/1856) | open, no fix yet |
+| Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
 
 ### Channel difference cooldown stripped
 
@@ -98,3 +99,18 @@ This depends on the wording of a log entry, which gotd may change in any release
   It fails if gotd connects despite the skew (the defect is fixed) or if the entry can no longer be read (the watch has gone blind).
 - On retirement: if gotd corrects for the skew, delete `clock_skew.go`, its tests, the stand and this entry, and the app no longer needs to say anything.
   If gotd instead reports the skew as an error, read it from there and drop the log watch.
+
+### Saved DC addresses handed to the client
+
+This one is not in the updates manager either, but in how gotd restores a session.
+Every time the client connects, gotd writes the config Telegram sent into the session file, data-centre addresses included.
+When it restores the session at the next start, it reads the data centre, the key and the salt back, but not the config, so it dials the static list compiled into gotd (`telegram/dcs/prod.go`).
+That list can name addresses Telegram no longer serves, or that a network cannot reach.
+A login works, because by the time it moves to the account's data centre gotd holds the live config, and every start after it dials the static addresses and retries them forever.
+
+`savedDCList` reads the addresses out of the session file and `Connect` hands them to gotd as its starting list.
+With no session, or one that saved no addresses, the list stays gotd's own.
+
+- Tripwire: `TestStand_WithoutTheSavedListASessionDialsTheStaticAddresses` (`internal/tg/session_dcs_stand_test.go`).
+  It fails once gotd dials the saved address itself.
+- On retirement: delete `savedDCList`, the `DCList` option in `internal/tg/client.go`, the stand and this entry; keep `TestConnect_DialsTheAddressesTheSessionSaved`, which holds the behaviour whoever provides it.

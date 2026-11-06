@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `bfe07cb`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -306,7 +306,7 @@ AUR 和 Snap 软件包已在计划中，但尚未发布。
 <a id="getting-started"></a>
 ## 快速上手
 
-运行 `tele`，用手机号、Telegram 发给你的验证码以及两步验证密码（如果设置了）登录。之后 `tele` 会询问一次是否作为服务继续运行。
+运行 `tele`，用手机上的 Telegram 扫描它显示的二维码，或者用手机号、Telegram 发给你的验证码以及两步验证密码（如果设置了）登录。之后 `tele` 会询问一次是否作为服务继续运行。
 
 首次启动、服务、应用密钥以及从 1.11 升级：[docs/zh-CN/getting-started.md](docs/zh-CN/getting-started.md)
 

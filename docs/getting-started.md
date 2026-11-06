@@ -9,11 +9,21 @@ Installing it is covered in the [README](../README.md#installation).
 tele
 ```
 
-On first run, `tele` creates `~/.config/tele/config.yml`, then asks for:
+On first run, `tele` creates `~/.config/tele/config.yml` and shows a QR code.
+Open Telegram on your phone, go to Settings > Devices > Link Desktop Device, and scan it.
+If your account has a 2FA password, `tele` asks for it next.
+
+The QR code needs a window of about 80 by 24.
+In a smaller one, `tele` asks you to make the window larger.
+
+To log in by phone number instead, press `p` or Enter.
+`tele` then asks for:
 
 - your phone number
 - the code Telegram sends you
 - your 2FA password, if you have one
+
+Esc at any of these goes back to the QR code.
 
 ## Running as a service
 

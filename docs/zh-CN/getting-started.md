@@ -1,6 +1,6 @@
 # 快速上手
 
-> 本文译自 [getting-started.md](../getting-started.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [getting-started.md](../getting-started.md)，对应提交 `bfe07cb`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 第一次运行 `tele` 时会发生什么，以及从 1.11 升级时有哪些变化。安装方法见 [README](../../README.zh-CN.md#installation)。
 
@@ -11,11 +11,17 @@
 tele
 ```
 
-首次运行时，`tele` 会创建 `~/.config/tele/config.yml`，然后依次询问：
+首次运行时，`tele` 会创建 `~/.config/tele/config.yml` 并显示一个二维码。在手机上打开 Telegram，进入 Settings > Devices > Link Desktop Device（菜单名称以英文界面为准），然后扫描它。如果你的账号设置了两步验证密码，`tele` 接着会询问它。
+
+二维码需要大约 80×24 的窗口。窗口更小时，`tele` 会请你把窗口调大。
+
+如果想改用手机号登录，按 `p` 或 Enter。`tele` 随后会依次询问：
 
 - 你的手机号
 - Telegram 发给你的验证码
 - 两步验证密码（如果设置了）
+
+在其中任何一步按 Esc 都会回到二维码。
 
 <a id="running-as-a-service"></a>
 ## 作为服务运行

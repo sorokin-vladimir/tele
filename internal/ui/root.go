@@ -647,6 +647,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConnectFailed(msg.Err)
 	case screens.LoginAnswerMsg:
 		return m.handleLoginAnswer(msg)
+	case screens.LoginSwitchMsg:
+		return m.handleLoginSwitch(msg)
 	case HostLostMsg:
 		return m.handleHostLost(msg)
 	case HostAwayMsg:

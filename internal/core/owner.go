@@ -129,7 +129,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		state:         st,
 		client:        client,
 		notifier:      n,
-		authFlow:      internaltg.NewAuthFlow(),
+		authFlow:      internaltg.NewAuthFlow(log),
 		clients:       make(map[clientID]*seat),
 		now:           time.Now,
 		readyCh:       make(chan struct{}),

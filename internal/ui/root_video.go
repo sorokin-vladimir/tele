@@ -35,9 +35,12 @@ type videoPlayer struct {
 	cols    int
 	rows    int
 
-	// behind is the frame sent under the back id, shown at the next tick
-	// once it is written (#331).
-	behind image.Image
+	// behind is the frame sent under the back id, shown at a later tick once
+	// it is written (#331). inFlight says it is being encoded or written, and
+	// writtenAt when it was written.
+	behind    image.Image
+	inFlight  bool
+	writtenAt time.Time
 
 	source     frameSource
 	playing    bool
@@ -168,17 +171,25 @@ func transmitFrameToID(id uint32, frame image.Image, cols, rows int) tea.Cmd {
 // for handleVideoFrameEncoded to write.
 func encodeFrameCmd(gen int, id uint32, frame image.Image, cols, rows int) tea.Cmd {
 	return func() tea.Msg {
-		seq, err := media.TransmitSeq(id, frame, cols, rows)
+		seq, err := media.TransmitFrameSeq(id, frame, cols, rows)
 		if err != nil {
-			return nil
+			// Reported all the same, with nothing to write, so the modal stops
+			// waiting for this frame and takes the next.
+			return videoFrameEncodedMsg{gen: gen, id: id}
 		}
-		return videoFrameEncodedMsg{gen: gen, seq: seq}
+		return videoFrameEncodedMsg{gen: gen, id: id, seq: seq}
 	}
 }
 
 // handleVideoFrameEncoded writes an encoded frame, then reports it written.
+// A frame that failed to encode is dropped, and so is one encoded for an id
+// that is no longer the back one: it would be written under the id on screen.
 func (m RootModel) handleVideoFrameEncoded(msg videoFrameEncodedMsg) (RootModel, tea.Cmd) {
 	if m.videoPlayer == nil || msg.gen != m.videoPlayer.gen {
+		return m, nil
+	}
+	if msg.seq == "" || msg.id != m.kittyStore.BackIDFor(videoPlayerKey) {
+		m.videoPlayer.inFlight = false
 		return m, nil
 	}
 	seq, gen := msg.seq, msg.gen
@@ -194,6 +205,8 @@ func (m RootModel) handleVideoFrameWritten(msg videoFrameWrittenMsg) (RootModel,
 		return m, nil
 	}
 	m.kittyStore.MarkBackTransmitted(videoPlayerKey, m.videoPlayer.cols)
+	m.videoPlayer.inFlight = false
+	m.videoPlayer.writtenAt = m.clock()
 	return m, nil
 }
 
@@ -277,10 +290,10 @@ func (m RootModel) handleVideoTick(msg videoTickMsg) (RootModel, tea.Cmd) {
 	if vp == nil || vp.source == nil || msg.gen != vp.gen || !vp.playing {
 		return m, nil
 	}
-	if m.kittyStore.BackReady(videoPlayerKey) {
+	// The terminal is given a frame's time after the write to decode it.
+	if m.kittyStore.BackReady(videoPlayerKey) && m.clock().Sub(vp.writtenAt) >= videoFrameInterval {
 		m.kittyStore.Swap(videoPlayerKey)
 		vp.frame = vp.behind
-		vp.posFrames++
 		m.imageCache.Add(videoPlayerKey, vp.frame)
 	}
 	frame, ok := vp.source.Next()
@@ -297,9 +310,27 @@ func (m RootModel) handleVideoTick(msg videoTickMsg) (RootModel, tea.Cmd) {
 		vp.posFrames = 0
 		return m, videoTickCmd(vp.gen)
 	}
+	// The stream keeps time whether or not this frame is shown.
+	vp.posFrames++
+	// One frame at a time: a large frame takes longer to encode than a tick
+	// lasts, and frames encoded together arrive out of order, so the video
+	// jumped back and forth and kept every core busy. While the back id is
+	// taken, this frame is dropped (#331).
+	if vp.inFlight || m.kittyStore.BackReady(videoPlayerKey) {
+		return m, videoTickCmd(vp.gen)
+	}
+	vp.inFlight = true
 	vp.behind = frame
 	id := m.kittyStore.BackIDFor(videoPlayerKey)
 	return m, tea.Batch(encodeFrameCmd(vp.gen, id, frame, vp.cols, vp.rows), videoTickCmd(vp.gen))
+}
+
+// clock is the time animations are timed by.
+func (m RootModel) clock() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
 }
 
 // videoSpinnerGlyph returns the loading-spinner glyph for the given index,

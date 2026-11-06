@@ -174,9 +174,15 @@ type RootModel struct {
 	lastPaneHeight int
 	retransmitGen  int
 
-	// gifBehind is the frame sent under the active GIF's back id, shown at
-	// the next tick once it is written (#331).
-	gifBehind image.Image
+	// gifBehind is the frame sent under the active GIF's back id, shown at a
+	// later tick once it is written (#331). gifInFlight says it is being
+	// encoded or written, and gifWrittenAt when it was written.
+	gifBehind    image.Image
+	gifInFlight  bool
+	gifWrittenAt time.Time
+
+	// now is the clock animations are timed by; time.Now when nil.
+	now func() time.Time
 
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
@@ -595,6 +601,11 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGifFramesReady(msg)
 	case gifTickMsg:
 		return m.handleGifTick(msg)
+	case gifFrameFailedMsg:
+		if msg.photoID == m.gifActiveID {
+			m.gifInFlight = false
+		}
+		return m, nil
 	case videoFileReadyMsg:
 		return m.handleVideoFileReady(msg)
 	case videoProbedMsg:

@@ -2,8 +2,10 @@ package media
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"image"
+	"image/png"
 	"math/rand/v2"
 	"strings"
 
@@ -228,7 +230,55 @@ func scaleForTransmit(img image.Image, cols int) image.Image {
 func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
 	img = scaleForTransmit(img, cols)
 	var buf bytes.Buffer
-	opts := &kitty.Options{
+	if err := kitty.EncodeGraphics(&buf, img, transmitOptions(id, cols, rows)); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// TransmitFrameSeq is TransmitSeq for a frame of an animation. Its PNG is
+// encoded for speed rather than size: at the default level a large frame took
+// longer to encode than a frame lasts, about three times as long as this,
+// for a fifth less data (#331). The kitty package offers no level, so the
+// chunks are written here, the way it writes them.
+func TransmitFrameSeq(id uint32, img image.Image, cols, rows int) (string, error) {
+	img = scaleForTransmit(img, cols)
+	var data bytes.Buffer
+	enc := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := enc.Encode(&data, img); err != nil {
+		return "", err
+	}
+	o := transmitOptions(id, cols, rows)
+	payload := base64.StdEncoding.EncodeToString(data.Bytes())
+	var b strings.Builder
+	for start := 0; start < len(payload) || start == 0; start += kitty.MaxChunkSize {
+		end := min(start+kitty.MaxChunkSize, len(payload))
+		first, last := start == 0, end == len(payload)
+		var keys []string
+		if first {
+			keys = o.Options()
+		} else {
+			keys = []string{fmt.Sprintf("q=%d", o.Quite)}
+		}
+		switch {
+		case first && last: // one chunk carries no m=
+		case last:
+			keys = append(keys, "m=0")
+		default:
+			keys = append(keys, "m=1")
+		}
+		b.WriteString(ansi.KittyGraphics([]byte(payload[start:end]), keys...))
+		if last {
+			break
+		}
+	}
+	return b.String(), nil
+}
+
+// transmitOptions transmits an image as PNG under id and places it virtually
+// over cols×rows cells, quietly.
+func transmitOptions(id uint32, cols, rows int) *kitty.Options {
+	return &kitty.Options{
 		Action: kitty.TransmitAndPut,
 		ID:     int(id),
 		// PNG is self-describing: the terminal reads dimensions from the data,
@@ -241,10 +291,6 @@ func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
 		Rows:             rows,
 		Quite:            2,
 	}
-	if err := kitty.EncodeGraphics(&buf, img, opts); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
 
 // KittyRenderer emits Unicode-placeholder grids that reference images already

@@ -1,6 +1,13 @@
 package media_test
 
 import (
+	"bytes"
+	"encoding/base64"
+	"image"
+	"image/color"
+	"image/png"
+	"math/rand/v2"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode"
@@ -182,6 +189,62 @@ func TestKittyStore_TransmitSeqIsDecodable(t *testing.T) {
 	hasDims := strings.Contains(seq, "s=") && strings.Contains(seq, "v=")
 	require.True(t, selfDescribing || hasDims,
 		"transmit must be PNG (f=100) or carry s=/v= dimensions")
+}
+
+// A still photo goes out exactly as the kitty package writes it: the faster
+// encoding is for animation frames only (#331).
+func TestKittyStore_TransmitSeqIsWhatTheKittyPackageWrites(t *testing.T) {
+	img := sampleImage(200, 150) // several chunks of data, sent unscaled at 40 columns
+	seq, err := media.TransmitSeq(7, img, 40, 20)
+	require.NoError(t, err)
+
+	var want strings.Builder
+	require.NoError(t, kitty.EncodeGraphics(&want, img, &kitty.Options{
+		Action: kitty.TransmitAndPut, ID: 7, Format: kitty.PNG, Transmission: kitty.Direct,
+		Chunk: true, VirtualPlacement: true, Columns: 40, Rows: 20, Quite: 2,
+	}))
+	require.Equal(t, want.String(), seq)
+}
+
+// An animation frame is encoded for speed rather than size: at the default
+// level a large frame took longer to encode than a tick lasts (#331). It is
+// still the same picture, transmitted and placed like any other.
+func TestKittyStore_AFrameSeqCarriesThePicture(t *testing.T) {
+	// Noise, so the picture does not compress into a single chunk.
+	img := image.NewRGBA(image.Rect(0, 0, 200, 150))
+	r := rand.New(rand.NewPCG(1, 2))
+	for i := range img.Pix {
+		img.Pix[i] = uint8(r.UintN(256))
+		if i%4 == 3 {
+			img.Pix[i] = 255
+		}
+	}
+	seq, err := media.TransmitFrameSeq(7, img, 40, 20)
+	require.NoError(t, err)
+
+	chunks := regexp.MustCompile("\x1b_G([^;]*);([^\x1b]*)\x1b\\\\").FindAllStringSubmatch(seq, -1)
+	require.Greater(t, len(chunks), 1, "the frame goes in chunks")
+	first := chunks[0][1]
+	for _, key := range []string{"a=T", "i=7", "f=100", "U=1", "c=40", "r=20", "q=2", "m=1"} {
+		require.Contains(t, strings.Split(first, ","), key)
+	}
+	var payload strings.Builder
+	for i, c := range chunks {
+		payload.WriteString(c[2])
+		if i > 0 {
+			want := "q=2,m=1"
+			if i == len(chunks)-1 {
+				want = "q=2,m=0"
+			}
+			require.Equal(t, want, c[1], "chunk %d", i)
+		}
+	}
+	data, err := base64.StdEncoding.DecodeString(payload.String())
+	require.NoError(t, err)
+	got, err := png.Decode(bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Equal(t, img.Bounds(), got.Bounds())
+	require.Equal(t, img.At(120, 90), color.RGBAModel.Convert(got.At(120, 90)))
 }
 
 func TestKittyRenderer_NilUntilTransmitted(t *testing.T) {

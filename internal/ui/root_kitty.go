@@ -40,12 +40,22 @@ func (m RootModel) transmitPhotoUnder(photoID int64, img image.Image, behind boo
 	// encode failure the command returns nil — nothing is written and the image is
 	// never marked ready, so a later reconcile can retry instead of leaving a
 	// permanently blank cell that the store falsely reports as ready (#95).
+	encode := media.TransmitSeq
+	if behind {
+		// A frame of an animation is encoded for speed (#331).
+		encode = media.TransmitFrameSeq
+	}
 	return func() tea.Msg {
-		seq, err := media.TransmitSeq(id, img, cols, rows)
+		seq, err := encode(id, img, cols, rows)
 		if err != nil {
+			if behind {
+				// The animation waits for one frame at a time: it is told this
+				// one is not coming, or it would wait forever.
+				return gifFrameFailedMsg{photoID: photoID}
+			}
 			return nil
 		}
-		return kittyEncodedMsg{photoID: photoID, cols: cols, seq: seq, behind: behind}
+		return kittyEncodedMsg{photoID: photoID, id: id, cols: cols, seq: seq, behind: behind}
 	}
 }
 

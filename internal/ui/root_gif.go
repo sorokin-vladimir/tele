@@ -91,6 +91,9 @@ func (m *RootModel) stopGifAnim() {
 	m.gifActiveID = 0
 	m.gifIdx = 0
 	m.gifGen++
+	// A frame still on its way belongs to the GIF stopped: the next one to
+	// start must not wait for it.
+	m.gifInFlight = false
 }
 
 // reconcileGifAnim is called whenever the selected message changes. It stops any
@@ -183,12 +186,20 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	if len(frames) == 0 {
 		return m, nil
 	}
-	if m.kittyStore.BackReady(m.gifActiveID) && m.gifBehind != nil {
+	// The terminal is given a frame's time after the write to decode it.
+	if m.kittyStore.BackReady(m.gifActiveID) && m.gifBehind != nil &&
+		m.clock().Sub(m.gifWrittenAt) >= gifFrameInterval {
 		m.kittyStore.Swap(m.gifActiveID)
 		m.imageCache.Add(m.gifActiveID, m.gifBehind)
 	}
 	m.gifIdx = (m.gifIdx + 1) % len(frames)
+	// One frame at a time, as in the video modal: while the back id is taken
+	// this frame is dropped, and the GIF keeps time (#331).
+	if m.gifInFlight || m.kittyStore.BackReady(m.gifActiveID) {
+		return m, gifTickCmd(m.gifGen)
+	}
 	frame := frames[m.gifIdx]
+	m.gifInFlight = true
 	m.gifBehind = frame
 	transmit := m.transmitFrameBehindCmd(m.gifActiveID, frame)
 	return m, tea.Batch(transmit, gifTickCmd(m.gifGen))

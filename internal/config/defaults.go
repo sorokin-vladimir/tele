@@ -39,6 +39,7 @@ func defaultValues() map[string]any {
 		"photos.disk_cache_size":     int64(256 * 1024 * 1024),
 		"avatars.disk_cache_size":    int64(16 * 1024 * 1024),
 		"cli.name_width":             20,
+		"cli.list_limit":             20,
 		"cli.account_commands":       "all",
 	}
 }

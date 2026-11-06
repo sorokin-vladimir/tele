@@ -45,31 +45,33 @@ tele [-c PATH]
 ## `tele chats`
 
 ```console
-tele chats [--unread] [--archived | --folder ID] [--limit N] [--json]
+tele chats [--unread] [--archived | --folder ID] [--all | --limit N] [--json]
 ```
 
-按聊天列表中的顺序列出聊天，每个聊天一行：聊天的 id、@username、标题和标记（未读、提及、回应、手动标为未读、静音，论坛还会显示有未读的话题数）。没有用户名的聊天，这一列留空；列表中所有聊天都没有用户名时，整列省略。用户名从不截断，因此可以原样粘贴到命令中。标记都从同一列开始，即最长的标题之后；标题宽于 `cli.name_width` 列（默认 20）时会被截断。不加参数时列出主列表，不含已归档的聊天。
+按聊天列表中的顺序列出聊天，每个聊天一行：聊天的 id、@username、标题和标记（未读、提及、回应、手动标为未读、静音，论坛还会显示有未读的话题数）。没有用户名的聊天，这一列留空；列表中所有聊天都没有用户名时，整列省略。用户名从不截断，因此可以原样粘贴到命令中。标记都从同一列开始，即最长的标题之后；标题宽于 `cli.name_width` 列（默认 20）时会被截断。未指定 `--limit` 时，文本输出最多 `cli.list_limit` 行（默认 20；0 为全部）。当输出被截断时，stderr 会显示提示（`20 of 143 chats; --all for the rest`）。不加参数时列出主列表，不含已归档的聊天。
 
 | 参数            | 作用                                                                            |
 | --------------- | ------------------------------------------------------------------------------- |
 | `--unread`      | 只列出有未读内容的聊天，包括手动标为未读的                                      |
 | `--archived`    | 列出已归档的聊天，而不是主列表                                                  |
 | `--folder <id>` | 列出你的某个文件夹中的聊天，与聊天列表中显示的一致。没有这个文件夹时以退出码 5 结束，并列出已有的文件夹 |
-| `--limit <n>`   | 最多列出这么多个，取其他参数筛选后的前几个。不加此参数时全部列出               |
+| `--all`         | 列出所有聊天，取消 `cli.list_limit` 限制                                        |
+| `--limit <n>`   | 最多列出这么多个，取其他参数筛选后的前几个；覆盖 `cli.list_limit`                |
 | `--json`        | 每个聊天输出一个 JSON 对象，见 [cli.md](cli.md#tele-chats---json)               |
 
 <a id="tele-topics"></a>
 ## `tele topics`
 
 ```console
-tele topics CHAT [--limit N] [--json]
+tele topics CHAT [--all | --limit N] [--json]
 ```
 
-按话题列表中的顺序列出论坛的话题，每个话题一行：话题的 id、标题和标记，标题与 `tele chats` 中一样按 `cli.name_width` 截断。聊天不是论坛时以退出码 5 结束。`tele show --topic` 接受的就是这个 id。
+按话题列表中的顺序列出论坛的话题，每个话题一行：话题的 id、标题和标记，标题与 `tele chats` 中一样按 `cli.name_width` 截断。未指定 `--limit` 时，文本输出最多 `cli.list_limit` 行（默认 20；0 为全部）。当输出被截断时，stderr 会显示提示（`20 of 143 topics; --all for the rest`）。聊天不是论坛时以退出码 5 结束。`tele show --topic` 接受的就是这个 id。
 
 | 参数          | 作用                                                                  |
 | ------------- | --------------------------------------------------------------------- |
-| `--limit <n>` | 最多列出这么多个，取列表的前几个。不加此参数时全部列出                |
+| `--all`       | 列出所有话题，取消 `cli.list_limit` 限制                              |
+| `--limit <n>` | 最多列出这么多个，取列表的前几个；覆盖 `cli.list_limit`                |
 | `--json`      | 每个话题输出一个 JSON 对象，见 [cli.md](cli.md#tele-topics---json)    |
 
 <a id="tele-show"></a>

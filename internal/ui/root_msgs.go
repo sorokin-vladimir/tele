@@ -49,6 +49,17 @@ type videoProbedMsg struct {
 // videoTickMsg advances the modal video by one frame. gen drops stale ticks.
 type videoTickMsg struct{ gen int }
 
+// videoFrameEncodedMsg carries a modal frame encoded for the terminal, to be
+// written under the back id; gen drops one from a closed or reopened modal.
+type videoFrameEncodedMsg struct {
+	gen int
+	seq string
+}
+
+// videoFrameWrittenMsg reports that a modal frame is written under the back
+// id, so the next tick may show it (#331).
+type videoFrameWrittenMsg struct{ gen int }
+
 type FullPhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image

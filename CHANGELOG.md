@@ -11,6 +11,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- `tele daemon install` over a running service on macOS and Windows waits
+  for the old service to stop before it starts the new one. It used to fail
+  with `Bootstrap failed: 5` on macOS, or start nothing on Windows, and leave
+  the account with no host. `tele daemon uninstall` waits too, so an install
+  right after it works (#327).
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

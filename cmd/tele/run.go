@@ -84,7 +84,7 @@ func (r run) host() error {
 		// Only a tele that hosts offers its service: one that only attaches
 		// is a window of a host that may be the service already (#208).
 		Notices: app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned,
-			systemInstaller(io.Discard).offer(options{cfgPath: r.cfgPath})),
+			systemInstaller(io.Discard, nil).offer(options{cfgPath: r.cfgPath})),
 	})
 }
 

@@ -58,11 +58,12 @@ func Output(name string, args ...string) ([]byte, error) {
 var ErrUnsupported = errors.New("tele cannot be installed as a service on this system")
 
 // ForThisSystem is the service manager of the system tele runs on, for the
-// person whose home is home.
-func ForThisSystem(home string) (Manager, error) {
+// person whose home is home. waiting, if set, is told of a wait for an old
+// service to go, as a wait's waiting is.
+func ForThisSystem(home string, waiting func() (done func())) (Manager, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		return Launchd{Home: home, UID: os.Getuid(), Run: Run}, nil
+		return Launchd{Home: home, UID: os.Getuid(), Run: Run, Waiting: waiting}, nil
 	case "linux":
 		config := os.Getenv("XDG_CONFIG_HOME")
 		if config == "" {
@@ -70,7 +71,7 @@ func ForThisSystem(home string) (Manager, error) {
 		}
 		return Systemd{ConfigHome: config, Run: Run}, nil
 	case "windows":
-		return TaskScheduler{TempDir: os.TempDir(), Run: Run, Output: Output}, nil
+		return TaskScheduler{TempDir: os.TempDir(), Run: Run, Output: Output, Waiting: waiting}, nil
 	default:
 		return nil, ErrUnsupported
 	}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,9 @@ import (
 type commands struct {
 	ran  []string
 	fail map[string]error
+	// script answers a command whose line starts with its key, one answer per
+	// call, the last one repeated; it is asked before fail.
+	script map[string][]error
 	// read keeps, for a command naming a file, what the file said then.
 	read map[string]string
 	// file is the argument after which a command names a file to read.
@@ -38,6 +42,15 @@ func (c *commands) run(name string, args ...string) error {
 			c.read[line] = string(b)
 		}
 	}
+	for prefix, answers := range c.script {
+		if strings.HasPrefix(line, prefix) && len(answers) > 0 {
+			err := answers[0]
+			if len(answers) > 1 {
+				c.script[prefix] = answers[1:]
+			}
+			return err
+		}
+	}
 	for prefix, err := range c.fail {
 		if strings.HasPrefix(line, prefix) {
 			return err
@@ -45,6 +58,22 @@ func (c *commands) run(name string, args ...string) error {
 	}
 	return nil
 }
+
+// clock is time as a test plays it: it stands still until something sleeps.
+type clock struct {
+	at    time.Time
+	slept []time.Duration
+}
+
+func (c *clock) now() time.Time { return c.at }
+
+func (c *clock) sleep(d time.Duration) {
+	c.slept = append(c.slept, d)
+	c.at = c.at.Add(d)
+}
+
+// errNoLabel is what launchctl print says of a label launchd does not hold.
+var errNoLabel = errors.New(`launchctl: could not find service "io.github.sorokin-vladimir.tele" in domain for user gui: 501`)
 
 var mine = service.Unit{Name: "tele", Binary: "/opt/homebrew/bin/tele", Config: "/Users/ada/.config/tele/config.yml"}
 
@@ -73,7 +102,7 @@ func TestLaunchd_InstallingAgainReplacesTheAgent(t *testing.T) {
 	home := t.TempDir()
 	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run}
 	require.NoError(t, m.Install(mine))
-	cmds := &commands{fail: map[string]error{"launchctl bootout": errors.New("not loaded")}}
+	cmds := &commands{fail: map[string]error{"launchctl bootout": errors.New("not loaded"), "launchctl print": errNoLabel}}
 	m.Run = cmds.run
 
 	require.NoError(t, m.Install(mine))
@@ -81,8 +110,53 @@ func TestLaunchd_InstallingAgainReplacesTheAgent(t *testing.T) {
 	plist := filepath.Join(home, "Library", "LaunchAgents", "io.github.sorokin-vladimir.tele.plist")
 	assert.Equal(t, []string{
 		"launchctl bootout gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
 		"launchctl bootstrap gui/501 " + plist,
 	}, cmds.ran)
+}
+
+// Over a loaded agent, the new one is loaded only once launchd has let the old
+// one's label go: it does so only when the old process has exited, and until
+// then bootstrap fails with error 5 and leaves no service at all (#327).
+func TestLaunchd_InstallWaitsForTheOldAgentToGo(t *testing.T) {
+	home := t.TempDir()
+	tick := &clock{}
+	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run, Sleep: tick.sleep, Now: tick.now}
+	require.NoError(t, m.Install(mine))
+	cmds := &commands{script: map[string][]error{"launchctl print": {nil, nil, nil, errNoLabel}}}
+	m.Run = cmds.run
+
+	require.NoError(t, m.Install(mine))
+
+	plist := filepath.Join(home, "Library", "LaunchAgents", "io.github.sorokin-vladimir.tele.plist")
+	assert.Equal(t, []string{
+		"launchctl bootout gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl bootstrap gui/501 " + plist,
+	}, cmds.ran)
+	assert.Equal(t, []time.Duration{100 * time.Millisecond, 100 * time.Millisecond, 100 * time.Millisecond}, tick.slept)
+}
+
+// An old agent that outlasts the wait still gets one try at loading the new
+// one; when launchd refuses it, the error says why (#327).
+func TestLaunchd_AnOldAgentThatStaysIsSaid(t *testing.T) {
+	home := t.TempDir()
+	tick := &clock{}
+	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run, Sleep: tick.sleep, Now: tick.now}
+	require.NoError(t, m.Install(mine))
+	cmds := &commands{fail: map[string]error{"launchctl bootstrap": errors.New("Bootstrap failed: 5: Input/output error")}}
+	m.Run = cmds.run
+
+	err := m.Install(mine)
+
+	require.ErrorIs(t, err, service.ErrStillRunning)
+	assert.Contains(t, err.Error(), "the running service did not stop in 30s")
+	assert.Contains(t, err.Error(), "Input/output error")
+	assert.Equal(t, 1, strings.Count(strings.Join(cmds.ran, "\n"), "launchctl bootstrap"))
+	assert.Equal(t, 30*time.Second, tick.at.Sub(time.Time{}))
 }
 
 // What launchd said when it would not load the agent is the error.
@@ -101,19 +175,83 @@ func TestLaunchd_Uninstall(t *testing.T) {
 	home := t.TempDir()
 	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run}
 	require.NoError(t, m.Install(mine))
-	cmds := &commands{}
+	cmds := &commands{fail: map[string]error{"launchctl print": errNoLabel}}
 	m.Run = cmds.run
 
 	removed, err := m.Uninstall("tele")
 
 	require.NoError(t, err)
 	assert.True(t, removed)
-	assert.Equal(t, []string{"launchctl bootout gui/501/io.github.sorokin-vladimir.tele"}, cmds.ran)
+	assert.Equal(t, []string{
+		"launchctl bootout gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+	}, cmds.ran)
 	assert.NoFileExists(t, filepath.Join(home, "Library", "LaunchAgents", "io.github.sorokin-vladimir.tele.plist"))
 
 	removed, err = m.Uninstall("tele")
 	require.NoError(t, err)
 	assert.False(t, removed)
+}
+
+// Uninstalling returns only once launchd has let the agent go, so that the
+// service is gone when it says so, and an install right after it loads (#327).
+func TestLaunchd_UninstallWaitsForTheAgentToGo(t *testing.T) {
+	home := t.TempDir()
+	tick := &clock{}
+	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run, Sleep: tick.sleep, Now: tick.now}
+	require.NoError(t, m.Install(mine))
+	cmds := &commands{script: map[string][]error{"launchctl print": {nil, nil, errNoLabel}}}
+	m.Run = cmds.run
+
+	removed, err := m.Uninstall("tele")
+
+	require.NoError(t, err)
+	assert.True(t, removed)
+	assert.Equal(t, []string{
+		"launchctl bootout gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+		"launchctl print gui/501/io.github.sorokin-vladimir.tele",
+	}, cmds.ran)
+	assert.Len(t, tick.slept, 2)
+}
+
+// An agent that outlasts the wait is no reason to keep its file, but it is a
+// reason not to say it is gone (#327).
+func TestLaunchd_UninstallSaysAnAgentThatStays(t *testing.T) {
+	home := t.TempDir()
+	tick := &clock{}
+	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run, Sleep: tick.sleep, Now: tick.now}
+	require.NoError(t, m.Install(mine))
+
+	removed, err := m.Uninstall("tele")
+
+	require.ErrorIs(t, err, service.ErrStillRunning)
+	assert.True(t, removed)
+	assert.NoFileExists(t, filepath.Join(home, "Library", "LaunchAgents", "io.github.sorokin-vladimir.tele.plist"))
+}
+
+// Whoever installs is told when a wait starts and when it ends, once each,
+// and not at all when launchd let the old agent go at once (#327).
+func TestLaunchd_AWaitIsTold(t *testing.T) {
+	home := t.TempDir()
+	tick := &clock{}
+	var started, ended int
+	m := service.Launchd{Home: home, UID: 501, Run: (&commands{}).run, Sleep: tick.sleep, Now: tick.now,
+		Waiting: func() func() {
+			started++
+			return func() { ended++ }
+		}}
+	require.NoError(t, m.Install(mine))
+
+	m.Run = (&commands{fail: map[string]error{"launchctl print": errNoLabel}}).run
+	require.NoError(t, m.Install(mine))
+	assert.Equal(t, 0, started, "nothing was waited for")
+
+	m.Run = (&commands{script: map[string][]error{"launchctl print": {nil, nil, errNoLabel}}}).run
+	require.NoError(t, m.Install(mine))
+	assert.Equal(t, 1, started)
+	assert.Equal(t, 1, ended)
 }
 
 // What an installed agent runs is read back from it, for status to check the

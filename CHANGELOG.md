@@ -11,6 +11,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Chat and folder titles with keycap emoji stay within their row width, leaving room for badges (#333).
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

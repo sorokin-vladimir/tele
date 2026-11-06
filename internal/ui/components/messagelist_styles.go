@@ -2,6 +2,8 @@ package components
 
 import (
 	"image/color"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -35,21 +37,44 @@ func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
 	return theme.NewStyle().Foreground(c).Bold(true)
 }
 
-func buildReactStr(reactions []domain.Reaction) string {
-	if len(reactions) == 0 {
+// buildReactStr presents whole reactions in descending count order without
+// changing the Telegram slice. Width includes the framing spaces.
+func buildReactStr(reactions []domain.Reaction, width int) string {
+	if len(reactions) == 0 || width <= 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(reactions))
-	for _, r := range reactions {
-		s := r.Emoji + " " + strconv.Itoa(r.Count)
+	ordered := slices.Clone(reactions)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Count > ordered[j].Count })
+	parts := make([]string, 0, len(ordered))
+	for _, r := range ordered {
+		entry := r.Emoji + " " + strconv.Itoa(r.Count)
 		if r.IsChosen {
-			parts = append(parts, theme.S().TickRead.Render(s))
+			entry = theme.S().TickRead.Render(entry)
 		} else {
-			parts = append(parts, theme.S().Timestamp.Render(s))
+			entry = theme.S().Timestamp.Render(entry)
 		}
+		parts = append(parts, entry)
 	}
 	sep := theme.S().Timestamp.Render(" · ")
-	// The framing spaces are their own cells on the bubble's bottom border,
-	// outside every run's reset, so they carry the canvas rather than nothing.
-	return theme.Pad(1) + strings.Join(parts, sep) + theme.Pad(1)
+	frame := func(body string) string { return theme.Pad(1) + body + theme.Pad(1) }
+	if all := frame(strings.Join(parts, sep)); lipgloss.Width(all) <= width {
+		return all
+	}
+	ellipsis := theme.S().Timestamp.Render("…")
+	if width < 3 {
+		return ellipsis
+	}
+	// Reserve the ellipsis and its separator before accepting each whole entry.
+	kept := 0
+	for kept < len(parts) {
+		body := strings.Join(parts[:kept+1], sep) + sep + ellipsis
+		if lipgloss.Width(frame(body)) > width {
+			break
+		}
+		kept++
+	}
+	if kept == 0 {
+		return frame(ellipsis)
+	}
+	return frame(strings.Join(parts[:kept], sep) + sep + ellipsis)
 }

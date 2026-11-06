@@ -17,6 +17,13 @@ const indicatorChar = "┃"
 // distance (#228).
 const indicatorGap = 1
 
+// A bubble adds two borders and one padding cell on each side of its content.
+const bubbleFrameWidth = 4
+
+func (ml *MessageList) maxContentWidth() int {
+	return max(max(ml.viewWidth*3/4, 10)-bubbleFrameWidth, 4)
+}
+
 // bubbleMetrics holds the finalized geometry and border-row content for a
 // message bubble, computed once by measureBubble and consumed by the border and
 // content rendering steps.
@@ -68,15 +75,7 @@ func (ml *MessageList) measureBubble(msg domain.Message) bubbleMetrics {
 }
 
 func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverride string) bubbleMetrics {
-	maxBubbleW := ml.viewWidth * 3 / 4
-	if maxBubbleW < 10 {
-		maxBubbleW = 10
-	}
-	// border(2)+padding(2) = 4 overhead
-	maxContentW := maxBubbleW - 4
-	if maxContentW < 4 {
-		maxContentW = 4
-	}
+	maxContentW := ml.maxContentWidth()
 
 	borderFg := ml.bubbleBorderFg(msg)
 	b := lipgloss.RoundedBorder()
@@ -138,7 +137,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	// Measured with lipgloss.Width so wide emoji match placeholderLine's padding.
 	if msg.Media != nil {
 		if w := lipgloss.Width(placeholderFor(msg.Media)); w > actualW {
-			actualW = w
+			actualW = min(w, maxContentW)
 		}
 	}
 
@@ -208,7 +207,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		innerW = tsW
 		actualW = innerW - 2
 	}
-	reactStr := buildReactStr(msg.Reactions)
+	reactStr := buildReactStr(msg.Reactions, maxContentW+2)
 	reactW := lipgloss.Width(reactStr)
 	if innerW < reactW+tsW+1 {
 		innerW = reactW + tsW + 1
@@ -231,6 +230,15 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 			actualW = innerW - 2
 		}
 	}
+
+	// Metadata shares the message body's content limit. Reserve timestamp
+	// space first, then fit whole reactions into the remaining border.
+	actualW = min(actualW, maxContentW)
+	innerW = actualW + 2
+	tsStr = TruncateText(tsStr, innerW)
+	tsW = lipgloss.Width(tsStr)
+	reactStr = buildReactStr(msg.Reactions, max(innerW-tsW, 0))
+	reactW = lipgloss.Width(reactStr)
 
 	return bubbleMetrics{
 		actualW:  actualW,
@@ -258,7 +266,9 @@ func (ml *MessageList) bubbleBorders(msg domain.Message, m bubbleMetrics) (top, 
 			if name == "" {
 				name = "?"
 			}
-			senderStyled = ml.senderNameStyle(msg.SenderID).Render(name)
+			// Reserve one leading border stroke and the spaces around the name.
+			const senderTitleInset = 3
+			senderStyled = ml.senderNameStyle(msg.SenderID).Render(TruncateText(name, m.innerW-senderTitleInset))
 		}
 		var titleStr string
 		if senderStyled != "" {
@@ -366,7 +376,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		case msg.Media.Kind == domain.MediaVoice && msg.Document != nil &&
 			msg.Document.ID == ml.playingVoiceID:
 			// Voice currently playing: waveform with playhead + live position.
-			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition)
+			label := voicePlayingLabel(msg.Media, ml.voiceProgress, ml.voicePosition, actualW)
 			sideLines = append(sideLines, paintedLabelLine(label, lipgloss.Width(label), actualW, b, bs))
 		default:
 			sideLines = append(sideLines, placeholderLine(msg.Media, actualW, b, bs))
@@ -498,7 +508,9 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		editMark = theme.S().Timestamp.Render("edited · ")
 	}
 	tsStr := editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr
-	reactStr := strings.TrimSpace(buildReactStr(msg.Reactions))
+	maxContentW := ml.maxContentWidth()
+	tsStr = TruncateText(tsStr, maxContentW)
+	reactStr := buildReactStr(msg.Reactions, max(maxContentW-lipgloss.Width(tsStr)-1, 0))
 
 	// Block width: widest of the art, the meta line, and (in groups) the name.
 	blockW := cols
@@ -515,7 +527,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		if name == "" {
 			name = "?"
 		}
-		nameStr = ml.senderNameStyle(msg.SenderID).Render(name)
+		nameStr = ml.senderNameStyle(msg.SenderID).Render(TruncateText(name, maxContentW))
 		if w := lipgloss.Width(nameStr); w > blockW {
 			blockW = w
 		}
@@ -539,7 +551,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		}
 	}
 	if overlay := ml.overlayLabelFor(msg); overlay != "" {
-		lines = append(lines, pad(overlay)) // ▶ duration / GIF badge under the thumbnail
+		lines = append(lines, pad(TruncateText(overlay, blockW))) // ▶ duration / GIF badge under the thumbnail
 	}
 	fill := blockW - lipgloss.Width(reactStr) - lipgloss.Width(tsStr)
 	if fill < 0 {
@@ -659,13 +671,13 @@ func (ml *MessageList) renderGroupStack(parts []domain.Message, selected bool) [
 	framing.Photo = nil
 	framing.Document = nil
 	m := ml.measureBubble(framing)
-	// The caption wraps at its natural width (before badges or an image widen the
-	// bubble), so the rendered caption line count matches groupHeight.
-	captionW := m.actualW
+	// Use the same caption wrapping budget as groupHeightStack.
+	captionW := ml.albumContentW()
 
-	// Widen to fit the badge labels (labelLine does not truncate) and the
+	// Widen within the pane for badge labels and the
 	// downscaled preview columns of any part whose bytes are known.
 	widen := func(cols int) {
+		cols = min(cols, ml.maxContentWidth())
 		if cols > m.actualW {
 			m.actualW = cols
 			m.innerW = cols + 2
@@ -742,7 +754,7 @@ func (ml *MessageList) groupPartArt(msg domain.Message, budget int, badge string
 			al = artLines[i]
 		}
 		if i == 0 {
-			al = overlayBadgeOnArtRow(al, badge, cols)
+			al = overlayBadgeOnArtRow(al, TruncateText(badge, m.actualW), cols)
 		}
 		al += theme.PadTo(lipgloss.Width(al), m.actualW)
 		out = append(out, bs.Render(b.Left)+theme.Pad(1)+al+theme.Pad(1)+bs.Render(b.Right))

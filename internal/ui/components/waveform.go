@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -30,10 +32,12 @@ func voiceLabel(m *domain.MediaRef) string {
 
 // voicePlayingLabel renders a voice message that is currently playing: the
 // waveform with a progress playhead and the live position (instead of total).
-func voicePlayingLabel(m *domain.MediaRef, progress float64, posSecs int) string {
-	bars := renderWaveformProgress(decodeWaveform(m.Waveform), maxWaveformBars, progress)
+func voicePlayingLabel(m *domain.MediaRef, progress float64, posSecs, width int) string {
+	prefix, tail := "🎤 ", " "+formatDuration(posSecs)
+	barsWidth := min(maxWaveformBars, max(width-ansi.StringWidth(prefix+tail), 0))
+	bars := renderWaveformProgress(decodeWaveform(m.Waveform), barsWidth, progress)
 	if bars == "" {
-		return theme.S().Body.Render("🎤 voice " + formatDuration(posSecs))
+		return theme.S().Body.Render(TruncateText("🎤 voice "+formatDuration(posSecs), width))
 	}
 	// Painted here rather than by the line that lays it out: bars holds a reset
 	// between the played run and the rest, so the glyphs either side of it have

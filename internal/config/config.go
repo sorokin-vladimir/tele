@@ -109,6 +109,9 @@ type CLIConfig struct {
 	// cutting it short: a sender's in `tele show`, a chat's or topic's in the
 	// listings. One long name would push everything after it to the right.
 	NameWidth int `mapstructure:"name_width"`
+	// ListLimit is how many rows `tele chats` and `tele topics` print as text
+	// when no `--limit` is given. 0 prints them all (#329).
+	ListLimit int `mapstructure:"list_limit"`
 	// AccountCommands is what commands may do with the account: all, read
 	// (list and show, change nothing) or none. It is the host's, since a
 	// command could be given another config, and it stops tele's own command

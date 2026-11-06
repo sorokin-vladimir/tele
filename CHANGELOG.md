@@ -18,6 +18,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   with `Bootstrap failed: 5` on macOS, or start nothing on Windows, and leave
   the account with no host. `tele daemon uninstall` waits too, so an install
   right after it works (#327).
+- Inline GIFs and the video player no longer blink or jump back and forth in
+  Ghostty. Each frame replaced the picture on screen, which Ghostty draws as
+  nothing until the new frame is decoded, and large frames were encoded
+  several at a time and arrived out of order. A frame now loads off screen
+  and is shown once it is ready, one frame at a time, and encodes about three
+  times faster (#331).
 
 ## [2.1.1] - 2026-11-04
 

@@ -59,7 +59,7 @@ func TestTakesHold_cli_name_width(t *testing.T) {
 		if err := showMessages(shortCtx(t), a, &showOut, "42", showQuery{limit: 1}); err != nil {
 			t.Fatal(err)
 		}
-		if err := listChats(shortCtx(t), a, &chatsOut, chatsQuery{nameWidth: a.cfg.CLI.NameWidth}); err != nil {
+		if err := listChats(shortCtx(t), a, &chatsOut, nil, chatsQuery{nameWidth: a.cfg.CLI.NameWidth}); err != nil {
 			t.Fatal(err)
 		}
 		return showOut.String(), chatsOut.String()

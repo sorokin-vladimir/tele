@@ -28,20 +28,28 @@ func newTopicsCmd(o *options) *cobra.Command {
 			}
 			return askAccount(cmd.Context(), *o, readyTimeout, func(ctx context.Context, a heldAccount) error {
 				q.nameWidth = a.cfg.CLI.NameWidth
-				return listTopics(ctx, a, cmd.OutOrStdout(), args[0], q)
+				q.listLimit = a.cfg.CLI.ListLimit
+				return listTopics(ctx, a, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], q)
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&q.asJSON, "json", false, "print a JSON object a topic, as docs/cli.md describes")
-	cmd.Flags().IntVar(&q.limit, "limit", 0, "how many topics at most, the first of the list; all when left out")
+	f := cmd.Flags()
+	f.BoolVar(&q.asJSON, "json", false, "print a JSON object a topic, as docs/cli.md describes")
+	f.BoolVar(&q.all, "all", false, "print every topic, lifting cli.list_limit")
+	f.IntVar(&q.limit, "limit", 0, "how many topics at most, the first of the list; all when left out")
+	cmd.MarkFlagsMutuallyExclusive("all", "limit")
 	return cmd
 }
 
 // topicsQuery is what `tele topics` was asked for.
 type topicsQuery struct {
 	asJSON bool
+	// all lifts cli.list_limit for this run.
+	all bool
 	// limit is how many topics to print at most; 0 prints them all.
 	limit int
+	// listLimit is how many topics to print by default when no --limit is given.
+	listLimit int
 	// nameWidth is the columns a title gets before it is cut short.
 	nameWidth int
 }
@@ -49,7 +57,7 @@ type topicsQuery struct {
 // listTopics prints the topics of the forum chat names, in the order a window
 // lists them: as text, or as JSON Lines. A chat that is not a forum has none,
 // and exits 5.
-func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat string, q topicsQuery) error {
+func listTopics(ctx context.Context, acc accountSurface, out, errOut io.Writer, chat string, q topicsQuery) error {
 	forum, err := resolveChat(ctx, acc, chat)
 	if err != nil {
 		return err
@@ -61,7 +69,9 @@ func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat str
 	if err != nil {
 		return err
 	}
-	topics = firstOf(topics, q.limit)
+	total := len(topics)
+	lim := effectiveListLimit(q.limit, q.all, q.asJSON, q.listLimit)
+	topics = firstOf(topics, lim)
 	if q.asJSON {
 		return topicsJSON(out, topics)
 	}
@@ -70,7 +80,13 @@ func listTopics(ctx context.Context, acc accountSurface, out io.Writer, chat str
 		lines = append(lines, columnLine{id: fmt.Sprint(t.ID), title: t.Title, badges: topicBadges(t)})
 	}
 	_, err = io.WriteString(out, columnsText(lines, q.nameWidth))
-	return err
+	if err != nil {
+		return err
+	}
+	if errOut != nil && len(topics) < total {
+		fmt.Fprintf(errOut, "%d of %d topics; --all for the rest\n", len(topics), total)
+	}
+	return nil
 }
 
 // topicBadges says what the topic list would badge a topic with.

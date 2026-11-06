@@ -139,6 +139,16 @@ func (ml *MessageList) SetRenderer(r media.Renderer) {
 	ml.renderer = r
 }
 
+// InvalidateMediaGeometry refreshes cell-aspect-dependent art and heights after
+// a terminal cell-size report, even when the pane's character dimensions agree.
+func (ml *MessageList) InvalidateMediaGeometry() {
+	if ml.renderer != nil {
+		ml.renderer.Reset()
+	}
+	ml.invalidateHeights()
+	ml.reanchorIfUnderfilled()
+}
+
 func (ml *MessageList) SetSize(width, height int) {
 	if width != ml.viewWidth && ml.renderer != nil {
 		ml.renderer.Reset()

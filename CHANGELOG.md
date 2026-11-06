@@ -11,6 +11,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Sixel photo previews and modals, including album tiles, automatic detection for foot and an explicit `photos.mode: sixel` override (#318).
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

@@ -7,6 +7,11 @@ Settings for all of it live under `photos:` in [configuration.md](configuration.
 
 Rendered inline in high quality via the Kitty graphics protocol in kitty, Ghostty and iTerm2 3.7.0 or newer, with an ANSI block-art fallback everywhere else.
 tmux and screen do not pass the protocol through, so images are block art inside them.
+Foot uses DEC Sixel for inline photo previews, album tiles and the photo viewer when `photos.mode` is `auto`; `photos.mode: sixel` forces it explicitly.
+Sixel keeps block art underneath as a fallback, caches pixel encodings, and drops stale paints after scrolling, overlays, font-size changes or resizing.
+Sixel painting waits until the text frame reserving its cells has been written, without a fixed paint delay.
+Redirected output uses block art.
+Animated GIFs, video playback and avatars keep their existing Kitty-only paths.
 
 Press `o` to open the full-quality image in an in-app modal viewer, with sender and timestamp on the border, or `O` to open it in an external viewer.
 

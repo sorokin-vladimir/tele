@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-06
+
 ### Fixed
 
 - `tele daemon install` over a running service on macOS and Windows waits

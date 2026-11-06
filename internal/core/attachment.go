@@ -306,6 +306,10 @@ func (a *Attachment) AnswerLogin(ctx context.Context, seq int, value string) err
 	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.AnswerLogin(ctx, seq, value) })
 }
 
+func (a *Attachment) SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error {
+	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.SwitchLogin(ctx, seq, to) })
+}
+
 func (a *Attachment) SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error {
 	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.SetMuted(ctx, h, muted) })
 }

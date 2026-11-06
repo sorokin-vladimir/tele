@@ -48,6 +48,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.logo.SetWidth(msg.Width)
+		m.login.SetRoom(loginRoom(msg.Width, msg.Height))
 		m.statusBar.SetWidth(msg.Width)
 		m.toasts.SetSize(msg.Width, msg.Height)
 		lay := computeLayout(msg.Width, msg.Height, m.chat.ComposerHeight(),

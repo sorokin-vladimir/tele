@@ -42,6 +42,8 @@ type ownerStub struct {
 	lastSub project.SubID
 	// answers records the login answers, in order.
 	answers []screens.LoginAnswerMsg
+	// switches records where the login screen switched to, by asking (#330).
+	switches []loginSwitch
 
 	// calls records the commands the UI issued, so a test can assert on what
 	// was asked for rather than on how the result was rendered. err is what
@@ -103,6 +105,18 @@ func (o *ownerStub) EndAccount(reason core.EndReason) { o.endedWith = append(o.e
 // AnswerLogin records what the login screen answered.
 func (o *ownerStub) AnswerLogin(_ context.Context, seq int, value string) error {
 	o.answers = append(o.answers, screens.LoginAnswerMsg{Seq: seq, Value: value})
+	return o.answerErr
+}
+
+// loginSwitch is one switch of the login: the asking it left, and to where.
+type loginSwitch struct {
+	seq int
+	to  project.LoginStepKind
+}
+
+// SwitchLogin records where the login screen switched to.
+func (o *ownerStub) SwitchLogin(_ context.Context, seq int, to project.LoginStepKind) error {
+	o.switches = append(o.switches, loginSwitch{seq: seq, to: to})
 	return o.answerErr
 }
 

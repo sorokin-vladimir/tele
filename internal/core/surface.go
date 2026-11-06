@@ -30,6 +30,11 @@ type Surface interface {
 	// by its Seq. An answer for a step already answered, here or by another
 	// client, is refused (#309).
 	AnswerLogin(ctx context.Context, seq int, value string) error
+	// SwitchLogin leaves the login step named by seq for the other way to log
+	// in: the QR step for the phone number (to LoginPhone), any other step for
+	// the QR code (to LoginQR). A switch that does not fit the step, or names
+	// one no longer asked, is refused (#330).
+	SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error
 
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.

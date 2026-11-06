@@ -11,11 +11,33 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-04
+
+### Fixed
+
+- tele connects again after a restart on networks where some of Telegram's
+  addresses are unreachable. It used to dial a built-in list of addresses
+  instead of the ones Telegram sent at login, and retry them forever (#312).
+
+## [2.1.0] - 2026-11-02
+
 ### Added
 
 - `tele chats` prints a chat's `@username` in its own column, between the id
   and the title, so the name a command takes is on screen. It is never cut
   short (#328).
+- Logging in starts with a QR code to scan with Telegram on a phone, so a
+  login no longer waits on a code that may not arrive. `p` turns to the phone
+  number, and Esc goes back to the QR code from any step after it (#330).
+- The log records each step of the login: how Telegram sent the code, how it
+  would send the next one, and every refusal with Telegram's own error. Never
+  the number, the code, the password or the QR code's token (#330).
+
+### Fixed
+
+- A reply quoting one contact in a private chat no longer changes colour from
+  one message to the next: a message Telegram sends without its sender now
+  counts as sent by the chat's user (#282, #316).
 
 ## [2.0.2] - 2026-10-26
 

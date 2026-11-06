@@ -45,6 +45,92 @@ func TestKittyStore_IDsStartSomewhereRandom(t *testing.T) {
 	require.Greater(t, len(first), 1, "stores do not all start at the same id")
 }
 
+// An animated image takes its next frame under a second id, not the one on
+// screen: a terminal such as Ghostty drops the image under an id the moment new
+// data for it arrives, and draws nothing there until the new data is decoded
+// (#331). Swapping puts the second id on screen and frees the first for the
+// frame after.
+func TestKittyStore_ABackIDTakesTheNextFrame(t *testing.T) {
+	s := media.NewKittyStore()
+	shown := s.IDFor(100)
+	back := s.BackIDFor(100)
+	require.NotEqual(t, shown, back, "the next frame never goes to the id on screen")
+	require.Equal(t, back, s.BackIDFor(100), "the back id is stable until a swap")
+	require.NotEqual(t, back, s.IDFor(200), "no other photo is given it")
+	s.MarkBackTransmitted(100, 8)
+
+	s.Swap(100)
+
+	require.Equal(t, back, s.IDFor(100), "the swap puts the back id on screen")
+	require.Equal(t, shown, s.BackIDFor(100), "and frees the old one for the next frame")
+}
+
+// A frame written under the back id is what a swap puts on screen, at the
+// width it was written at; the back id then waits for the next frame (#331).
+func TestKittyStore_ASwapShowsTheFrameWrittenBehind(t *testing.T) {
+	s := media.NewKittyStore()
+	s.MarkTransmitted(100, 30)
+	require.False(t, s.BackReady(100), "nothing written behind yet")
+
+	s.MarkBackTransmitted(100, 40)
+	require.True(t, s.BackReady(100))
+	require.True(t, s.Ready(100, 30), "the frame on screen stays until the swap")
+
+	s.Swap(100)
+
+	require.True(t, s.Ready(100, 40), "the swap shows the frame written behind")
+	require.False(t, s.Ready(100, 30))
+	require.False(t, s.BackReady(100), "the back id waits for the next frame")
+}
+
+// With nothing written behind there is nothing to show: a swap then would put
+// an empty id on screen (#331).
+func TestKittyStore_ASwapWithNothingBehindChangesNothing(t *testing.T) {
+	s := media.NewKittyStore()
+	shown := s.IDFor(100)
+	s.MarkTransmitted(100, 30)
+
+	s.Swap(100)
+
+	require.Equal(t, shown, s.IDFor(100))
+	require.True(t, s.Ready(100, 30))
+}
+
+// What is drawn after a swap names the id swapped in, though the photo and
+// its width are the same as before (#331).
+func TestKittyRenderer_DrawsTheIDSwappedIn(t *testing.T) {
+	s := media.NewKittyStore()
+	r := media.NewKittyRenderer(s)
+	img := sampleImage(16, 16)
+	s.MarkTransmitted(100, 8)
+	before := strings.Join(r.Render(100, img, 8), "\n")
+	s.MarkBackTransmitted(100, 8)
+
+	s.Swap(100)
+
+	after := strings.Join(r.Render(100, img, 8), "\n")
+	require.Equal(t, strings.Join(media.PlaceholderLines(s.IDFor(100), 8, len(r.Render(100, img, 8))), "\n"), after)
+	require.NotEqual(t, before, after)
+}
+
+// Deleting a photo deletes both of its ids, and clearing forgets a frame
+// written behind as it forgets the one on screen (#331).
+func TestKittyStore_BothIDsGoTogether(t *testing.T) {
+	s := media.NewKittyStore()
+	shown, back := s.IDFor(100), s.BackIDFor(100)
+	seq := s.DeleteLiveSeq([]int64{100})
+	require.Contains(t, seq, media.DeleteSeq(shown))
+	require.Contains(t, seq, media.DeleteSeq(back))
+
+	s.MarkBackTransmitted(100, 8)
+	s.Clear()
+	require.False(t, s.BackReady(100))
+
+	s.MarkBackTransmitted(100, 8)
+	s.Untransmit(100)
+	require.False(t, s.BackReady(100))
+}
+
 func TestKittyStore_ReadyTracksTransmission(t *testing.T) {
 	s := media.NewKittyStore()
 	require.False(t, s.Ready(100, 30))

@@ -47,6 +47,37 @@ func TestSQLite_SetChat_PersistsSurvivesReopen(t *testing.T) {
 	assert.Equal(t, int64(999), chat.Peer.AccessHash)
 }
 
+// A build from before #294 stored reactions as Telegram spells them, a red
+// heart without U+FE0F. Read back, such a row is spelled the way every set
+// from Telegram now is, so picking the heart again still takes it back.
+func TestSQLite_LoadMessages_SpellsReactionsStoredByAnOlderBuild(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.SetMessages(7, []domain.Message{{
+		ID: 1, ChatID: 7, Text: "hi", Date: time.Unix(1, 0),
+		Reactions: []domain.Reaction{
+			{Emoji: "\U00002764", Count: 2, IsChosen: true},
+			{Emoji: "👍", Count: 1},
+		},
+	}})
+	require.NoError(t, s.Close())
+
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(domain.HistoryKey{ChatID: 7})
+
+	got := s2.Messages(domain.HistoryKey{ChatID: 7})
+	require.Len(t, got, 1)
+	assert.Equal(t, []domain.Reaction{
+		{Emoji: "\U00002764\U0000FE0F", Count: 2, IsChosen: true},
+		{Emoji: "👍", Count: 1},
+	}, got[0].Reactions)
+}
+
 func TestSQLite_LastMessage_PersistsSurvivesReopen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.db")

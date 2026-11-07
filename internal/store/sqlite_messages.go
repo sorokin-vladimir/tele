@@ -534,6 +534,11 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 		if s.msgDeletePendingLocked(h.ChatID, m.ID) {
 			continue
 		}
+		// A row written before #294 holds reactions as Telegram spells them;
+		// everything past the boundary compares them in emoji presentation.
+		for i := range m.Reactions {
+			m.Reactions[i].Emoji = domain.EmojiPresentation(m.Reactions[i].Emoji)
+		}
 		disk = append(disk, m)
 	}
 	if err := rows.Err(); err != nil {

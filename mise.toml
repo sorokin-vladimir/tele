@@ -1,5 +1,6 @@
 [tools]
 go = "1.26.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -32,6 +33,10 @@ run = "go vet ./..."
 [tasks.check]
 description = "Full check: vet + lint + test"
 run = ["go vet ./...", "golangci-lint run ./...", "go test ./..."]
+
+[tasks.vuln]
+description = "Report known vulnerabilities in the code the build calls"
+run = "govulncheck ./..."
 
 [tasks.tidy]
 description = "Tidy go modules"

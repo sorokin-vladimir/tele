@@ -28,6 +28,13 @@ jobs:
       # ever read.
       - uses: ./.github/actions/go-build-cache
 
+      # The checking tools at the versions mise.toml pins, the same ones the
+      # git hooks run. No cache: on a tag, what gates the release is installed
+      # fresh.
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          cache: false
+
       - name: vet
         run: go vet ./...
 
@@ -35,6 +42,9 @@ jobs:
       # binary fails the job in a quarter of the time the 10m default costs.
       - name: test
         run: go test -race -timeout 5m ./...
+
+      - name: vulnerabilities
+        run: govulncheck ./...
 
       - name: lint
         uses: golangci/golangci-lint-action@v9

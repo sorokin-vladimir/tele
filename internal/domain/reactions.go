@@ -27,8 +27,10 @@ func FormatReactions(r []Reaction) string {
 
 // textDefaultReactions maps each reaction in Telegram's set whose emoji
 // defaults to text presentation, spelled as Telegram sends it (without
-// U+FE0F), to its emoji presentation. Telegram's set is closed: a reaction it
-// adds later with a text-default emoji needs a row here.
+// U+FE0F), to its emoji presentation. Checked against
+// messages.getAvailableReactions on 2026-11-07 (74 reactions, these seven are
+// the only text-default ones). Telegram's set is closed: a reaction it adds
+// later with a text-default emoji needs a row here.
 var textDefaultReactions = map[string]string{
 	heart:                      heart + vs16,                      // red heart
 	"\U0000270D":               "\U0000270D" + vs16,               // writing hand

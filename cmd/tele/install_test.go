@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,13 +29,15 @@ type managed struct {
 	// runs is the command the installed service runs, empty when none is
 	// installed.
 	runs string
+	// failing is what Install fails with.
+	failing error
 }
 
 func (m *managed) Installed(string) (string, bool, error) { return m.runs, m.runs != "", nil }
 
 func (m *managed) Install(u service.Unit) error {
 	m.installed = append(m.installed, u)
-	return nil
+	return m.failing
 }
 
 func (m *managed) Uninstall(name string) (bool, error) {
@@ -95,6 +98,26 @@ func TestInstall_RegistersTheServiceOfThisConfig(t *testing.T) {
 		t.Errorf("the service logs to %q", u.LogPath)
 	}
 	assertSays(t, out.String(), "Installed", onPath)
+}
+
+// A service that outlasted the wait for it to stop left the new one written
+// and not started: installing again is what starts it, and the error says so
+// (#327).
+func TestInstall_AnOldServiceThatStaysAsksForAnotherInstall(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, _ := teleOnPath(t)
+	m := &managed{failing: fmt.Errorf("%w: launchctl: Bootstrap failed: 5: Input/output error", service.ErrStillRunning)}
+	var out bytes.Buffer
+
+	err := installing(m, running, &out).install(context.Background(), options{cfgPath: cfg}, "")
+
+	if err == nil {
+		t.Fatal("installed over a service that did not stop")
+	}
+	assertSays(t, err.Error(), "did not stop in 30s", "Input/output error", "run `tele daemon install` again")
+	if out.Len() != 0 {
+		t.Errorf("said %q", out.String())
+	}
 }
 
 // The default config's service is named after the build alone.
@@ -274,4 +297,70 @@ func serveHeld(t *testing.T, stateDir string, hello wire.Hello) {
 		srv.Stop(time.Second, core.StopQuit)
 		r.Close()
 	})
+}
+
+// A tele that hosts offers to install its service where installing would
+// succeed, and a yes installs it, saying what it did (#208).
+func TestOffer_AServiceThatCanBeInstalledIsOffered(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, onPath := teleOnPath(t)
+	m := &managed{}
+
+	offer := installing(m, running, &bytes.Buffer{}).offer(options{cfgPath: cfg})
+
+	if offer == nil {
+		t.Fatal("nothing offered")
+	}
+	if offer.App != appName {
+		t.Errorf("offered as %q", offer.App)
+	}
+	text, err := offer.Install(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.installed) != 1 {
+		t.Fatalf("installed %d units", len(m.installed))
+	}
+	assertSays(t, text, "Installed", onPath)
+}
+
+// Nothing is offered that a yes could not install, nor what is installed
+// already.
+func TestOffer_NothingThatCannotBeInstalled(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, onPath := teleOnPath(t)
+	elsewhere := filepath.Join(t.TempDir(), "tele")
+	if err := os.WriteFile(elsewhere, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := installing(&managed{}, running, &bytes.Buffer{})
+	unsupported.manager = func() (service.Manager, error) { return nil, service.ErrUnsupported }
+
+	for name, in := range map[string]installer{
+		"no service manager":       unsupported,
+		"another tele on the PATH": installing(&managed{}, elsewhere, &bytes.Buffer{}),
+		"the service installed":    installing(&managed{runs: onPath}, running, &bytes.Buffer{}),
+	} {
+		if offer := in.offer(options{cfgPath: cfg}); offer != nil {
+			t.Errorf("%s: offered", name)
+		}
+	}
+}
+
+// Installed from the window of the tele that holds the state directory, the
+// service waits for that very tele, and is said to.
+func TestOffer_TheServiceTakesOverFromTheTeleThatInstalledIt(t *testing.T) {
+	stateDir, cfg := isolatedHome(t)
+	running, _ := teleOnPath(t)
+	serveHeld(t, stateDir, wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0", PID: os.Getpid(), Kept: wire.KeptByWindow})
+
+	text, err := installing(&managed{}, running, &bytes.Buffer{}).offer(options{cfgPath: cfg}).Install(context.Background())
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSays(t, text, "takes over when this tele quits")
+	if strings.Contains(text, "pid") {
+		t.Errorf("names its own pid:\n%s", text)
+	}
 }

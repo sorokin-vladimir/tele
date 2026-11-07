@@ -145,6 +145,28 @@ func TestHostEnd_AReloadOfABrokenFileKeepsWhatWasRunning(t *testing.T) {
 	assert.Empty(t, *applied)
 }
 
+// cli.account_commands is the host's, and takes hold at once: commands may do
+// everything by default, and once the host reads read, the next one is held
+// to reading (#181).
+func TestTakesHold_cli_account_commands(t *testing.T) {
+	e, path, _ := hostEndAt(t, "")
+	require.Equal(t, wire.CommandsAll, e.AccountCommands(), "commands may do everything by default")
+
+	read := "telegram:\n  api_id: 1\n  api_hash: x\ncli:\n  account_commands: read\n"
+	require.NoError(t, os.WriteFile(path, []byte(read), 0o600))
+	require.Empty(t, e.Reload().Failed)
+
+	assert.Equal(t, wire.CommandsRead, e.AccountCommands())
+}
+
+// A value the setting does not take is put back to all, as any setting's
+// illegal value is to its default, and said in a warning.
+func TestHostEnd_AnUnknownAccountCommandsIsAll(t *testing.T) {
+	e, _, _ := hostEndAt(t, "cli:\n  account_commands: sometimes\n")
+
+	assert.Equal(t, wire.CommandsAll, e.AccountCommands())
+}
+
 // Hello says what was wrong with the host's settings when it started, and
 // nothing of a client's.
 func TestHostEnd_HelloCarriesTheHostsWarningsOnly(t *testing.T) {

@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS chats (
 	is_archived        INTEGER NOT NULL DEFAULT 0,
 	unread_reactions_count INTEGER NOT NULL DEFAULT 0,
 	unread_mentions_count INTEGER NOT NULL DEFAULT 0,
-	is_forum           INTEGER NOT NULL DEFAULT 0
+	is_forum           INTEGER NOT NULL DEFAULT 0,
+	username           TEXT    NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS update_state (
 	user_id INTEGER PRIMARY KEY,
@@ -407,6 +408,7 @@ func ensureChatColumns(db *sql.DB) error {
 		{"unread_reactions_count", `ALTER TABLE chats ADD COLUMN unread_reactions_count INTEGER NOT NULL DEFAULT 0`},
 		{"unread_mentions_count", `ALTER TABLE chats ADD COLUMN unread_mentions_count INTEGER NOT NULL DEFAULT 0`},
 		{"is_forum", `ALTER TABLE chats ADD COLUMN is_forum INTEGER NOT NULL DEFAULT 0`},
+		{"username", `ALTER TABLE chats ADD COLUMN username TEXT NOT NULL DEFAULT ''`},
 	}
 	for _, m := range migrations {
 		if _, ok := existing[m.col]; ok {

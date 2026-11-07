@@ -91,6 +91,9 @@ func (m *RootModel) stopGifAnim() {
 	m.gifActiveID = 0
 	m.gifIdx = 0
 	m.gifGen++
+	// A frame still on its way belongs to the GIF stopped: the next one to
+	// start must not wait for it.
+	m.gifInFlight = false
 }
 
 // reconcileGifAnim is called whenever the selected message changes. It stops any
@@ -170,8 +173,11 @@ func (m RootModel) handleGifFramesReady(msg gifFramesReadyMsg) (RootModel, tea.C
 	return m, gifTickCmd(m.gifGen)
 }
 
-// handleGifTick advances the active animation by one frame and re-transmits it to
-// the same Kitty id, then re-arms. Stale ticks (older gen) are ignored.
+// handleGifTick shows the frame written behind on the last tick, sends the
+// next one behind, and re-arms. A frame is never written under the id on
+// screen: Ghostty drops the image under an id as soon as new data for it
+// arrives and draws nothing until that data is decoded, which blanked the GIF
+// at every frame (#331). Stale ticks (older gen) are ignored.
 func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	if msg.gen != m.gifGen || m.gifActiveID == 0 {
 		return m, nil
@@ -180,10 +186,22 @@ func (m RootModel) handleGifTick(msg gifTickMsg) (RootModel, tea.Cmd) {
 	if len(frames) == 0 {
 		return m, nil
 	}
+	// The terminal is given a frame's time after the write to decode it.
+	if m.kittyStore.BackReady(m.gifActiveID) && m.gifBehind != nil &&
+		m.clock().Sub(m.gifWrittenAt) >= gifFrameInterval {
+		m.kittyStore.Swap(m.gifActiveID)
+		m.imageCache.Add(m.gifActiveID, m.gifBehind)
+	}
 	m.gifIdx = (m.gifIdx + 1) % len(frames)
+	// One frame at a time, as in the video modal: while the back id is taken
+	// this frame is dropped, and the GIF keeps time (#331).
+	if m.gifInFlight || m.kittyStore.BackReady(m.gifActiveID) {
+		return m, gifTickCmd(m.gifGen)
+	}
 	frame := frames[m.gifIdx]
-	m.imageCache.Add(m.gifActiveID, frame)
-	transmit := m.transmitPhotoCmd(m.gifActiveID, frame)
+	m.gifInFlight = true
+	m.gifBehind = frame
+	transmit := m.transmitFrameBehindCmd(m.gifActiveID, frame)
 	return m, tea.Batch(transmit, gifTickCmd(m.gifGen))
 }
 

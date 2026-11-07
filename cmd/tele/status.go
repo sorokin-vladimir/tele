@@ -20,14 +20,17 @@ import (
 // newStatusCmd is `tele daemon status`: how the tele hosting the account is
 // doing, asked over the endpoint of any host, a window's included (#208).
 func newStatusCmd(o *options) *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Say how the tele hosting the account is doing",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return newInstaller(cmd).status(cmd.Context(), *o)
+			return newInstaller(cmd).status(cmd.Context(), *o, asJSON, cmd.ErrOrStderr())
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print it as JSON, as docs/cli.md describes")
+	return cmd
 }
 
 // noHostCode is what status exits with when no host answers: a script tells
@@ -38,16 +41,53 @@ const noHostCode = 3
 // it said, and what is wrong with the service installed for the config, if
 // one is: whether or not a host answers, since a service whose command is gone
 // is exactly one that does not (#182).
-func (in installer) status(ctx context.Context, o options) error {
+//
+// As JSON, a host that does not answer leaves nothing to print: the exit code
+// says it, and the warning goes to errOut, so that what a script reads is
+// either the whole answer or nothing (#213).
+func (in installer) status(ctx context.Context, o options, asJSON bool, errOut io.Writer) error {
 	s, err := newSetup(o.cfgPath)
 	if err != nil {
 		return err
 	}
-	asked := askHost(ctx, s, in.out)
-	if warning := in.installedWarning(s); warning != "" {
+	a, err := askHost(ctx, s)
+	warning := in.installedWarning(s)
+	if err != nil {
+		if warning != "" {
+			w := in.out
+			if asJSON {
+				w = errOut
+			}
+			_, _ = fmt.Fprintln(w, warning)
+		}
+		return err
+	}
+	if asJSON {
+		raw, err := statusJSON(a.stateDir, a.host, a.status, a.mismatch, a.mine, warning)
+		if err != nil {
+			return err
+		}
+		_, err = in.out.Write(raw)
+		return err
+	}
+	if _, err := fmt.Fprint(in.out, statusText(a.stateDir, a.host, a.status, a.mismatch, a.mine, time.Now())); err != nil {
+		return err
+	}
+	if warning != "" {
 		_, _ = fmt.Fprintln(in.out, warning)
 	}
-	return asked
+	return nil
+}
+
+// asked is what the host of stateDir said when asked how it is doing: what it
+// said of itself, how it is doing, and, set in mismatch when it speaks another
+// protocol, why it was asked nothing more. mine is what this tele said.
+type asked struct {
+	stateDir string
+	host     wire.Hello
+	status   wire.HostStatus
+	mismatch error
+	mine     wire.Hello
 }
 
 // installedWarning is what is wrong with the service installed for the config
@@ -88,37 +128,35 @@ func unitWarning(binary string, versionOf func(string) (string, error), mine str
 	}
 }
 
-// askHost asks the host of the state directory read by s how it is doing, and
-// prints what it said to w.
-func askHost(ctx context.Context, s setup, w io.Writer) error {
+// askHost asks the host of the state directory read by s how it is doing.
+func askHost(ctx context.Context, s setup) (asked, error) {
 	stateDir := s.store.Current().StateDir
 	none := &exitCode{code: noHostCode, msg: fmt.Sprintf("No tele hosts %s.", stateDir)}
 	// The endpoint is named after the state directory's resolved path: with no
 	// directory, nothing has ever hosted it.
 	if _, err := os.Stat(stateDir); errors.Is(err, os.ErrNotExist) {
-		return none
+		return asked{}, none
 	}
 	ep, err := ipc.EndpointFor(appName, stateDir)
 	if err != nil {
-		return err
+		return asked{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, helloTimeout)
 	defer cancel()
 	conn, err := ipc.Dial(ctx, ep)
 	if errors.Is(err, ipc.ErrNoHost) {
-		return none
+		return asked{}, none
 	}
 	if err != nil {
-		return fmt.Errorf("reaching the tele that hosts %s: %w", stateDir, err)
+		return asked{}, fmt.Errorf("reaching the tele that hosts %s: %w", stateDir, err)
 	}
-	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Config: s.cfgPath}
+	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Config: s.cfgPath, Kind: wire.KindCommand}
 	host, status, err := dial.AskStatus(ctx, conn, mine)
 	var mismatch *dial.Mismatch
 	if err != nil && !errors.As(err, &mismatch) {
-		return fmt.Errorf("asking the tele that hosts %s: %w", stateDir, err)
+		return asked{}, fmt.Errorf("asking the tele that hosts %s: %w", stateDir, err)
 	}
-	_, err = fmt.Fprint(w, statusText(stateDir, host, status, err, mine, time.Now()))
-	return err
+	return asked{stateDir: stateDir, host: host, status: status, mismatch: err, mine: mine}, nil
 }
 
 // exitCode ends tele with code, after saying msg.
@@ -147,7 +185,13 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "Clients: %s\n", windows(status.Clients))
+	fmt.Fprintf(&b, "Windows: %d, commands: %d\n", status.Windows, status.Commands)
+	switch status.AccountCommands {
+	case wire.CommandsRead:
+		b.WriteString("Commands may read the account and change nothing: cli.account_commands is read.\n")
+	case wire.CommandsNone:
+		b.WriteString("Commands may not act on the account: cli.account_commands is none.\n")
+	}
 	a := status.Account
 	if a == nil {
 		b.WriteString("Account: none, the next one is opening\n")
@@ -161,6 +205,9 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 		fmt.Fprintf(&b, "Last update: %s ago\n", since(a.LastUpdate, now))
 	}
 	fmt.Fprintf(&b, "Outbox: %d waiting\n", a.Outbox)
+	if t := a.Throttle; t != nil && t.Until.After(now) {
+		fmt.Fprintf(&b, "Telegram asks to wait: %s, on %s\n", t.Until.Sub(now).Round(time.Second), t.Method)
+	}
 	return b.String()
 }
 
@@ -191,17 +238,6 @@ func versions(mine, host wire.Hello) string {
 		return this + " and cannot attach to it: the two speak different protocols."
 	default:
 		return this + "."
-	}
-}
-
-func windows(n int) string {
-	switch n {
-	case 0:
-		return "no windows"
-	case 1:
-		return "1 window"
-	default:
-		return fmt.Sprintf("%d windows", n)
 	}
 }
 

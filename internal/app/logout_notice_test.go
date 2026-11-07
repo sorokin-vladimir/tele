@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sorokin-vladimir/tele/internal/ipc"
+	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
@@ -75,6 +77,30 @@ func TestHost_ALogOutAWindowShowsIsNotNotified(t *testing.T) {
 	waitForEnd(t, h, first)
 
 	assert.Empty(t, n.all())
+}
+
+// A command running is not a person looking: a log out while only a command
+// is attached is told to the desktop, as with nobody at all (#213).
+func TestHost_ALogOutWithOnlyACommandAttachedIsNotified(t *testing.T) {
+	h := testHost(t)
+	first := h.host.current()
+	n := alone(t, h)
+	dialCtx, stop := context.WithTimeout(context.Background(), 2*time.Second)
+	defer stop()
+	conn, err := ipc.Dial(dialCtx, h.endpoint)
+	require.NoError(t, err)
+	cmd, err := dial.Dial(dialCtx, conn, commandHello)
+	require.NoError(t, err)
+	defer func() { _ = cmd.Close() }()
+	require.Eventually(t, func() bool { return h.host.clients.Commands() == 1 }, 2*time.Second, 5*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	h.host.Start(ctx)
+
+	require.Eventually(t, func() bool { return h.host.current() != first }, 5*time.Second, 5*time.Millisecond)
+	require.Len(t, n.all(), 1)
+	assert.Contains(t, n.all()[0], "logged out")
 }
 
 // A banned account is said as such, and no login is offered: logging in with

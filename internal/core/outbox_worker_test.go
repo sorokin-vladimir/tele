@@ -275,6 +275,31 @@ func TestWorker_RecordsTheSentMessageAndDropsTheEntry(t *testing.T) {
 	assert.True(t, msgs[0].IsOut)
 }
 
+// A send that became a message is remembered by its ref with the message it
+// became, and the same ref sent again sends nothing: a script that retries
+// after losing the answer sends once (#181).
+func TestWorker_ASentRefIsRememberedAndNotSentAgain(t *testing.T) {
+	c := &stubClient{sentID: 77}
+	o, _ := newCmdOwner(t, c)
+	q := newOutboxStore(t)
+	o.SetOutbox(q)
+	ctx := runWorker(t, o)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "hi"}))
+	waitFor(t, "the send was never remembered", func() bool {
+		_, ok := q.SentRef("r1")
+		return ok
+	})
+	sent, _ := q.SentRef("r1")
+	assert.Equal(t, []int{77}, sent.MsgIDs)
+
+	require.NoError(t, o.Send(ctx, SendRequest{Ref: "r1", ChatID: 1, Text: "hi"}))
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, c.sendCalls(), "the same ref was sent twice")
+	assert.Empty(t, q.All())
+}
+
 // A send that names no message id cannot be recorded. The send still happened,
 // so the entry goes rather than being retried into a duplicate.
 func TestWorker_DropsTheEntryWhenTheSendNamesNoMessage(t *testing.T) {

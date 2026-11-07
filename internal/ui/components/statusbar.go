@@ -34,6 +34,9 @@ type StatusBar struct {
 	// from status because status is cleared on every key press, and this lasts
 	// until the skew is over.
 	clockSkew string
+	// throttle says Telegram asked to wait, and how long is left (#212); it
+	// lasts until the wait is over, as clockSkew does.
+	throttle string
 	// hostAway says the window's host is away and being waited for (#210),
 	// and lasts until it is back, as clockSkew does.
 	hostAway string
@@ -57,6 +60,9 @@ func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
 
 // SetClockSkew shows s right after the mode label until it is set to "".
 func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
+
+// SetThrottle shows s after the clock until it is set to "".
+func (sb *StatusBar) SetThrottle(s string) { sb.throttle = s }
 
 // SetHostAway shows s right after the mode label until it is set to "".
 func (sb *StatusBar) SetHostAway(s string) { sb.hostAway = s }
@@ -122,6 +128,9 @@ func (sb *StatusBar) View() string {
 	}
 	if sb.clockSkew != "" {
 		segs = append(segs, theme.S().Bar.Render(sb.clockSkew))
+	}
+	if sb.throttle != "" {
+		segs = append(segs, theme.S().Bar.Render(sb.throttle))
 	}
 	if sb.dlText != "" {
 		text := sb.dlSpinner.View() + " " + sb.dlText

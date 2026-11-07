@@ -1,6 +1,13 @@
 package media_test
 
 import (
+	"bytes"
+	"encoding/base64"
+	"image"
+	"image/color"
+	"image/png"
+	"math/rand/v2"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode"
@@ -43,6 +50,92 @@ func TestKittyStore_IDsStartSomewhereRandom(t *testing.T) {
 		first[id]++
 	}
 	require.Greater(t, len(first), 1, "stores do not all start at the same id")
+}
+
+// An animated image takes its next frame under a second id, not the one on
+// screen: a terminal such as Ghostty drops the image under an id the moment new
+// data for it arrives, and draws nothing there until the new data is decoded
+// (#331). Swapping puts the second id on screen and frees the first for the
+// frame after.
+func TestKittyStore_ABackIDTakesTheNextFrame(t *testing.T) {
+	s := media.NewKittyStore()
+	shown := s.IDFor(100)
+	back := s.BackIDFor(100)
+	require.NotEqual(t, shown, back, "the next frame never goes to the id on screen")
+	require.Equal(t, back, s.BackIDFor(100), "the back id is stable until a swap")
+	require.NotEqual(t, back, s.IDFor(200), "no other photo is given it")
+	s.MarkBackTransmitted(100, 8)
+
+	s.Swap(100)
+
+	require.Equal(t, back, s.IDFor(100), "the swap puts the back id on screen")
+	require.Equal(t, shown, s.BackIDFor(100), "and frees the old one for the next frame")
+}
+
+// A frame written under the back id is what a swap puts on screen, at the
+// width it was written at; the back id then waits for the next frame (#331).
+func TestKittyStore_ASwapShowsTheFrameWrittenBehind(t *testing.T) {
+	s := media.NewKittyStore()
+	s.MarkTransmitted(100, 30)
+	require.False(t, s.BackReady(100), "nothing written behind yet")
+
+	s.MarkBackTransmitted(100, 40)
+	require.True(t, s.BackReady(100))
+	require.True(t, s.Ready(100, 30), "the frame on screen stays until the swap")
+
+	s.Swap(100)
+
+	require.True(t, s.Ready(100, 40), "the swap shows the frame written behind")
+	require.False(t, s.Ready(100, 30))
+	require.False(t, s.BackReady(100), "the back id waits for the next frame")
+}
+
+// With nothing written behind there is nothing to show: a swap then would put
+// an empty id on screen (#331).
+func TestKittyStore_ASwapWithNothingBehindChangesNothing(t *testing.T) {
+	s := media.NewKittyStore()
+	shown := s.IDFor(100)
+	s.MarkTransmitted(100, 30)
+
+	s.Swap(100)
+
+	require.Equal(t, shown, s.IDFor(100))
+	require.True(t, s.Ready(100, 30))
+}
+
+// What is drawn after a swap names the id swapped in, though the photo and
+// its width are the same as before (#331).
+func TestKittyRenderer_DrawsTheIDSwappedIn(t *testing.T) {
+	s := media.NewKittyStore()
+	r := media.NewKittyRenderer(s)
+	img := sampleImage(16, 16)
+	s.MarkTransmitted(100, 8)
+	before := strings.Join(r.Render(100, img, 8), "\n")
+	s.MarkBackTransmitted(100, 8)
+
+	s.Swap(100)
+
+	after := strings.Join(r.Render(100, img, 8), "\n")
+	require.Equal(t, strings.Join(media.PlaceholderLines(s.IDFor(100), 8, len(r.Render(100, img, 8))), "\n"), after)
+	require.NotEqual(t, before, after)
+}
+
+// Deleting a photo deletes both of its ids, and clearing forgets a frame
+// written behind as it forgets the one on screen (#331).
+func TestKittyStore_BothIDsGoTogether(t *testing.T) {
+	s := media.NewKittyStore()
+	shown, back := s.IDFor(100), s.BackIDFor(100)
+	seq := s.DeleteLiveSeq([]int64{100})
+	require.Contains(t, seq, media.DeleteSeq(shown))
+	require.Contains(t, seq, media.DeleteSeq(back))
+
+	s.MarkBackTransmitted(100, 8)
+	s.Clear()
+	require.False(t, s.BackReady(100))
+
+	s.MarkBackTransmitted(100, 8)
+	s.Untransmit(100)
+	require.False(t, s.BackReady(100))
 }
 
 func TestKittyStore_ReadyTracksTransmission(t *testing.T) {
@@ -96,6 +189,62 @@ func TestKittyStore_TransmitSeqIsDecodable(t *testing.T) {
 	hasDims := strings.Contains(seq, "s=") && strings.Contains(seq, "v=")
 	require.True(t, selfDescribing || hasDims,
 		"transmit must be PNG (f=100) or carry s=/v= dimensions")
+}
+
+// A still photo goes out exactly as the kitty package writes it: the faster
+// encoding is for animation frames only (#331).
+func TestKittyStore_TransmitSeqIsWhatTheKittyPackageWrites(t *testing.T) {
+	img := sampleImage(200, 150) // several chunks of data, sent unscaled at 40 columns
+	seq, err := media.TransmitSeq(7, img, 40, 20)
+	require.NoError(t, err)
+
+	var want strings.Builder
+	require.NoError(t, kitty.EncodeGraphics(&want, img, &kitty.Options{
+		Action: kitty.TransmitAndPut, ID: 7, Format: kitty.PNG, Transmission: kitty.Direct,
+		Chunk: true, VirtualPlacement: true, Columns: 40, Rows: 20, Quite: 2,
+	}))
+	require.Equal(t, want.String(), seq)
+}
+
+// An animation frame is encoded for speed rather than size: at the default
+// level a large frame took longer to encode than a tick lasts (#331). It is
+// still the same picture, transmitted and placed like any other.
+func TestKittyStore_AFrameSeqCarriesThePicture(t *testing.T) {
+	// Noise, so the picture does not compress into a single chunk.
+	img := image.NewRGBA(image.Rect(0, 0, 200, 150))
+	r := rand.New(rand.NewPCG(1, 2))
+	for i := range img.Pix {
+		img.Pix[i] = uint8(r.UintN(256))
+		if i%4 == 3 {
+			img.Pix[i] = 255
+		}
+	}
+	seq, err := media.TransmitFrameSeq(7, img, 40, 20)
+	require.NoError(t, err)
+
+	chunks := regexp.MustCompile("\x1b_G([^;]*);([^\x1b]*)\x1b\\\\").FindAllStringSubmatch(seq, -1)
+	require.Greater(t, len(chunks), 1, "the frame goes in chunks")
+	first := chunks[0][1]
+	for _, key := range []string{"a=T", "i=7", "f=100", "U=1", "c=40", "r=20", "q=2", "m=1"} {
+		require.Contains(t, strings.Split(first, ","), key)
+	}
+	var payload strings.Builder
+	for i, c := range chunks {
+		payload.WriteString(c[2])
+		if i > 0 {
+			want := "q=2,m=1"
+			if i == len(chunks)-1 {
+				want = "q=2,m=0"
+			}
+			require.Equal(t, want, c[1], "chunk %d", i)
+		}
+	}
+	data, err := base64.StdEncoding.DecodeString(payload.String())
+	require.NoError(t, err)
+	got, err := png.Decode(bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Equal(t, img.Bounds(), got.Bounds())
+	require.Equal(t, img.At(120, 90), color.RGBAModel.Convert(got.At(120, 90)))
 }
 
 func TestKittyRenderer_NilUntilTransmitted(t *testing.T) {

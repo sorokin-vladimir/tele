@@ -10,6 +10,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
 )
@@ -282,8 +283,13 @@ func SetOpenPathForTest(fn func(string)) func() {
 // quiet marks the eager prefetch, which runs for every photo in the window
 // without anyone asking and therefore keeps an expired file reference to
 // itself. The viewer passes false: there the user is looking at the photo and
-// would otherwise wonder why it stays at preview quality.
+// would otherwise wonder why it stays at preview quality. Nobody waits on the
+// prefetch either, so it is background work and yields to what somebody does
+// (#212).
 func saveFullPhotoCmd(ctx context.Context, o Owner, chatID int64, msgID int, photoID int64, tmpDir string, quiet bool) tea.Cmd {
+	if quiet {
+		ctx = priority.InBackground(ctx)
+	}
 	return func() tea.Msg {
 		path, err := o.SaveMedia(ctx, chatID, msgID, domain.PhotoFull, tmpDir, "")
 		if err != nil {

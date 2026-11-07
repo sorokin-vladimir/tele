@@ -66,7 +66,7 @@ func newRootCmd() *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&o.cfgPath, "config", defaultConfigPath(appName), "path to config file")
+	pf.StringVarP(&o.cfgPath, "config", "c", defaultConfigPath(appName), "path to config file")
 	pf.BoolVarP(&o.verbose, "debug", "e", false, "debug logging")
 	pf.BoolVar(&o.trace, "trace", false, "log sensitive metadata (peer IDs, message lengths) — never use in shared environments")
 
@@ -75,14 +75,69 @@ func newRootCmd() *cobra.Command {
 	// version, and a version template of one's own is executed by
 	// text/template, which keeps every method of every type the binary links
 	// (#208).
+	//
+	// It is a command now (#213); the flag stays, unoffered, for as long as
+	// the homebrew-core formula test runs it.
 	f.BoolVar(&printVersion, "version", false, "print version and exit")
+	_ = f.MarkHidden("version")
 	f.Var(&themeCheck, "theme-check", "print which theme each slot resolved to and where its tokens came from, then exit; give a theme name to inspect one")
 	f.Lookup("theme-check").NoOptDefVal = bareArg
 	f.Var(&themeDump, "theme-dump", "print a slot's theme (dark or light) as a complete theme file, then exit; give a theme name to dump one")
 	f.Lookup("theme-dump").NoOptDefVal = bareArg
+	// Commands now (#213); the flags stay, unoffered, for as long as the
+	// homebrew-core formula test runs them.
+	_ = f.MarkHidden("theme-check")
+	_ = f.MarkHidden("theme-dump")
 
-	root.AddCommand(newDaemonCmd(&o))
+	root.AddCommand(newChatsCmd(&o), newTopicsCmd(&o), newShowCmd(&o), newSendCmd(&o), newDaemonCmd(&o), newVersionCmd(), newThemeCmd(&o),
+		newAgentsHelp())
+	usageExits(root)
 	return root
+}
+
+// usageCode is what tele exits with when it cannot read its command line, so
+// a script tells a mistake of its own from anything that went wrong (#213).
+const usageCode = 2
+
+// usageExits makes every mistake in cmd's command line, and in its
+// subcommands', exit usageCode: a flag tele does not know, arguments a
+// command does not take, an unknown command among them, and flags that cannot
+// go together.
+func usageExits(cmd *cobra.Command) {
+	usage := func(err error) error {
+		if err == nil {
+			return nil
+		}
+		return &exitCode{code: usageCode, msg: err.Error()}
+	}
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage(err) })
+	if args := cmd.Args; args != nil {
+		cmd.Args = func(c *cobra.Command, a []string) error { return usage(args(c, a)) }
+	}
+	// Cobra checks the flag groups itself only after PreRunE, and returns what
+	// it finds as is; checked here first, a broken group is a usage mistake.
+	cmd.PreRunE = func(c *cobra.Command, _ []string) error {
+		if err := c.ValidateRequiredFlags(); err != nil {
+			return usage(err)
+		}
+		return usage(c.ValidateFlagGroups())
+	}
+	for _, sub := range cmd.Commands() {
+		usageExits(sub)
+	}
+}
+
+// newVersionCmd is `tele version`: the version alone, for a script to read.
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), version.Version)
+			return err
+		},
+	}
 }
 
 // setup is what every command that runs tele settles first: the config file,

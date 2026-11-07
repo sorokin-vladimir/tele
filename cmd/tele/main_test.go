@@ -86,21 +86,29 @@ func TestHomebrewCoreContract(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 
-	version, err := exec.Command(bin, "--version").CombinedOutput()
-	if err != nil {
-		t.Fatalf("tele --version: %v\n%s", err, version)
-	}
-	if got := strings.TrimSpace(string(version)); got != wantVersion {
+	version := formulaOutput(t, bin, "--version")
+	if got := strings.TrimSpace(version); got != wantVersion {
 		t.Fatalf("tele --version printed %q, want %q: the formula matches the version it built with", got, wantVersion)
 	}
 
-	dump, err := exec.Command(bin, "--theme-dump=tele-dark").CombinedOutput()
-	if err != nil {
-		t.Fatalf("tele --theme-dump=tele-dark: %v\n%s", err, dump)
-	}
-	if want := "dumped from tele-dark"; !strings.Contains(string(dump), want) {
+	dump := formulaOutput(t, bin, "--theme-dump=tele-dark")
+	if want := "dumped from tele-dark"; !strings.Contains(dump, want) {
 		t.Fatalf("tele --theme-dump=tele-dark printed %q, want it to contain %q", dump, want)
 	}
+}
+
+// formulaOutput runs bin the way the formula's shell_output does: it must exit
+// 0, and only what it prints to standard output is matched. Text that moved to
+// standard error would fail the formula while still being printed.
+func formulaOutput(t *testing.T, bin string, args ...string) string {
+	t.Helper()
+	var stdout, stderr strings.Builder
+	cmd := exec.Command(bin, args...)
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("tele %s: %v\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), err, stdout.String(), stderr.String())
+	}
+	return stdout.String()
 }
 
 // builtVersion is the version buildTele injects.

@@ -3,6 +3,7 @@ package ui_test
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
@@ -87,4 +88,27 @@ func TestLogin_AReadyAccountOpensTheMainScreen(t *testing.T) {
 	m = withLoginStep(t, m, accountIs(m, project.AccountContents{Phase: project.AccountReady}))
 
 	assert.Equal(t, ui.ScreenMain, m.CurrentScreen())
+}
+
+// A window attaching to a service that is already logged in can hear the
+// account is ready before the terminal has said how big it is. The main screen
+// cannot be laid out without a size, so nothing is drawn until one arrives.
+func TestLogin_AReadyAccountBeforeTheSizeDrawsNothing(t *testing.T) {
+	m := newLoginRoot().WithLogPath(testLogPath)
+
+	m = withLoginStep(t, m, accountIs(m, project.AccountContents{Phase: project.AccountReady}))
+
+	assert.Empty(t, m.View().Content)
+}
+
+// The size arriving after the account is ready brings up the main screen the
+// account was already on.
+func TestLogin_TheSizeAfterAReadyAccountDrawsTheMainScreen(t *testing.T) {
+	m := newLoginRoot().WithLogPath(testLogPath)
+	m = withLoginStep(t, m, accountIs(m, project.AccountContents{Phase: project.AccountReady}))
+
+	m = withLoginStep(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	assert.Equal(t, ui.ScreenMain, m.CurrentScreen())
+	assert.Contains(t, m.View().Content, "[1] Chats")
 }

@@ -163,7 +163,7 @@ func TestBuildChatList_RowCarriesWhatTheRowRenders(t *testing.T) {
 
 	require.Len(t, got.Rows, 1)
 	assert.Equal(t, project.ChatRow{
-		ID: 1, Title: "Ada", IsUser: true, Online: true,
+		ID: 1, Title: "Ada", Kind: project.ChatKindUser, IsUser: true, Online: true,
 		Unread: 3, Mentions: 1, Reactions: 2, UnreadMark: true, Muted: true,
 	}, got.Rows[0], "the row carries no Peer: a client holds no access hash")
 }
@@ -174,6 +174,27 @@ func TestRow_CarriesWhetherTheChatIsArchived(t *testing.T) {
 	got := project.Row(domain.Chat{ID: 1, Title: "Ada", IsArchived: true}, nil)
 
 	assert.True(t, got.Archived)
+}
+
+// A command names a chat's kind and username: a supergroup is a group to the
+// person, and a bot is told from a person (#181).
+func TestRow_CarriesTheChatsKindAndUsername(t *testing.T) {
+	cases := []struct {
+		chat domain.Chat
+		kind project.ChatKind
+	}{
+		{domain.Chat{ID: 1, Username: "ada", Peer: domain.Peer{Type: domain.PeerUser}}, project.ChatKindUser},
+		{domain.Chat{ID: 2, Username: "helper_bot", IsBot: true, Peer: domain.Peer{Type: domain.PeerUser}}, project.ChatKindBot},
+		{domain.Chat{ID: 3, Peer: domain.Peer{Type: domain.PeerGroup}}, project.ChatKindGroup},
+		{domain.Chat{ID: 4, Username: "gophers", Peer: domain.Peer{Type: domain.PeerSuperGroup}}, project.ChatKindGroup},
+		{domain.Chat{ID: 5, Username: "news", Peer: domain.Peer{Type: domain.PeerChannel}}, project.ChatKindChannel},
+	}
+	for _, c := range cases {
+		got := project.Row(c.chat, nil)
+
+		assert.Equal(t, c.kind, got.Kind, "chat %d", c.chat.ID)
+		assert.Equal(t, c.chat.Username, got.Username, "chat %d", c.chat.ID)
+	}
 }
 
 func TestBuildChatList_FolderCountsCountChatsWithUnreadAcrossTheWholeList(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/hosting"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
 	"github.com/sorokin-vladimir/tele/internal/store"
@@ -29,7 +30,7 @@ type loginConn struct {
 	answered chan []string
 }
 
-func (c loginConn) Connect(ctx context.Context, af *internaltg.AuthFlow, ready chan<- struct{}, _ func(int64, string)) error {
+func (c loginConn) Connect(ctx context.Context, af *internaltg.AuthFlow, ready chan<- struct{}, _ func(domain.User)) error {
 	phone, err := af.Phone(ctx)
 	if err != nil {
 		return err

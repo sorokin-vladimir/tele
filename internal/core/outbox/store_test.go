@@ -405,6 +405,68 @@ func TestNewStore_MigratesOnlyOnce(t *testing.T) {
 	assert.NoError(t, err, "reopening must not trip over a column that is already there")
 }
 
+// A send that became a message leaves the queue and is remembered by its ref,
+// with the message it became, across a restart (#181).
+func TestSent_LeavesTheQueueAndIsRemembered(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	e, _, err := s.Add(textEntry("a", 10, "one"))
+	require.NoError(t, err)
+	e.TopicID = 3
+	e.SentMsgIDs = []int{512}
+	at := time.Now().Truncate(time.Millisecond)
+
+	require.NoError(t, s.Sent(e, at))
+
+	_, queued := s.Get("a")
+	assert.False(t, queued, "a sent send stays queued")
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	got, ok := reopened.SentRef("a")
+	require.True(t, ok)
+	assert.Equal(t, domain.SentSend{Ref: "a", ChatID: 10, TopicID: 3, MsgIDs: []int{512}, At: at}, got)
+}
+
+// A ref that already became a message is known: submitted again, it is not
+// queued again, so a script retrying after a lost answer sends once (#181).
+func TestAdd_ASentRefIsNotQueuedAgain(t *testing.T) {
+	s, err := NewStore(openDB(t, filepath.Join(t.TempDir(), "q.db")))
+	require.NoError(t, err)
+	e, _, err := s.Add(textEntry("a", 10, "one"))
+	require.NoError(t, err)
+	e.SentMsgIDs = []int{512}
+	require.NoError(t, s.Sent(e, time.Now()))
+
+	_, added, err := s.Add(textEntry("a", 10, "one"))
+
+	require.NoError(t, err)
+	assert.False(t, added)
+	assert.Empty(t, s.All())
+}
+
+// What was sent is remembered for SentRemembered and then forgotten, when the
+// store is next opened.
+func TestNewStore_ForgetsSendsOlderThanItRemembers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.db")
+	s, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+	for ref, age := range map[string]time.Duration{"old": SentRemembered + time.Hour, "recent": time.Hour} {
+		e, _, err := s.Add(textEntry(ref, 10, ref))
+		require.NoError(t, err)
+		e.SentMsgIDs = []int{1}
+		require.NoError(t, s.Sent(e, time.Now().Add(-age)))
+	}
+
+	reopened, err := NewStore(openDB(t, path))
+	require.NoError(t, err)
+
+	_, old := reopened.SentRef("old")
+	_, recent := reopened.SentRef("recent")
+	assert.False(t, old)
+	assert.True(t, recent)
+}
+
 func TestRandomIDFor_IsDeterministicAndNonZero(t *testing.T) {
 	assert.Equal(t, RandomIDFor("abc"), RandomIDFor("abc"))
 	assert.NotEqual(t, RandomIDFor("abc"), RandomIDFor("abd"))

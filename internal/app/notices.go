@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/notices"
@@ -19,7 +20,9 @@ const noticeDelay = 7 * time.Second
 // sees what happened on their machine. stateMoved and sessionPinned are the
 // host's to know: a client that only attaches to another tele's host passes
 // false for both, since the window of the tele that moved the state said so.
-func StartupNotices(stateDir string, stateMoved, sessionPinned bool) []notices.Notice {
+// offer is the service this tele could install, nil when there is none to
+// offer.
+func StartupNotices(stateDir string, stateMoved, sessionPinned bool, offer *ServiceOffer) []notices.Notice {
 	out := []notices.Notice{
 		{
 			ID:    "second-window-v2.0",
@@ -51,14 +54,40 @@ func StartupNotices(stateDir string, stateMoved, sessionPinned bool) []notices.N
 				"hold the session and the database.",
 		})
 	}
+	if offer != nil {
+		out = append(out, offer.notice())
+	}
 	return out
+}
+
+// ServiceOffer is a service a tele that hosts can install for its config: App
+// is the command the person runs it by, and Install installs it and says what
+// came of it. It is offered only where installing can succeed, so only a tele
+// that knows that makes one (#208).
+type ServiceOffer struct {
+	App     string
+	Install func(context.Context) (string, error)
+}
+
+// notice asks, once logged in, whether to install the service: before that the
+// account it would hold is not there yet.
+func (o ServiceOffer) notice() notices.Notice {
+	return notices.Notice{
+		ID:    "service-prompt-v2.0",
+		Title: "Keep " + o.App + " running with no window?",
+		Body: o.App + " can run as a service: it starts with your desktop session and holds " +
+			"the account with no window open, so desktop notifications keep coming after " +
+			"the last window is closed. To install it later, run `" + o.App + " daemon install`.",
+		Yes:        o.Install,
+		AfterLogin: true,
+	}
 }
 
 // noticeIDs is every notice an earlier build may have recorded as seen in an
 // account's database, for carrying over into the file once.
 func noticeIDs() []string {
 	ids := []string{"single-instance-v1.10"}
-	for _, n := range StartupNotices("", true, true) {
+	for _, n := range StartupNotices("", true, true, nil) {
 		ids = append(ids, n.ID)
 	}
 	return ids

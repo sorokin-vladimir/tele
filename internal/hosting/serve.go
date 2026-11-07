@@ -8,6 +8,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/ipc/serve"
+	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
 )
 
 // Server serves the endpoint: every client that connects gets an attachment of
@@ -50,7 +51,7 @@ func (s *Server) accept() {
 		s.conns.Add(1)
 		go func() {
 			defer s.conns.Done()
-			_ = serve.Conn(s.ctx, conn, att, s.host)
+			_ = serve.Conn(s.ctx, conn, greeted{Attachment: att, clients: s.clients}, s.host)
 			remove()
 			s.mu.Lock()
 			delete(s.served, att)
@@ -58,6 +59,15 @@ func (s *Server) accept() {
 		}()
 	}
 }
+
+// greeted is a client's attachment as it is served: its hello tells the host
+// what kind of client it is (#213).
+type greeted struct {
+	*core.Attachment
+	clients *Clients
+}
+
+func (g greeted) Greeted(h wire.Hello) { g.clients.introduce(g.Attachment, h.Kind) }
 
 // Stop stops serving for reason. The endpoint goes first, so nobody new
 // connects; every client still there is told the host is stopping and why, and

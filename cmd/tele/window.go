@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 
-	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/hosting"
-	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
 // runWindow is tele with no command: a window on the account, hosting it when
@@ -20,20 +17,7 @@ func runWindow(o options, themeCheck, themeDump optionalArg) error {
 		return err
 	}
 	cfg := s.store.Current()
-
-	// Themes are resolved here, before the TUI exists, so a bad theme file is
-	// reported like a config warning rather than something the interface has to
-	// cope with. The TUI is handed the result and never sees the config.
-	themesDir := cfg.ThemesDir
-	themes := theme.LoadSlots(themesDir, cfg.UI.ThemeSlots.Dark, cfg.UI.ThemeSlots.Light)
-	theme.SetSlots(themes.Slots())
-	// What is printed and logged at startup: the config's warnings and the
-	// themes'. Gathered here rather than written into the config, which is what
-	// the file says and is replaced by a reload (#239).
-	warnings := slices.Clone(cfg.Warnings)
-	for _, w := range themes.Warnings {
-		warnings = append(warnings, config.Warning{Text: "theme: " + w})
-	}
+	themesDir, themes, warnings := loadThemes(cfg)
 
 	if themeCheck.set {
 		fmt.Print(themeReport(themesDir, themes, themeCheck.value, warnings))

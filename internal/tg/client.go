@@ -17,6 +17,7 @@ import (
 	"github.com/gotd/td/tg"
 
 	"github.com/sorokin-vladimir/tele/internal/appkey"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
@@ -54,6 +55,8 @@ type GotdClient struct {
 	// skew watches for a local clock too far off for gotd to accept what
 	// Telegram sends (#277).
 	skew *clockSkew
+	// throttle is every call's one budget to Telegram (#212).
+	throttle *throttle
 	// loggedOut ends the connection as a log out: the person's, or a key
 	// Telegram invalidated (#254, #297).
 	loggedOut loggedOut
@@ -77,6 +80,10 @@ func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetRepo
 // every change. It must not block. Set before Connect.
 func (c *GotdClient) SetOnLink(report func(up bool)) { c.onLink = report }
 
+// SetOnThrottle installs the function told of a flood wait a call somebody
+// waits on has run into (#212). It must not block. Set before Connect.
+func (c *GotdClient) SetOnThrottle(report func(Throttled)) { c.throttle.SetReport(report) }
+
 func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.StateStorage, trace bool) *GotdClient {
 	traceLog := zap.NewNop()
 	if trace {
@@ -93,6 +100,7 @@ func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.Stat
 		stateStorage: stateStorage,
 		senderNames:  newNameCache(),
 		skew:         newClockSkew(),
+		throttle:     newThrottle(time.Now, sleepCtx),
 	}
 }
 
@@ -110,15 +118,19 @@ func (c *GotdClient) acquireAPI() (*tg.Client, error) {
 
 // Connect starts the gotd client. Call in a goroutine — blocks until ctx is cancelled.
 // Closes readyCh once auth is complete and the updates loop has started.
-// onAuth is called with the authenticated user ID and username before readyCh
-// is closed; may be nil.
-func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error {
+// onAuth is called with the authenticated user (id, username and name) before
+// readyCh is closed; may be nil.
+func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- struct{}, onAuth func(domain.User)) error {
 	sess := NewFileSession(c.endpoint.SessionFile)
 	// Read before connecting, since gotd stores a fresh key as soon as it has
 	// one: whether there was a session decides whether a 401 is a log out that
 	// ends the account or a start with nothing to log out of (#297).
 	stored, _ := sess.LoadSession(ctx)
 	hadSession := len(stored) > 0
+	dcList := savedDCList(ctx, sess)
+	if !dcList.Zero() {
+		c.log.Info("dc addresses from the session", zap.Int("count", len(dcList.Options)))
+	}
 
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, c.mustDeliver, c.droppable, c.log, func(id int) bool {
@@ -200,7 +212,10 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
 	// Every update that arrives is a message the clock check let through, so it
 	// ends a clock skew (#277).
-	arrivals := c.skew.arrivals(hook)
+	//
+	// A scanned login token is reported by an update that comes before the
+	// login ends, so it is caught on the way in (#330).
+	arrivals := watchLoginToken(c.skew.arrivals(hook), af.TokenAccepted)
 
 	// resync forces a full catch-up (getDifference) on every reconnect after the
 	// first, so state missed during OS sleep/suspend is reconciled immediately on
@@ -219,7 +234,16 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 				}
 			}()
 		},
-		link: c.onLink,
+		// The login waiting to issue a QR code for want of Telegram tries again
+		// the moment the link is back (#330).
+		link: func(up bool) {
+			if c.onLink != nil {
+				c.onLink(up)
+			}
+			if up {
+				af.LinkReady()
+			}
+		},
 	}
 
 	go func() {
@@ -248,6 +272,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	tc := telegram.NewClient(c.endpoint.Key.ID, c.endpoint.Key.Hash, telegram.Options{
 		UpdateHandler:  arrivals,
 		SessionStorage: sess,
+		// The addresses Telegram sent last time rather than gotd's static
+		// list, which can name ones no longer served (#312).
+		DCList: dcList,
 		// One resolver for every data centre this client ever reaches, so a
 		// photo from a media DC takes the same route as the message it came
 		// with. It is built from the proxy section the process started with
@@ -282,7 +309,12 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// sendMessage, sendMedia) and nowhere else, until an unrelated pts gap
 		// forces a getDifference. Without this hook a forward stayed invisible
 		// until the other side happened to read it (#198).
-		Middlewares: []telegram.Middleware{c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle)},
+		//
+		// The throttle is outermost, so every call of this client goes through
+		// one budget and the flood waits it reads are already mapped (#212).
+		Middlewares: []telegram.Middleware{
+			c.throttle.middleware(), c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle),
+		},
 	})
 
 	// The connection runs under its own context so a log out - the person's,
@@ -300,7 +332,8 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// the first mistyped code (#285), and our own check of whether it is
 		// needed rather than auth.Client.Status, which sends a banned account
 		// into it too (#254).
-		self, err := af.authorize(ctx, tc.Self, tc.Auth(), hadSession)
+		login := newGotdLogin(tc, c.endpoint.Key.ID, c.endpoint.Key.Hash, c.log)
+		self, err := af.authorize(ctx, tc.Self, login, hadSession)
 		if err != nil {
 			c.log.Error("auth failed", zap.Error(err))
 			return err
@@ -309,7 +342,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		c.authorized.Store(true)
 
 		if onAuth != nil {
-			onAuth(self.ID, self.Username)
+			onAuth(domain.User{ID: self.ID, Username: self.Username, FirstName: self.FirstName, LastName: self.LastName})
 		}
 
 		c.mu.Lock()

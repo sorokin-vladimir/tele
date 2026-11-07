@@ -84,6 +84,13 @@ func openAccount(d accountDeps) (*account, error) {
 	if linked, ok := conn.(interface{ SetOnLink(func(bool)) }); ok {
 		linked.SetOnLink(owner.SetLink)
 	}
+	// A flood wait somebody runs into shows in every client, not as a freeze
+	// (#212).
+	if throttled, ok := conn.(interface {
+		SetOnThrottle(func(internaltg.Throttled))
+	}); ok {
+		throttled.SetOnThrottle(func(t internaltg.Throttled) { owner.SetThrottle(t.Method, t.Until) })
+	}
 
 	// The send queue shares the account database: the file DB runs on a single
 	// connection (#119), and a second one to the same file is how SQLITE_BUSY

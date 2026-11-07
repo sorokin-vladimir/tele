@@ -31,3 +31,17 @@ func TestCalls_AreEveryMethodOfTheSurface(t *testing.T) {
 
 	assert.Equal(t, want, got)
 }
+
+// Every call is a read or a write, never neither: cli.account_commands set to
+// read lets a command make the one and not the other, so a call nobody
+// placed would slip through on whichever side the host guessed (#181).
+func TestCalls_EveryOneIsAReadOrAWrite(t *testing.T) {
+	for name := range protocol.Calls {
+		_, read := protocol.Reads[name]
+		_, write := protocol.Writes[name]
+		assert.True(t, read != write, "%s is placed as a read %v and as a write %v", name, read, write)
+	}
+	assert.Contains(t, protocol.Writes, "Send")
+	assert.Contains(t, protocol.Writes, "MarkRead")
+	assert.Contains(t, protocol.Reads, "History")
+}

@@ -152,6 +152,8 @@ func (o *testOwner) EndAccount(core.EndReason) {}
 
 func (o *testOwner) AnswerLogin(context.Context, int, string) error { return nil }
 
+func (o *testOwner) SwitchLogin(context.Context, int, project.LoginStepKind) error { return nil }
+
 func (o *testOwner) MoveWindow(id project.SubID, w project.Window) {
 	o.moves = append(o.moves, w)
 	o.reg.MoveWindow(id, w)
@@ -227,6 +229,16 @@ func (o *testOwner) Chats(_ context.Context) ([]project.ChatRow, error) {
 		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, o.cmdErr
+}
+
+// ResolveChat and History are for commands; a window names a chat by id and
+// subscribes to its history.
+func (o *testOwner) ResolveChat(context.Context, core.ChatName) (project.ChatRow, error) {
+	return project.ChatRow{}, nil
+}
+
+func (o *testOwner) History(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
+	return nil, nil
 }
 
 func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
@@ -373,6 +385,11 @@ func (o *testOwner) RetryOutbox(ref string) error {
 func (o *testOwner) DiscardOutbox(ref string) error {
 	o.discarded = append(o.discarded, ref)
 	return o.cmdErr
+}
+
+// AwaitSend is for commands; a window watches its sends in the projection.
+func (o *testOwner) AwaitSend(context.Context, string, time.Duration) (core.SendOutcome, error) {
+	return core.SendOutcome{}, o.cmdErr
 }
 
 // ownerDraft is one SaveDraft the UI issued, replacing what used to be recorded

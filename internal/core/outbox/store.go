@@ -38,7 +38,19 @@ CREATE TABLE IF NOT EXISTS outbox (
 	err_reason      TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(next_attempt_at, id);
+CREATE TABLE IF NOT EXISTS outbox_sent (
+	ref      TEXT    PRIMARY KEY,
+	chat_id  INTEGER NOT NULL,
+	topic_id INTEGER NOT NULL DEFAULT 0,
+	msg_ids  TEXT    NOT NULL,
+	sent_at  INTEGER NOT NULL
+);
 `
+
+// SentRemembered is how long a send that became a message is remembered by
+// its ref: long enough for a script retrying after a lost answer to be told
+// it went, rather than send it again (#181).
+const SentRemembered = 30 * 24 * time.Hour
 
 // migrations run after the schema, for tables that already exist and therefore
 // were not touched by CREATE TABLE IF NOT EXISTS. Each one is additive and its
@@ -59,10 +71,13 @@ type Store struct {
 	mu      sync.RWMutex
 	db      *sql.DB
 	entries map[string]domain.OutboxEntry
+	// sent is every send remembered as having become a message, by ref.
+	sent map[string]domain.SentSend
 }
 
-// NewStore creates the table if needed, loads what is there, and resets every
-// entry left in flight by a process that died mid-send.
+// NewStore creates the tables if needed, forgets sends older than
+// SentRemembered, loads what is there, and resets every entry left in flight
+// by a process that died mid-send.
 func NewStore(db *sql.DB) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -70,11 +85,80 @@ func NewStore(db *sql.DB) (*Store, error) {
 	for _, m := range migrations {
 		_, _ = db.Exec(m)
 	}
-	s := &Store{db: db, entries: make(map[string]domain.OutboxEntry)}
+	if _, err := db.Exec(`DELETE FROM outbox_sent WHERE sent_at < ?`,
+		time.Now().Add(-SentRemembered).UnixMilli()); err != nil {
+		return nil, err
+	}
+	s := &Store{db: db, entries: make(map[string]domain.OutboxEntry), sent: make(map[string]domain.SentSend)}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
+	if err := s.loadSent(); err != nil {
+		return nil, err
+	}
 	return s, s.resetSending()
+}
+
+func (s *Store) loadSent() error {
+	rows, err := s.db.Query(`SELECT ref, chat_id, topic_id, msg_ids, sent_at FROM outbox_sent`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var (
+			sent   domain.SentSend
+			msgIDs string
+			at     int64
+		)
+		if err := rows.Scan(&sent.Ref, &sent.ChatID, &sent.TopicID, &msgIDs, &at); err != nil {
+			return err
+		}
+		if err := json.Unmarshal([]byte(msgIDs), &sent.MsgIDs); err != nil {
+			return err
+		}
+		sent.At = time.UnixMilli(at)
+		s.sent[sent.Ref] = sent
+	}
+	return rows.Err()
+}
+
+// Sent takes a send that became the messages e.SentMsgIDs name off the queue,
+// and remembers it by its ref, in one transaction: there is no moment when it
+// is neither queued nor remembered (#181).
+func (s *Store) Sent(e domain.OutboxEntry, at time.Time) error {
+	msgIDs, err := json.Marshal(e.SentMsgIDs)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`DELETE FROM outbox WHERE ref = ?`, e.Ref); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO outbox_sent (ref, chat_id, topic_id, msg_ids, sent_at)
+		VALUES (?, ?, ?, ?, ?)`, e.Ref, e.ChatID, e.TopicID, string(msgIDs), at.UnixMilli()); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	delete(s.entries, e.Ref)
+	s.sent[e.Ref] = domain.SentSend{Ref: e.Ref, ChatID: e.ChatID, TopicID: e.TopicID, MsgIDs: e.SentMsgIDs, At: at}
+	return nil
+}
+
+// SentRef is the send ref became, when it became one within SentRemembered.
+func (s *Store) SentRef(ref string) (domain.SentSend, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sent, ok := s.sent[ref]
+	return sent, ok
 }
 
 // RandomIDFor derives Telegram's deduplication key from the caller's ref.
@@ -168,12 +252,16 @@ func (s *Store) resetSending() error {
 }
 
 // Add persists a new entry and returns it with its assigned Seq. added is false
-// when the ref is already known, which is what makes submission idempotent.
+// when the ref is already known, queued or remembered as sent, which is what
+// makes submission idempotent.
 func (s *Store) Add(e domain.OutboxEntry) (domain.OutboxEntry, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.entries[e.Ref]; ok {
 		return existing, false, nil
+	}
+	if _, ok := s.sent[e.Ref]; ok {
+		return domain.OutboxEntry{}, false, nil
 	}
 	return s.insert(e)
 }

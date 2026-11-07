@@ -20,6 +20,7 @@ var surface = map[string]any{
 	"LogOut":           core.Surface.LogOut,
 	"EndAccount":       core.Surface.EndAccount,
 	"AnswerLogin":      core.Surface.AnswerLogin,
+	"SwitchLogin":      core.Surface.SwitchLogin,
 	"SetMuted":         core.Surface.SetMuted,
 	"SetArchived":      core.Surface.SetArchived,
 	"SetUnreadMark":    core.Surface.SetUnreadMark,
@@ -38,10 +39,13 @@ var surface = map[string]any{
 	"SendMedia":        core.Surface.SendMedia,
 	"RetryOutbox":      core.Surface.RetryOutbox,
 	"DiscardOutbox":    core.Surface.DiscardOutbox,
+	"AwaitSend":        core.Surface.AwaitSend,
 	"SearchContacts":   core.Surface.SearchContacts,
 	"Chats":            core.Surface.Chats,
 	"Topics":           core.Surface.Topics,
 	"Chat":             core.Surface.Chat,
+	"ResolveChat":      core.Surface.ResolveChat,
+	"History":          core.Surface.History,
 	"FolderFilters":    core.Surface.FolderFilters,
 	"GetParticipants":  core.Surface.GetParticipants,
 	"KnownUser":        core.Surface.KnownUser,
@@ -51,4 +55,35 @@ var surface = map[string]any{
 	"InvalidateMedia":  core.Surface.InvalidateMedia,
 	"FetchAvatar":      core.Surface.FetchAvatar,
 	"InvalidateAvatar": core.Surface.InvalidateAvatar,
+}
+
+// Reads are the calls that change nothing about the account: what it holds,
+// what Telegram says of it, and the caches it is drawn from. Writes are the
+// rest, the ones that change something - in Telegram, in the queue, or in
+// what the owner thinks somebody is looking at. Every call is one or the
+// other; a test holds them to Calls, so a call added later is placed on
+// purpose (#181).
+var (
+	Reads = set(
+		"Subscribe", "MoveWindow", "Unsubscribe", "LogOutPreview",
+		"SearchContacts", "Chats", "Topics", "Chat", "ResolveChat", "History",
+		"FolderFilters", "GetParticipants", "KnownUser", "GetUser",
+		"FetchMedia", "SaveMedia", "InvalidateMedia", "FetchAvatar", "InvalidateAvatar",
+		"AwaitSend",
+	)
+	Writes = set(
+		"LogOut", "EndAccount", "AnswerLogin", "SwitchLogin",
+		"SetMuted", "SetArchived", "SetUnreadMark", "AddToFolder",
+		"MarkRead", "SetFocus", "ReadReactions", "ReadMentions",
+		"EditMessage", "DeleteMessages", "SendReaction", "Forward", "SetTyping", "SaveDraft",
+		"Send", "SendMedia", "RetryOutbox", "DiscardOutbox",
+	)
+)
+
+func set(names ...string) map[string]struct{} {
+	s := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		s[n] = struct{}{}
+	}
+	return s
 }

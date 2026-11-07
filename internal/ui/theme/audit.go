@@ -231,7 +231,7 @@ func auditWarning(themeName string, fs []Finding) string {
 	} else {
 		b.WriteString(unsetPhrase(unset, false))
 	}
-	b.WriteString("; run tele --theme-check")
+	b.WriteString("; run tele theme check")
 	return b.String()
 }
 

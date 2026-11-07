@@ -22,7 +22,7 @@ type heldSearch struct {
 	started chan struct{}
 }
 
-func (h *heldSearch) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (h *heldSearch) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 

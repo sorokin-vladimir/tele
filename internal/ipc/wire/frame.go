@@ -36,6 +36,9 @@ type Frame struct {
 	Sub    uint64          `json:"sub,omitempty"`
 	Delta  json.RawMessage `json:"delta,omitempty"`
 	Event  string          `json:"event,omitempty"`
+	// Background marks a request nobody is waiting on, so that the host's
+	// calls to Telegram for it yield to the ones somebody is (#212).
+	Background bool `json:"background,omitempty"`
 }
 
 // Shape is what a frame is.

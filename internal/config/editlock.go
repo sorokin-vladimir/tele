@@ -17,8 +17,11 @@ import (
 // hidden, because the directory is the person's and the file means nothing to
 // them.
 //
-// Reading the file needs no lock: it is replaced whole, so a reader sees one
-// version or the next, never half of one.
+// Reading the file takes the lock too. The file is replaced whole, so a reader
+// never sees half of one version, but on Windows a file being renamed over
+// cannot be opened at all: a read that lands in another process's edit fails
+// instead of waiting for it. The lock is not reentrant, so nothing reads the
+// file while holding it.
 func lockEdits(path string) (unlock func(), err error) {
 	f, err := os.OpenFile(filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {

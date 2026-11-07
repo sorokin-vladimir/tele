@@ -42,6 +42,8 @@ type ownerStub struct {
 	lastSub project.SubID
 	// answers records the login answers, in order.
 	answers []screens.LoginAnswerMsg
+	// switches records where the login screen switched to, by asking (#330).
+	switches []loginSwitch
 
 	// calls records the commands the UI issued, so a test can assert on what
 	// was asked for rather than on how the result was rendered. err is what
@@ -103,6 +105,18 @@ func (o *ownerStub) EndAccount(reason core.EndReason) { o.endedWith = append(o.e
 // AnswerLogin records what the login screen answered.
 func (o *ownerStub) AnswerLogin(_ context.Context, seq int, value string) error {
 	o.answers = append(o.answers, screens.LoginAnswerMsg{Seq: seq, Value: value})
+	return o.answerErr
+}
+
+// loginSwitch is one switch of the login: the asking it left, and to where.
+type loginSwitch struct {
+	seq int
+	to  project.LoginStepKind
+}
+
+// SwitchLogin records where the login screen switched to.
+func (o *ownerStub) SwitchLogin(_ context.Context, seq int, to project.LoginStepKind) error {
+	o.switches = append(o.switches, loginSwitch{seq: seq, to: to})
 	return o.answerErr
 }
 
@@ -229,6 +243,16 @@ func (o *ownerStub) Chats(_ context.Context) ([]project.ChatRow, error) {
 		rows = append(rows, project.Row(c, o.state.Store().Topics(c.ID)))
 	}
 	return rows, o.err
+}
+
+// ResolveChat and History are for commands; a window names a chat by id and
+// subscribes to its history.
+func (o *ownerStub) ResolveChat(context.Context, core.ChatName) (project.ChatRow, error) {
+	return project.ChatRow{}, o.err
+}
+
+func (o *ownerStub) History(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
+	return nil, o.err
 }
 
 func (o *ownerStub) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
@@ -367,6 +391,11 @@ func (o *ownerStub) RetryOutbox(ref string) error {
 func (o *ownerStub) DiscardOutbox(ref string) error {
 	o.discarded = append(o.discarded, ref)
 	return o.err
+}
+
+// AwaitSend is for commands; a window watches its sends in the projection.
+func (o *ownerStub) AwaitSend(context.Context, string, time.Duration) (core.SendOutcome, error) {
+	return core.SendOutcome{}, o.err
 }
 
 func (o *ownerStub) Forward(_ context.Context, fromChatID int64, target domain.HistoryKey, _ []int, _ string) error {

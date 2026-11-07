@@ -12,16 +12,19 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf16"
 )
 
 // Manager registers units with the operating system's service manager.
 type Manager interface {
 	// Install writes u and starts the service. A unit already installed under
-	// its name is replaced, and the service started anew on it.
+	// its name is replaced, and the service started anew on it once the old
+	// one is gone; ErrStillRunning when that did not happen in time.
 	Install(u Unit) error
-	// Uninstall stops the service named name and removes its unit. It reports
-	// false, and does nothing, when none is installed.
+	// Uninstall stops the service named name and removes its unit, and returns
+	// once the service is gone; ErrStillRunning when it did not go in time. It
+	// reports false, and does nothing, when none is installed.
 	Uninstall(name string) (bool, error)
 	// Installed is the command the service named name runs, as its unit
 	// says; false when none is installed.
@@ -55,11 +58,12 @@ func Output(name string, args ...string) ([]byte, error) {
 var ErrUnsupported = errors.New("tele cannot be installed as a service on this system")
 
 // ForThisSystem is the service manager of the system tele runs on, for the
-// person whose home is home.
-func ForThisSystem(home string) (Manager, error) {
+// person whose home is home. waiting, if set, is told of a wait for an old
+// service to go, as a wait's waiting is.
+func ForThisSystem(home string, waiting func() (done func())) (Manager, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		return Launchd{Home: home, UID: os.Getuid(), Run: Run}, nil
+		return Launchd{Home: home, UID: os.Getuid(), Run: Run, Waiting: waiting}, nil
 	case "linux":
 		config := os.Getenv("XDG_CONFIG_HOME")
 		if config == "" {
@@ -67,10 +71,61 @@ func ForThisSystem(home string) (Manager, error) {
 		}
 		return Systemd{ConfigHome: config, Run: Run}, nil
 	case "windows":
-		return TaskScheduler{TempDir: os.TempDir(), Run: Run, Output: Output}, nil
+		return TaskScheduler{TempDir: os.TempDir(), Run: Run, Output: Output, Waiting: waiting}, nil
 	default:
 		return nil, ErrUnsupported
 	}
+}
+
+// wait is how an install or an uninstall waits for the old instance of a
+// service to go, before it starts the new one or says it is done: a service
+// manager may still hold the old one after it was told to stop it (#327).
+type wait struct {
+	// waiting, if set, is told that a wait has started; what it returns is
+	// called once when it ends.
+	waiting func() (done func())
+	// sleep and now are the clock the wait runs by; the real one when nil.
+	sleep func(time.Duration)
+	now   func() time.Time
+	// every is how often the wait looks.
+	every time.Duration
+}
+
+// leaveLimit is the longest a wait lasts. launchd kills an agent that has not
+// exited 20 seconds after it was told to.
+const leaveLimit = 30 * time.Second
+
+// ErrStillRunning is an old instance of a service that outlasted the wait for
+// it, so that the new one could not be started; installing again, once it is
+// gone, starts it.
+var ErrStillRunning = fmt.Errorf("the running service did not stop in %s", leaveLimit)
+
+// untilGone waits until gone says the old instance is gone, for at most
+// leaveLimit, and reports whether it went.
+func (w wait) untilGone(gone func() bool) bool {
+	if gone() {
+		return true
+	}
+	if w.waiting != nil {
+		if done := w.waiting(); done != nil {
+			defer done()
+		}
+	}
+	sleep, now := w.sleep, w.now
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	if now == nil {
+		now = time.Now
+	}
+	deadline := now().Add(leaveLimit)
+	for now().Before(deadline) {
+		sleep(w.every)
+		if gone() {
+			return true
+		}
+	}
+	return false
 }
 
 // Launchd installs a unit as a LaunchAgent: the person's own, run in their
@@ -79,6 +134,21 @@ type Launchd struct {
 	Home string
 	UID  int
 	Run  Runner
+	// Waiting, Sleep and Now are as a wait's.
+	Waiting func() (done func())
+	Sleep   func(time.Duration)
+	Now     func() time.Time
+}
+
+func (m Launchd) wait() wait {
+	return wait{waiting: m.Waiting, sleep: m.Sleep, now: m.Now, every: 100 * time.Millisecond}
+}
+
+// loaded says whether launchd holds the label of the agent named name. It
+// lets a label go only once the agent's process has exited, which takes up
+// to its ExitTimeOut, and refuses to load one it still holds (#327).
+func (m Launchd) loaded(name string) bool {
+	return m.Run("launchctl", "print", m.domain()+"/"+Label(Unit{Name: name})) == nil
 }
 
 func (m Launchd) plist(name string) string {
@@ -89,10 +159,13 @@ func (m Launchd) domain() string { return "gui/" + strconv.Itoa(m.UID) }
 
 func (m Launchd) Install(u Unit) error {
 	path := m.plist(u.Name)
+	stayed := false
 	if _, err := os.Stat(path); err == nil {
 		// Unloaded first, or launchd keeps running what it loaded before. One
-		// that was not loaded has nothing to unload.
+		// that was not loaded has nothing to unload. bootout's own error says
+		// nothing: it fails on one still stopping as on one not loaded.
 		_ = m.Run("launchctl", "bootout", m.domain()+"/"+Label(u))
+		stayed = !m.wait().untilGone(func() bool { return !m.loaded(u.Name) })
 	}
 	if u.LogPath != "" {
 		if err := os.MkdirAll(filepath.Dir(u.LogPath), 0o700); err != nil {
@@ -105,7 +178,12 @@ func (m Launchd) Install(u Unit) error {
 	if err := os.WriteFile(path, Plist(u), 0o644); err != nil {
 		return err
 	}
-	return m.Run("launchctl", "bootstrap", m.domain(), path)
+	// One that outlasted the wait may still have gone by now: tried once.
+	err := m.Run("launchctl", "bootstrap", m.domain(), path)
+	if err != nil && stayed {
+		return fmt.Errorf("%w: %w", ErrStillRunning, err)
+	}
+	return err
 }
 
 func (m Launchd) Uninstall(name string) (bool, error) {
@@ -115,8 +193,12 @@ func (m Launchd) Uninstall(name string) (bool, error) {
 	}
 	// An agent that is not loaded has nothing to stop; its file still goes.
 	_ = m.Run("launchctl", "bootout", m.domain()+"/"+Label(Unit{Name: name}))
+	gone := m.wait().untilGone(func() bool { return !m.loaded(name) })
 	if err := os.Remove(path); err != nil {
 		return false, err
+	}
+	if !gone {
+		return true, ErrStillRunning
 	}
 	return true, nil
 }
@@ -256,6 +338,28 @@ type TaskScheduler struct {
 	Run     Runner
 	// Output runs a command for what it prints.
 	Output func(name string, args ...string) ([]byte, error)
+	// Waiting, Sleep and Now are as a wait's.
+	Waiting func() (done func())
+	Sleep   func(time.Duration)
+	Now     func() time.Time
+}
+
+// PowerShell starts slowly, so the state is asked for less often than
+// launchd's.
+func (m TaskScheduler) wait() wait {
+	return wait{waiting: m.Waiting, sleep: m.Sleep, now: m.Now, every: 500 * time.Millisecond}
+}
+
+// running says whether the task named name is running. Its State is the name
+// of an enum, the same in every language, where what schtasks prints is
+// translated; a task that cannot be asked about is not running. With
+// MultipleInstancesPolicy IgnoreNew, a task started while running is not
+// started, and nothing says so (#327).
+func (m TaskScheduler) running(name string) bool {
+	quoted := "'" + strings.ReplaceAll(name, "'", "''") + "'"
+	printed, err := m.Output("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"(Get-ScheduledTask -TaskName "+quoted+").State")
+	return err == nil && strings.TrimSpace(string(printed)) == "Running"
 }
 
 func (m TaskScheduler) Installed(name string) (string, bool, error) {
@@ -304,8 +408,13 @@ func (m TaskScheduler) Install(u Unit) error {
 	// Ended first, so the task starts on the command it is given now. One not
 	// running has nothing to end.
 	_ = m.Run("schtasks", "/End", "/TN", u.Name)
+	stopped := m.wait().untilGone(func() bool { return !m.running(u.Name) })
 	if err := m.Run("schtasks", "/Create", "/TN", u.Name, "/XML", f.Name(), "/F"); err != nil {
 		return err
+	}
+	if !stopped {
+		// Started now, it would be ignored and said to have started.
+		return ErrStillRunning
 	}
 	return m.Run("schtasks", "/Run", "/TN", u.Name)
 }
@@ -315,8 +424,12 @@ func (m TaskScheduler) Uninstall(name string) (bool, error) {
 		return false, nil
 	}
 	_ = m.Run("schtasks", "/End", "/TN", name)
+	stopped := m.wait().untilGone(func() bool { return !m.running(name) })
 	if err := m.Run("schtasks", "/Delete", "/TN", name, "/F"); err != nil {
 		return false, err
+	}
+	if !stopped {
+		return true, ErrStillRunning
 	}
 	return true, nil
 }

@@ -33,6 +33,10 @@ func (m *mockClient) SearchContacts(_ context.Context, _ string, _ int) ([]domai
 	return nil, nil
 }
 
+func (m *mockClient) ResolveUsername(_ context.Context, _ string) (domain.Chat, error) {
+	return domain.Chat{}, nil
+}
+
 func (m *mockClient) GetDialogFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	return nil, nil
 }

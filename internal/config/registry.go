@@ -291,6 +291,28 @@ var registry = []settings.Entry{
 		Applies: settings.Startup,
 		Min:     0,
 	},
+	{
+		Key:     "cli.name_width",
+		Process: settings.Client,
+		Group:   "cli",
+		Label:   "Name width",
+		Help:    "How many columns a command gives a name or title before cutting it short: a sender's in tele show, a chat's or a topic's in tele chats and tele topics. What follows a name starts after the widest one shown, so one long name would push it all to the right.",
+		Widget:  settings.Number,
+		Applies: settings.NextUse,
+		Unit:    "columns",
+		Min:     4,
+		Max:     60,
+	},
+	{
+		Key:     "cli.account_commands",
+		Process: settings.Host,
+		Group:   "cli",
+		Label:   "Account commands",
+		Help:    "What tele chats, tele topics, tele show and tele send may do with your chats. all: everything. read: list and show, and change nothing, so no sending and no marking read. none: nothing at all. What is not allowed exits 7, so a script or an AI agent allowed to run tele cannot go further through it. It does not stop a program that reads the state directory itself.",
+		Widget:  settings.Choice,
+		Applies: settings.Immediate,
+		Choices: []string{"all", "read", "none"},
+	},
 }
 
 // excluded names a field of Config that is deliberately not a setting, and says

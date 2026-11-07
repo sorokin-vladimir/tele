@@ -23,6 +23,11 @@ type stubClient struct {
 	internaltg.Client
 	err error
 
+	// byUsername is what ResolveUsername answers with; resolved is every
+	// username it was asked.
+	byUsername domain.Chat
+	resolved   []string
+
 	mutedWith     *bool
 	archivedWith  *bool
 	unreadWith    *bool
@@ -95,7 +100,7 @@ type stubClient struct {
 	uploadBlock chan struct{}
 }
 
-func (s *stubClient) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (s *stubClient) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 

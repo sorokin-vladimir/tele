@@ -178,7 +178,7 @@ func (o *Owner) recordSentMedia(e domain.OutboxEntry, peer domain.Peer, ids []in
 		// nothing should be re-sent: drop the entry and let the next history
 		// fetch surface the messages.
 		o.log.Warn("outbox: media send confirmed no message id", zap.String("ref", e.Ref))
-		o.dropEntry(e.Ref)
+		o.dropSent(e)
 		o.Refresh()
 		return
 	}
@@ -195,7 +195,7 @@ func (o *Owner) recordSentMedia(e domain.OutboxEntry, peer domain.Peer, ids []in
 		// would be the worse lie.
 		o.log.Warn("outbox: could not refresh a sent album",
 			zap.String("ref", e.Ref), zap.Error(err))
-		o.dropEntry(e.Ref)
+		o.dropSent(e)
 		o.Refresh()
 		return
 	}

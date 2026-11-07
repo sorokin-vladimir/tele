@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -36,14 +37,22 @@ func (m RootModel) View() tea.View {
 					loginContentW = w
 				}
 			}
-			const loginPadV, loginPadH = 1, 3
 			innerW := loginContentW + 2*loginPadH
 			innerH := loginContentH + 2*loginPadV
 			padded := theme.NewStyle().Padding(loginPadV, loginPadH).Render(loginContent)
 			loginBox := components.RenderBox(padded, "Telegram", "", "", "", b, nil, innerW+2, innerH+2)
 			combined := joinCentred(logoView, "\n", loginBox)
+			// The QR code takes most of an ordinary terminal, and the logo gives
+			// way to it rather than push it off the screen (#330).
+			if m.login.CurrentStep() == project.LoginQR && lipgloss.Height(combined) > m.height {
+				combined = loginBox
+			}
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		}
+	} else if m.width <= 0 || m.height <= 0 {
+		// The panes are laid out from the terminal's size, and a window attached
+		// to an account that is already loaded reaches this screen before the
+		// terminal has reported one. The frame stays empty until it does.
 	} else {
 		paneH := m.height + 1
 		innerH := paneH - 2*borderSize
@@ -245,6 +254,15 @@ func joinPanes(blocks ...string) string {
 // the same thing but pads with bare spaces and, unlike Place, offers no
 // whitespace style to fix that with. On the login screen the padding it adds
 // around the logo is most of the block.
+// The login box's padding inside its border, in cells.
+const loginPadV, loginPadH = 1, 3
+
+// loginRoom is the room the login screen's content has in a terminal w by h:
+// what is left inside the box's border and padding.
+func loginRoom(w, h int) (int, int) {
+	return max(w-2-2*loginPadH, 0), max(h-2-2*loginPadV, 0)
+}
+
 func joinCentred(blocks ...string) string {
 	var lines []string
 	for _, b := range blocks {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sorokin-vladimir/tele/internal/app"
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
@@ -32,19 +33,27 @@ type installer struct {
 }
 
 // newInstaller is the installer of this system, saying what it does on cmd's
-// output.
+// output, and showing a long wait for the running service to stop on its
+// error output (#327).
 func newInstaller(cmd *cobra.Command) installer {
+	return systemInstaller(cmd.OutOrStdout(), newIndicator(cmd.ErrOrStderr()).waiting)
+}
+
+// systemInstaller is the installer of this system, saying what it does on out
+// and telling waiting, if set, of a wait for the running service to stop. A
+// window sets none: it would draw over its own screen.
+func systemInstaller(out io.Writer, waiting func() (done func())) installer {
 	return installer{
 		manager: func() (service.Manager, error) {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return nil, err
 			}
-			return service.ForThisSystem(home)
+			return service.ForThisSystem(home, waiting)
 		},
 		executable: os.Executable,
 		versionOf:  versionOf,
-		out:        cmd.OutOrStdout(),
+		out:        out,
 	}
 }
 
@@ -135,15 +144,60 @@ func (in installer) install(ctx context.Context, o options, given string) error 
 		return err
 	}
 	holder, held := whoHolds(ctx, cfg.StateDir)
-	if err := m.Install(u); err != nil {
+	if err := m.Install(u); errors.Is(err, service.ErrStillRunning) {
+		// The new service is written and not started: an install once the
+		// old one has gone starts it (#327).
+		return fmt.Errorf("installing the service: %w; run `%s daemon install` again", err, appName)
+	} else if err != nil {
 		return fmt.Errorf("installing the service: %w", err)
 	}
 	_, _ = fmt.Fprintf(in.out, "Installed the service %s: it runs %s at every login, and now.\n", u.Name, entry)
-	if held && holder.Kept != wire.KeptByService {
+	switch {
+	case !held || holder.Kept == wire.KeptByService:
+	case holder.PID == os.Getpid():
+		// Installed from the window of the tele that hosts (#208).
+		_, _ = fmt.Fprintln(in.out, "The service takes over when this tele quits.")
+	default:
 		_, _ = fmt.Fprintf(in.out, "tele %s (pid %d) holds %s now; the service takes over when it quits.\n",
 			holder.Binary, holder.PID, cfg.StateDir)
 	}
 	return nil
+}
+
+// offer is the service of o's config for a tele that hosts to offer, or nil
+// where a yes could not install it: with no service manager, with another tele
+// on the PATH, which only `--path` could name, or with the service installed
+// already (#208). A yes installs it as `tele daemon install` would, and says
+// what that would print.
+func (in installer) offer(o options) *app.ServiceOffer {
+	m, err := in.manager()
+	if err != nil {
+		return nil
+	}
+	running, err := in.executable()
+	if err != nil {
+		return nil
+	}
+	if _, err := service.EntryPoint(appName, running, ""); err != nil {
+		return nil
+	}
+	s, err := newSetup(o.cfgPath)
+	if err != nil {
+		return nil
+	}
+	u, err := unitOf(s, "")
+	if err != nil {
+		return nil
+	}
+	if _, installed, err := m.Installed(u.Name); err != nil || installed {
+		return nil
+	}
+	return &app.ServiceOffer{App: appName, Install: func(ctx context.Context) (string, error) {
+		var said strings.Builder
+		in.out = &said
+		err := in.install(ctx, o, "")
+		return strings.TrimSpace(said.String()), err
+	}}
 }
 
 // uninstall tells the service of o's config it is being uninstalled, so it
@@ -222,5 +276,5 @@ func reachHolder(ctx context.Context, stateDir string) (io.ReadWriteCloser, bool
 
 // ownHello is what a command that only asks the host says of itself.
 func ownHello() wire.Hello {
-	return wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version}
+	return wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Kind: wire.KindCommand}
 }

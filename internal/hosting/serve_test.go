@@ -14,6 +14,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/hosting"
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
@@ -32,13 +33,14 @@ func (helloHost) Settings() wire.HostSettings              { return wire.HostSet
 func (helloHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetResult{} }
 func (helloHost) Reload() wire.ReloadResult                { return wire.ReloadResult{} }
 func (helloHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
-func (helloHost) Restart() wire.RestartResult              { return wire.RestartResult{} }
+func (helloHost) Restart() (wire.RestartResult, func())    { return wire.RestartResult{}, nil }
 func (helloHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
+func (helloHost) AccountCommands() wire.CommandAccess      { return wire.CommandsAll }
 
 // noConn is a connection to Telegram nothing in these tests reaches.
 type noConn struct{ internaltg.Client }
 
-func (noConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (noConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 
@@ -195,4 +197,38 @@ func TestServe_AClientAskingForTheEndIsHeard(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the host never heard it")
 	}
+}
+
+// clientAs attaches to the host at ep as a client of kind.
+func clientAs(t *testing.T, ep ipc.Endpoint, kind wire.ClientKind) *dial.Attachment {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := ipc.Dial(ctx, ep)
+	require.NoError(t, err)
+	h := hello
+	h.Kind = kind
+	a, err := dial.Dial(ctx, conn, h)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = a.Close() })
+	return a
+}
+
+// A host counts its windows apart from its commands, by what each says it is
+// in its hello: a command running is not a person looking (#213).
+func TestServe_WindowsAndCommandsAreCountedApart(t *testing.T) {
+	clients := hosting.NewClients()
+	ep, _ := host(t, clients)
+
+	clientAs(t, ep, wire.KindWindow)
+	clientAs(t, ep, wire.KindWindow)
+	cmd := clientAs(t, ep, wire.KindCommand)
+
+	require.Eventually(t, func() bool { return clients.Windows() == 2 && clients.Commands() == 1 },
+		2*time.Second, 10*time.Millisecond, "windows %d, commands %d", clients.Windows(), clients.Commands())
+
+	_ = cmd.Close()
+	require.Eventually(t, func() bool { return clients.Commands() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"a command that went is not counted")
+	assert.Equal(t, 2, clients.Windows())
 }

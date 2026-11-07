@@ -36,7 +36,7 @@ func (c loginConn) GetDialogFilters(context.Context) ([]domain.FolderFilter, err
 	return c.folders, nil
 }
 
-func (loginConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (loginConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 
@@ -271,17 +271,18 @@ func TestLogin_LoggedInLoadsTheAccount(t *testing.T) {
 func TestLogin_TheLoggedInUserIsTheAccounts(t *testing.T) {
 	o, a := loginOwner(t, loginConn{})
 
-	o.onAuth(42, "ada")
+	o.onAuth(domain.User{ID: 42, Username: "ada", FirstName: "Ada", LastName: "Lovelace"})
 
+	ada := project.LoggedInUser{ID: 42, Username: "ada", Name: "Ada Lovelace"}
 	got, ok := recvAccount(t, a)
 	require.True(t, ok)
-	assert.Equal(t, project.LoggedInUser{ID: 42, Username: "ada"}, got.LoggedInUser)
+	assert.Equal(t, ada, got.LoggedInUser)
 
 	late := attach(o)
 	late.Subscribe(project.AccountWindow{})
 	first, ok := recvAccount(t, late)
 	require.True(t, ok)
-	assert.Equal(t, project.LoggedInUser{ID: 42, Username: "ada"}, first.LoggedInUser, "a client attaching later sees it too")
+	assert.Equal(t, ada, first.LoggedInUser, "a client attaching later sees it too")
 }
 
 // How much history a page is is the owner's to say, since it is what the owner

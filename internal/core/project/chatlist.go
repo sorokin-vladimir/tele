@@ -6,8 +6,12 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 // nothing more; in particular no Peer, because a client has no business holding
 // an access hash and commands address chats by id.
 type ChatRow struct {
-	ID         int64
-	Title      string
+	ID    int64
+	Title string
+	// Username is the chat's public username, without the @; empty when it
+	// has none.
+	Username   string
+	Kind       ChatKind
 	IsUser     bool
 	Online     bool
 	Unread     int
@@ -19,6 +23,32 @@ type ChatRow struct {
 	// IsForum marks a chat opened through its topic list (#275). Its Unread is
 	// how many of its topics have unread, as Telegram Desktop badges a forum.
 	IsForum bool
+}
+
+// ChatKind is what a chat is to the person: whom or what they talk to there.
+// A supergroup is a group; how Telegram stores one is not the person's
+// business (#181).
+type ChatKind string
+
+const (
+	ChatKindUser    ChatKind = "user"
+	ChatKindBot     ChatKind = "bot"
+	ChatKindGroup   ChatKind = "group"
+	ChatKindChannel ChatKind = "channel"
+)
+
+// kindOf is the kind of chat c is.
+func kindOf(c domain.Chat) ChatKind {
+	switch {
+	case c.Peer.IsChannel():
+		return ChatKindChannel
+	case c.Peer.IsGroup():
+		return ChatKindGroup
+	case c.IsBot:
+		return ChatKindBot
+	default:
+		return ChatKindUser
+	}
 }
 
 // FolderCounts is the folder pane's state: which folders there are, how many
@@ -83,6 +113,8 @@ func Row(c domain.Chat, topics []domain.Topic) ChatRow {
 	row := ChatRow{
 		ID:         c.ID,
 		Title:      c.Title,
+		Username:   c.Username,
+		Kind:       kindOf(c),
 		IsUser:     c.Peer.IsUser(),
 		Online:     c.Online,
 		Unread:     c.UnreadCount,

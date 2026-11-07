@@ -35,7 +35,14 @@ type videoPlayer struct {
 	cols    int
 	rows    int
 
-	source     *vmedia.FrameSource
+	// behind is the frame sent under the back id, shown at a later tick once
+	// it is written (#331). inFlight says it is being encoded or written, and
+	// writtenAt when it was written.
+	behind    image.Image
+	inFlight  bool
+	writtenAt time.Time
+
+	source     frameSource
 	playing    bool
 	posFrames  int // frames shown since the loop's start (position = posFrames/videoFPS)
 	gen        int // bumped on (re)open/close to drop stale ticks
@@ -45,6 +52,14 @@ type videoPlayer struct {
 	// left/right paging across the album.
 	album    []components.GroupMediaRef
 	albumIdx int
+}
+
+// frameSource is where the modal takes its frames from: ffmpeg decoding the
+// file (vmedia.FrameSource), or a test's own.
+type frameSource interface {
+	// Next is the next frame; false at the end of the stream.
+	Next() (image.Image, bool)
+	Close() error
 }
 
 // videoFPS is the modal playback rate. videoFrameInterval is the tick period.
@@ -140,7 +155,8 @@ func mustCellW() float64 { w, _ := media.CellPx(); return w }
 func mustCellH() float64 { _, h := media.CellPx(); return h }
 
 // transmitFrameToID writes a Kitty transmit-and-place for a specific id via
-// tea.Raw (approach A: overwriting the same id updates the placement in place).
+// tea.Raw. The photo modal uses it for an image shown once; an animation
+// would blank between frames this way (#331), see handleVideoTick.
 func transmitFrameToID(id uint32, frame image.Image, cols, rows int) tea.Cmd {
 	return func() tea.Msg {
 		seq, err := media.TransmitSeq(id, frame, cols, rows)
@@ -149,6 +165,49 @@ func transmitFrameToID(id uint32, frame image.Image, cols, rows int) tea.Cmd {
 		}
 		return tea.Raw(seq)()
 	}
+}
+
+// encodeFrameCmd encodes a modal frame as a Kitty transmit-and-place under id,
+// for handleVideoFrameEncoded to write.
+func encodeFrameCmd(gen int, id uint32, frame image.Image, cols, rows int) tea.Cmd {
+	return func() tea.Msg {
+		seq, err := media.TransmitFrameSeq(id, frame, cols, rows)
+		if err != nil {
+			// Reported all the same, with nothing to write, so the modal stops
+			// waiting for this frame and takes the next.
+			return videoFrameEncodedMsg{gen: gen, id: id}
+		}
+		return videoFrameEncodedMsg{gen: gen, id: id, seq: seq}
+	}
+}
+
+// handleVideoFrameEncoded writes an encoded frame, then reports it written.
+// A frame that failed to encode is dropped, and so is one encoded for an id
+// that is no longer the back one: it would be written under the id on screen.
+func (m RootModel) handleVideoFrameEncoded(msg videoFrameEncodedMsg) (RootModel, tea.Cmd) {
+	if m.videoPlayer == nil || msg.gen != m.videoPlayer.gen {
+		return m, nil
+	}
+	if msg.seq == "" || msg.id != m.kittyStore.BackIDFor(videoPlayerKey) {
+		m.videoPlayer.inFlight = false
+		return m, nil
+	}
+	seq, gen := msg.seq, msg.gen
+	return m, tea.Sequence(
+		func() tea.Msg { return tea.Raw(seq)() },
+		func() tea.Msg { return videoFrameWrittenMsg{gen: gen} },
+	)
+}
+
+// handleVideoFrameWritten marks the frame written behind ready to be shown.
+func (m RootModel) handleVideoFrameWritten(msg videoFrameWrittenMsg) (RootModel, tea.Cmd) {
+	if m.videoPlayer == nil || msg.gen != m.videoPlayer.gen {
+		return m, nil
+	}
+	m.kittyStore.MarkBackTransmitted(videoPlayerKey, m.videoPlayer.cols)
+	m.videoPlayer.inFlight = false
+	m.videoPlayer.writtenAt = m.clock()
+	return m, nil
 }
 
 // selectedVideoInfo returns the selected message's video duration (seconds) and
@@ -218,12 +277,24 @@ func (m RootModel) handleVideoProbed(msg videoProbedMsg) (RootModel, tea.Cmd) {
 	return m, videoTickCmd(m.videoPlayer.gen)
 }
 
-// handleVideoTick pulls and shows the next frame, then re-arms. At EOF it loops
-// by reopening the source. Pausing stops re-arming (ffmpeg backpressures).
+// handleVideoTick shows the frame written behind on the last tick, sends the
+// next one behind, and re-arms. A frame is never written under the id on
+// screen: Ghostty drops the image under an id as soon as new data for it
+// arrives and draws nothing until that data is decoded, which blanked the
+// modal at every frame (#331). So a frame goes under the back id and is shown
+// a tick later, once the terminal has had that tick to load it. At EOF it
+// loops by reopening the source. Pausing stops re-arming (ffmpeg
+// backpressures).
 func (m RootModel) handleVideoTick(msg videoTickMsg) (RootModel, tea.Cmd) {
 	vp := m.videoPlayer
 	if vp == nil || vp.source == nil || msg.gen != vp.gen || !vp.playing {
 		return m, nil
+	}
+	// The terminal is given a frame's time after the write to decode it.
+	if m.kittyStore.BackReady(videoPlayerKey) && m.clock().Sub(vp.writtenAt) >= videoFrameInterval {
+		m.kittyStore.Swap(videoPlayerKey)
+		vp.frame = vp.behind
+		m.imageCache.Add(videoPlayerKey, vp.frame)
 	}
 	frame, ok := vp.source.Next()
 	if !ok {
@@ -239,11 +310,27 @@ func (m RootModel) handleVideoTick(msg videoTickMsg) (RootModel, tea.Cmd) {
 		vp.posFrames = 0
 		return m, videoTickCmd(vp.gen)
 	}
-	vp.frame = frame
+	// The stream keeps time whether or not this frame is shown.
 	vp.posFrames++
-	m.imageCache.Add(videoPlayerKey, frame)
-	id := m.kittyStore.IDFor(videoPlayerKey)
-	return m, tea.Batch(transmitFrameToID(id, frame, vp.cols, vp.rows), videoTickCmd(vp.gen))
+	// One frame at a time: a large frame takes longer to encode than a tick
+	// lasts, and frames encoded together arrive out of order, so the video
+	// jumped back and forth and kept every core busy. While the back id is
+	// taken, this frame is dropped (#331).
+	if vp.inFlight || m.kittyStore.BackReady(videoPlayerKey) {
+		return m, videoTickCmd(vp.gen)
+	}
+	vp.inFlight = true
+	vp.behind = frame
+	id := m.kittyStore.BackIDFor(videoPlayerKey)
+	return m, tea.Batch(encodeFrameCmd(vp.gen, id, frame, vp.cols, vp.rows), videoTickCmd(vp.gen))
+}
+
+// clock is the time animations are timed by.
+func (m RootModel) clock() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
 }
 
 // videoSpinnerGlyph returns the loading-spinner glyph for the given index,
@@ -276,6 +363,9 @@ func (m RootModel) closeVideoPlayer() RootModel {
 		}
 		m.videoPlayer.gen++
 		m.imageCache.Remove(videoPlayerKey)
+		// A frame written behind belongs to this video: the next one opened
+		// must not swap it in.
+		m.kittyStore.Untransmit(videoPlayerKey)
 		m.videoPlayer = nil
 	}
 	return m

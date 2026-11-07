@@ -1,0 +1,11 @@
+{
+  "name": "tele",
+  "description": "Read and send Telegram messages through the tele command line",
+  "author": {
+    "name": "Vladimir Sorokin"
+  },
+  "homepage": "https://github.com/sorokin-vladimir/tele",
+  "repository": "https://github.com/sorokin-vladimir/tele",
+  "license": "GPL-3.0",
+  "keywords": ["telegram", "cli"]
+}

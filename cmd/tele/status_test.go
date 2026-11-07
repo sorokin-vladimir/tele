@@ -35,8 +35,9 @@ func TestStatusText_SaysHowTheHostIsDoing(t *testing.T) {
 	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.9", PID: 4242, Kept: wire.KeptByService}
 	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "2.0.0-beta.9"}
 	status := wire.HostStatus{
-		Since:   statusNow.Add(-3 * time.Hour),
-		Clients: 2,
+		Since:    statusNow.Add(-3 * time.Hour),
+		Windows:  2,
+		Commands: 1,
 		Account: &wire.AccountStatus{
 			Phase: wire.PhaseReady, User: "ada",
 			Link: wire.LinkUp, LinkSince: statusNow.Add(-time.Hour),
@@ -48,9 +49,26 @@ func TestStatusText_SaysHowTheHostIsDoing(t *testing.T) {
 	text := statusText("/state/tele", host, status, nil, mine, statusNow)
 
 	assertSays(t, text, "tele 2.0.0-beta.9", "pid 4242", "/state/tele", "service", "3h0m0s",
-		"2 windows", "ready", "@ada", "up", "1h0m0s ago", "12s ago", "1 waiting")
+		"Windows: 2, commands: 1", "ready", "@ada", "up", "1h0m0s ago", "12s ago", "1 waiting")
 	if strings.Contains(text, "This tele") {
 		t.Errorf("the same version is not compared:\n%s", text)
+	}
+}
+
+// A host that holds commands back says how far, since that is why a script
+// was refused with exit 7; one that lets them do everything says nothing
+// (#181).
+func TestStatusText_SaysWhenCommandsAreHeldBack(t *testing.T) {
+	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", PID: 7, Kept: wire.KeptByService}
+	mine := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev"}
+	text := func(access wire.CommandAccess) string {
+		return statusText("/s", host, wire.HostStatus{Since: statusNow, AccountCommands: access}, nil, mine, statusNow)
+	}
+
+	assertSays(t, text(wire.CommandsRead), "cli.account_commands is read")
+	assertSays(t, text(wire.CommandsNone), "cli.account_commands is none")
+	if all := text(wire.CommandsAll); strings.Contains(all, "cli.account_commands") {
+		t.Errorf("a host letting commands do everything says so:\n%s", all)
 	}
 }
 
@@ -64,7 +82,21 @@ func TestStatusText_SaysWhatIsNotThereYet(t *testing.T) {
 
 	text := statusText("/s", host, status, nil, host, statusNow)
 
-	assertSays(t, text, "window", "no windows", "logging in", "not connected yet", "Last update: none", "0 waiting")
+	assertSays(t, text, "window", "Windows: 0, commands: 0", "logging in", "not connected yet", "Last update: none", "0 waiting")
+}
+
+// A wait Telegram asked for is said with what is left of it and the call it
+// holds (#212).
+func TestStatusText_SaysAWaitTelegramAskedFor(t *testing.T) {
+	host := wire.Hello{Protocol: wire.ProtocolVersion, Binary: "dev", Kept: wire.KeptByService}
+	status := wire.HostStatus{Since: statusNow, Account: &wire.AccountStatus{
+		Phase: wire.PhaseReady, Link: wire.LinkUp,
+		Throttle: &wire.Throttle{Method: "messages.getHistory", Until: statusNow.Add(32 * time.Second)},
+	}}
+
+	text := statusText("/s", host, status, nil, host, statusNow)
+
+	assertSays(t, text, "Telegram asks to wait: 32s, on messages.getHistory")
 }
 
 // Between one account and the next there is no account to tell of.
@@ -145,7 +177,7 @@ func TestStatus_WarnsOfAnInstalledServiceWithNoHost(t *testing.T) {
 	in := installing(&managed{runs: "/opt/old/tele"}, "", &out)
 	in.versionOf = reportedVersions(nil)
 
-	err := in.status(context.Background(), options{cfgPath: cfg})
+	err := in.status(context.Background(), options{cfgPath: cfg}, false, &bytes.Buffer{})
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != noHostCode {

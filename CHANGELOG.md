@@ -11,6 +11,117 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- A red heart or writing hand reaction from Telegram is drawn as the emoji,
+  not as a text symbol, and picking it again takes it back (#294).
+
+## [2.1.2] - 2026-11-06
+
+### Fixed
+
+- `tele daemon install` over a running service on macOS and Windows waits
+  for the old service to stop before it starts the new one. It used to fail
+  with `Bootstrap failed: 5` on macOS, or start nothing on Windows, and leave
+  the account with no host. `tele daemon uninstall` waits too, so an install
+  right after it works (#327).
+- Inline GIFs and the video player no longer blink or jump back and forth in
+  Ghostty. Each frame replaced the picture on screen, which Ghostty draws as
+  nothing until the new frame is decoded, and large frames were encoded
+  several at a time and arrived out of order. A frame now loads off screen
+  and is shown once it is ready, one frame at a time, and encodes about three
+  times faster (#331).
+
+## [2.1.1] - 2026-11-04
+
+### Fixed
+
+- tele connects again after a restart on networks where some of Telegram's
+  addresses are unreachable. It used to dial a built-in list of addresses
+  instead of the ones Telegram sent at login, and retry them forever (#312).
+
+## [2.1.0] - 2026-11-02
+
+### Added
+
+- `tele chats` prints a chat's `@username` in its own column, between the id
+  and the title, so the name a command takes is on screen. It is never cut
+  short (#328).
+- Logging in starts with a QR code to scan with Telegram on a phone, so a
+  login no longer waits on a code that may not arrive. `p` turns to the phone
+  number, and Esc goes back to the QR code from any step after it (#330).
+- The log records each step of the login: how Telegram sent the code, how it
+  would send the next one, and every refusal with Telegram's own error. Never
+  the number, the code, the password or the QR code's token (#330).
+
+### Fixed
+
+- A reply quoting one contact in a private chat no longer changes colour from
+  one message to the next: a message Telegram sends without its sender now
+  counts as sent by the chat's user (#282, #316).
+
+## [2.0.2] - 2026-10-26
+
+### Fixed
+
+- 2.0.1 was tagged but never released: the documentation tests compared paths
+  with `\` on Windows and failed the release build. Everything listed under
+  2.0.1 ships in this release.
+
+## [2.0.1] - 2026-10-26
+
+### Added
+
+- Commands that act on the account, asking the `tele` that holds it:
+  `tele chats` lists the chats, with `--unread`, `--archived`,
+  `--folder ID` and `--limit`; `tele topics CHAT` lists a forum's topics, with
+  `--limit`; `tele show CHAT`
+  prints its newest messages, with `--topic`, `--limit`, `--before` and
+  `--mark-read`, fetching what the local history lacks. Each prints JSON
+  Lines with `--json`. [docs/cli.md](docs/cli.md) describes them (#181).
+- A command names a chat by its id, its `@username` or `me`. A username that is
+  not among your chats is asked of Telegram (#181).
+- A command waits up to 30 seconds for the account to be ready, and exits 4
+  when it is waiting for someone to log in (#181).
+- `cli.name_width` (20 by default) is how many columns a command gives a name
+  or title before cutting it short: a sender's in `tele show`, a chat's or a
+  topic's in `tele chats` and `tele topics` (#181).
+- `tele send CHAT [TEXT...]` sends a message, from the words given or from
+  stdin, with its markup read as the composer reads it, and waits for it to
+  go. It exits 6 when the message will not go and 75 when it is still queued;
+  `--ref` keeps a retry from sending it twice, and `--no-wait` returns once it
+  is queued (#181).
+- `cli.account_commands` (`all`, `read` or `none`) says what commands may do
+  with your chats, for a script or an AI agent you let run `tele`. What it
+  does not allow exits 7. It is the setting of the `tele` holding the account,
+  and `tele daemon status` shows it (#181).
+- `tele help agents` prints how an AI agent should use the commands, from the
+  binary, so it matches the `tele` installed. A `tele` skill points an agent
+  there: a plugin for Claude Code and GitHub Copilot CLI, from this
+  repository as their marketplace, and `npx skills add sorokin-vladimir/tele`
+  for Codex, Cursor, Gemini CLI and other agents. The README says how for each
+  (#323).
+
+### Changed
+
+- `tele` 2.0.1 and 2.0.0 speak different protocols: a 2.0.1 command or window
+  restarts a 2.0.0 service on its own, and a 2.0.0 window has to be quit before
+  a 2.0.1 one can join the account (#181).
+
+## [2.0.0] - 2026-10-23 — One tele for the account, and a service to keep it
+
+### Upgrading from 1.11
+
+- A second `tele` on the same account no longer exits: it joins the first as
+  another window and shares its connection.
+- Once you are logged in, `tele` offers once to install itself as a service,
+  so the account is held and notifications arrive with no window open. `n`
+  keeps things as they were; `tele daemon install` does it later.
+- Flags take two dashes, and the version and the theme tools are commands:
+  `tele version`, `tele theme check`, `tele theme dump`. `-e` stays.
+- 1.11 and 2.0 cannot hold the same account at once: quit 1.11 before
+  starting 2.0.
+
 ### Added
 
 - `tele daemon` holds the account with no window: it keeps the connection and
@@ -32,6 +143,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   stops and removes it, leaving state and config alone (#182).
 - `tele daemon status` warns when the installed service runs a command that is
   gone, or another version than yours (#182).
+- Once logged in, a `tele` that holds the account asks once whether to install
+  the service: `y` installs it, `n` or Esc leaves it, and the question names
+  `tele daemon install` for later. It is not asked where installing could not
+  succeed, nor when the service is installed already (#208).
 - A window joined to a service waits for it through a restart: the status bar
   says it is reconnecting, Enter keeps the text instead of sending it, and the
   window carries on once the service is back. After thirty seconds, ninety on
@@ -42,20 +157,38 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   is never restarted from outside (#183).
 - A log out, or a banned account, with no window open is told to the desktop
   once, whatever `ui.notifications.desktop` says (#211).
+- `tele daemon status --json` prints the same answer as one JSON object, for
+  scripts. [docs/cli.md](docs/cli.md) describes it, with the exit codes and
+  the rules commands are named by (#213).
+- `-c` is short for `--config` (#213).
 
 ### Changed
 
 - **Breaking:** flags take two dashes. `-version`, `-config`, `-theme-dump`
-  and `-theme-check` no longer work; use `--version`, `--config` and so on.
-  `-e` stays, and is also `--debug` (#208).
-
-- The first step towards tele 2.0, where one process holds the Telegram
-  connection and the terminal interface and the command line attach to it.
-  The interface now reaches the account only the way another process will:
+  and `-theme-check` no longer work; use `--config`, and the commands below
+  for the rest. `-e` stays, and is also `--debug` (#208).
+- The version and the theme tools are commands: `tele version`,
+  `tele theme check [NAME]` and `tele theme dump [NAME]`. `--version`,
+  `--theme-check` and `--theme-dump` still work but are no longer offered.
+  A command line `tele` cannot read exits 2 instead of 1 (#213).
+- `tele daemon status` counts windows and commands apart, and says when
+  Telegram asked `tele` to wait. A command asking `tele` something no longer
+  counts as a window: a log out while one runs is still told to the desktop,
+  and quitting a window does not count it among the windows it would close
+  (#213, #212).
+- Every call to Telegram, from every window joined to the same `tele`, comes
+  out of one budget, spread out ahead of time instead of each call waiting on
+  its own. A flood wait holds only the kind of call that earned it, so a wait
+  on loading history no longer holds sending, and is not asked again until
+  it is over. Work nobody waits on, such as eager full-size photos, yields to
+  what you are doing. A wait something you are waiting on runs into is
+  counted down in the status bar. Telegram does not publish its limits, so
+  the budget is a guess: if `tele` often has you waiting, please report it
+  (#212).
+- The interface reaches the account only the way another process would:
   through one link that outlives a log out, with everything it is told -
   messages, notifications, progress, the login - on one stream in the order
-  it happened. Nothing should look different; anything that does is a bug
-  worth reporting (#309).
+  it happened (#309).
 - The login is followed by tele itself rather than by the screen, so the
   step being asked, a clock that is off and a connection that failed are
   shown to whatever attaches, whenever it attaches. A login answer meant for
@@ -65,12 +198,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Logging out finishes any request still under way as cancelled, instead of
   letting it fail on whatever the log out closed under it. A request to end
   an account that has already ended no longer touches the next one (#309).
-- Groundwork for the next step: everything the interface asks of the account
-  and is told by it can now cross a local socket, after the two sides check
-  that they speak the same protocol (#205, #206, #209).
-- The interface now reaches the account through that socket even when it runs
-  in the same process: every `tele` starts by looking for the one that holds
-  the state directory, and becomes it when there is none (#208).
+- Everything the interface asks of the account and is told by it crosses a
+  local socket, after the two sides check that they speak the same protocol,
+  even when they run in the same process: every `tele` starts by looking for
+  the one that holds the state directory, and becomes it when there is none
+  (#205, #206, #209, #208).
 - A second `tele` on the same account no longer exits. It joins the first as
   another window, sharing its connection, and closes when the first one quits.
   The first one asks before quitting while others are joined to it, whatever
@@ -93,8 +225,6 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   (#315).
 - Two `tele` processes changing settings in one config file at the same
   moment no longer lose one of the changes (#315).
-- A window and the `tele` it joins must both be this beta or later: an
-  earlier 2.0 beta is named and not joined (#315).
 - A window that joined another `tele` logs to `tele-client.log`, with its
   process id on every line (#208).
 - A `tele` that cannot be joined - 1.11, an earlier 2.0 beta, or one speaking
@@ -113,7 +243,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
-- A red heart or writing hand reaction from Telegram is drawn as the emoji, not as a text symbol, and picking it again takes it back (#294).
+- On Windows, the default config file is read from and written to
+  `~\.config\tele\config.yml` in the home directory, rather than under a
+  directory named `~` in whichever directory tele was started from.
 
 ## [1.11.13] - 2026-10-13
 

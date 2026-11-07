@@ -19,6 +19,10 @@ type Client interface {
 	// SearchContacts queries Telegram (contacts.search) for users matching q,
 	// returning matches as domain.Chat with valid peers. Phase 1: users only.
 	SearchContacts(ctx context.Context, q string, limit int) ([]domain.Chat, error)
+	// ResolveUsername asks Telegram (contacts.resolveUsername) which user,
+	// bot or channel holds username, given without the @. One nobody holds
+	// is PeerNotFound (#181).
+	ResolveUsername(ctx context.Context, username string) (domain.Chat, error)
 	GetDialogFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetHistory(ctx context.Context, peer domain.Peer, offsetID int, limit int) ([]domain.Message, error)
 	// GetHistoryAfter fetches messages newer than afterID, oldest first. It is

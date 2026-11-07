@@ -113,7 +113,7 @@ func TestSocket_AStaleSocketIsNoHostAndStaysInTheWay(t *testing.T) {
 	ep := endpoint(t)
 	l, err := ipc.Listen(ep)
 	require.NoError(t, err)
-	l.(*net.UnixListener).SetUnlinkOnClose(false)
+	l.SetUnlinkOnClose(false)
 	require.NoError(t, l.Close())
 
 	_, err = dial(t, ep)

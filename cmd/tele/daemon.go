@@ -81,7 +81,8 @@ func runDaemon(ctx context.Context, o options, kept wire.Keeper) error {
 			return nil // stopped while it waited
 		}
 	} else {
-		reached, err = reachAsDaemon(ctx, appName, cfg.StateDir, r.hello())
+		// It asks the tele in its way who it is, and goes: a command (#213).
+		reached, err = reachAsDaemon(ctx, appName, cfg.StateDir, r.helloAs(wire.KindCommand))
 	}
 	if err != nil {
 		return err

@@ -19,6 +19,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ipc/protocol"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -494,7 +495,11 @@ func (a *Attachment) roundTrip(ctx context.Context, method string, params json.R
 	if !l.await() {
 		return nil, l.why
 	}
-	if err := l.enc.Encode(wire.Request(id, method, params)); err != nil {
+	req := wire.Request(id, method, params)
+	// The context does not cross the socket, so what it says about the call
+	// goes in the frame.
+	req.Background = priority.IsBackground(ctx)
+	if err := l.enc.Encode(req); err != nil {
 		return nil, hostLost()
 	}
 	select {

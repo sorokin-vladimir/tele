@@ -49,7 +49,7 @@ func TestSearchContacts_AnswersWithRows(t *testing.T) {
 	got, err := o.SearchContacts(context.Background(), "ad", 10)
 
 	require.NoError(t, err)
-	assert.Equal(t, []project.ChatRow{{ID: ada.ID, Title: "Ada", IsUser: true}}, got)
+	assert.Equal(t, []project.ChatRow{{ID: ada.ID, Title: "Ada", Kind: project.ChatKindUser, IsUser: true}}, got)
 }
 
 // Search and the forward picker go over every chat, archived ones included,
@@ -78,7 +78,7 @@ func TestChat_AnswersOneRow(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, ok)
-	assert.Equal(t, project.ChatRow{ID: 2, Title: "Bob", IsUser: true, Muted: true}, got)
+	assert.Equal(t, project.ChatRow{ID: 2, Title: "Bob", Kind: project.ChatKindUser, IsUser: true, Muted: true}, got)
 }
 
 // A person with no dialog is not a chat the owner holds, even when it can

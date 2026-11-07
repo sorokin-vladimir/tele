@@ -132,6 +132,7 @@ func (o *Owner) recordFailure(e domain.OutboxEntry, err error) {
 	if uerr := o.outbox.Update(e); uerr != nil {
 		o.log.Error("outbox: could not record a failure", zap.Error(uerr))
 	}
+	o.outboxMoved()
 	o.Refresh()
 }
 
@@ -153,7 +154,7 @@ func (o *Owner) recordSent(e domain.OutboxEntry, sent domain.Message) {
 		// nothing should be re-sent: drop the entry and let the next history
 		// fetch surface the message.
 		o.log.Warn("outbox: send confirmed no message id", zap.String("ref", e.Ref))
-		o.dropEntry(e.Ref)
+		o.dropSent(e)
 		return
 	}
 	e.SentMsgIDs = []int{sent.ID}
@@ -187,19 +188,22 @@ func (o *Owner) dropIfUndelivered(ref string) {
 	}
 	o.log.Warn("outbox: no update for a sent message, dropping the entry",
 		zap.String("ref", ref), zap.Ints("msg_ids", cur.SentMsgIDs))
-	o.dropEntry(ref)
+	o.dropSent(cur)
 	o.Refresh()
 }
 
-// dropEntry removes a row and lets the worker know. The wake is the point: a
+// dropSent takes a send that happened off the queue, remembering its ref and
+// the messages it became, and lets the worker know. The wake is the point: a
 // sent entry stays the head of its chat until it goes, so the next message in
 // that chat is not eligible — and without a nudge the worker would sleep out
-// its idle interval before noticing (#193).
-func (o *Owner) dropEntry(ref string) {
-	if err := o.outbox.Delete(ref); err != nil {
+// its idle interval before noticing (#193). The ref is remembered so that the
+// same one submitted again is not sent again (#181).
+func (o *Owner) dropSent(e domain.OutboxEntry) {
+	if err := o.outbox.Sent(e, time.Now()); err != nil {
 		o.log.Error("outbox: could not drop an entry", zap.Error(err))
 		return
 	}
+	o.outboxMoved()
 	o.wakeOutbox()
 }
 
@@ -226,6 +230,6 @@ func (o *Owner) clearSentOutbox(chatID int64) {
 		if !landed {
 			continue
 		}
-		o.dropEntry(e.Ref)
+		o.dropSent(e)
 	}
 }

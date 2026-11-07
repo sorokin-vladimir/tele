@@ -185,8 +185,12 @@ type MediaRef struct {
 }
 
 type Chat struct {
-	ID              int64
-	Title           string
+	ID    int64
+	Title string
+	// Username is the chat's public username, without the @: a user's, a
+	// bot's or a channel's. Empty when it has none, and always for a basic
+	// group, which cannot have one.
+	Username        string
 	Peer            Peer
 	Pinned          bool
 	UnreadCount     int

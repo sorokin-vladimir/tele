@@ -103,6 +103,19 @@ type PhotosConfig struct {
 // avatar is bounded in size, belongs to a person, and is fetched over and over
 // for the same handful of people, so it gets its own budget rather than
 // competing with scrolled-past video thumbnails (#223, ADR 0007).
+// CLIConfig is how the commands print what they answer with (#181).
+type CLIConfig struct {
+	// NameWidth is how many columns a command gives a name or title before
+	// cutting it short: a sender's in `tele show`, a chat's or topic's in the
+	// listings. One long name would push everything after it to the right.
+	NameWidth int `mapstructure:"name_width"`
+	// AccountCommands is what commands may do with the account: all, read
+	// (list and show, change nothing) or none. It is the host's, since a
+	// command could be given another config, and it stops tele's own command
+	// line only, not a program that reads the state directory (#181).
+	AccountCommands string `mapstructure:"account_commands"`
+}
+
 type AvatarsConfig struct {
 	// DiskCacheSize bounds the on-disk avatar cache in bytes. An avatar is
 	// fetched at Telegram's big size (ADR 0011), around a hundred kilobytes, so
@@ -124,6 +137,7 @@ type Config struct {
 	UI          UIConfig                  `mapstructure:"ui"`
 	Photos      PhotosConfig              `mapstructure:"photos"`
 	Avatars     AvatarsConfig             `mapstructure:"avatars"`
+	CLI         CLIConfig                 `mapstructure:"cli"`
 	Keybindings map[string]map[string]any `mapstructure:"keybindings"`
 
 	// StateDir holds one account's state: the session, the SQLite database and
@@ -186,7 +200,7 @@ func Load(path, defaultStateDir string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
 	setDefaults(v)
-	if err := v.ReadInConfig(); err != nil {
+	if err := readConfig(v, path); err != nil {
 		return nil, err
 	}
 	repairs := repairIllegal(v)
@@ -204,6 +218,19 @@ func Load(path, defaultStateDir string) (*Config, error) {
 	cfg.ThemesDir = filepath.Join(filepath.Dir(path), themesDirName)
 	cfg.resolveTheme()
 	return &cfg, nil
+}
+
+// readConfig reads the file at path into v while no edit is replacing it.
+//
+// A directory the lock file cannot be made in is one no edit can rename a file
+// into either, so the file is read without the lock there rather than refused:
+// a config a system configuration manages is read-only and must still load. A
+// directory that does not exist is ReadInConfig's to report.
+func readConfig(v *viper.Viper, path string) error {
+	if unlock, err := lockEdits(path); err == nil {
+		defer unlock()
+	}
+	return v.ReadInConfig()
 }
 
 // resolveProxy is the one section that can stop a config from loading.
@@ -358,10 +385,11 @@ func (c *Config) resolveState(defaultStateDir string) {
 	c.Telegram.SessionFile = filepath.Join(c.StateDir, "session.json")
 }
 
-// ExpandTilde replaces a leading ~/ with the user home directory. Paths that do
-// not start with ~/ are returned unchanged.
+// ExpandTilde replaces a leading ~/ with the user home directory, and a ~
+// followed by the platform's own separator, which is ~\ on Windows. Other paths
+// are returned unchanged.
 func ExpandTilde(path string) string {
-	if !strings.HasPrefix(path, "~/") {
+	if !strings.HasPrefix(path, "~/") && !strings.HasPrefix(path, "~"+string(filepath.Separator)) {
 		return path
 	}
 	home, err := os.UserHomeDir()

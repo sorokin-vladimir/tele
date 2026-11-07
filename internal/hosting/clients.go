@@ -4,14 +4,18 @@ import (
 	"sync"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
+	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
 )
 
 // Clients is every attachment the host has, each seated at the owner of the
 // moment. The host seats them all at each owner in turn, tells them all what
 // it has to say, and hears any of them ask for the account to end (#208).
 type Clients struct {
-	mu    sync.Mutex
-	all   map[*core.Attachment]chan struct{}
+	mu  sync.Mutex
+	all map[*core.Attachment]chan struct{}
+	// kinds is what kind each client said it is in its hello; one that has
+	// not said yet is neither a window nor a command.
+	kinds map[*core.Attachment]wire.ClientKind
 	owner *core.Owner
 	// ends carries the requests that the account end, from whichever client
 	// made one. One waiting is enough, as it is for a single attachment.
@@ -21,8 +25,9 @@ type Clients struct {
 // NewClients is a host with no clients and no owner yet.
 func NewClients() *Clients {
 	return &Clients{
-		all:  make(map[*core.Attachment]chan struct{}),
-		ends: make(chan core.EndReason, 1),
+		all:   make(map[*core.Attachment]chan struct{}),
+		kinds: make(map[*core.Attachment]wire.ClientKind),
+		ends:  make(chan core.EndReason, 1),
 	}
 }
 
@@ -43,6 +48,8 @@ func (c *Clients) Add(att *core.Attachment) (remove func()) {
 		once.Do(func() {
 			c.mu.Lock()
 			delete(c.all, att)
+			delete(c.kinds, att)
+			c.tellWatched()
 			c.mu.Unlock()
 			close(gone)
 		})
@@ -73,6 +80,16 @@ func (c *Clients) Join(o *core.Owner) {
 	c.owner = o
 	for att := range c.all {
 		att.Join(o)
+	}
+	c.tellWatched()
+}
+
+// tellWatched tells the owner of the moment whether a window is attached,
+// which is when its login issues a QR code (#330). The host is the one to
+// say: only it heard what each client is. Called with c.mu held.
+func (c *Clients) tellWatched() {
+	if c.owner != nil {
+		c.owner.SetWatched(c.countedLocked(wire.KindWindow) > 0)
 	}
 }
 
@@ -106,6 +123,38 @@ func (c *Clients) Count() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.all)
+}
+
+// introduce records that att said in its hello it is a client of kind.
+func (c *Clients) introduce(att *core.Attachment, kind wire.ClientKind) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.all[att]; ok {
+		c.kinds[att] = kind
+		c.tellWatched()
+	}
+}
+
+// Windows is how many of the clients are windows: someone looking.
+func (c *Clients) Windows() int { return c.counted(wire.KindWindow) }
+
+// Commands is how many of the clients are commands.
+func (c *Clients) Commands() int { return c.counted(wire.KindCommand) }
+
+func (c *Clients) counted(kind wire.ClientKind) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.countedLocked(kind)
+}
+
+func (c *Clients) countedLocked(kind wire.ClientKind) int {
+	n := 0
+	for _, k := range c.kinds {
+		if k == kind {
+			n++
+		}
+	}
+	return n
 }
 
 // EndRequests is where the host hears that a client asked for the account to

@@ -29,9 +29,9 @@ func (serviceHost) SetSetting(wire.SetParams) wire.SetResult { return wire.SetRe
 func (serviceHost) Reload() wire.ReloadResult                { return wire.ReloadResult{} }
 func (serviceHost) Status() wire.HostStatus                  { return wire.HostStatus{} }
 func (serviceHost) Uninstall() wire.UninstallResult          { return wire.UninstallResult{} }
-func (s serviceHost) Restart() wire.RestartResult {
-	go s.restart()
-	return wire.RestartResult{}
+func (serviceHost) AccountCommands() wire.CommandAccess      { return wire.CommandsAll }
+func (s serviceHost) Restart() (wire.RestartResult, func()) {
+	return wire.RestartResult{}, func() { go s.restart() }
 }
 
 // serviceManager runs a service over a state directory, and starts it again

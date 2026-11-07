@@ -90,7 +90,7 @@ type limitConn struct {
 	limits []int
 }
 
-func (c *limitConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(int64, string)) error {
+func (c *limitConn) Connect(context.Context, *internaltg.AuthFlow, chan<- struct{}, func(domain.User)) error {
 	return nil
 }
 

@@ -2,6 +2,7 @@ package dial
 
 import (
 	"context"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
@@ -57,6 +58,9 @@ func (a *Attachment) RetryOutbox(ref string) error {
 func (a *Attachment) DiscardOutbox(ref string) error {
 	return do(a, context.Background(), "DiscardOutbox", ref)
 }
+func (a *Attachment) AwaitSend(ctx context.Context, ref string, within time.Duration) (core.SendOutcome, error) {
+	return ask[core.SendOutcome](a, ctx, "AwaitSend", ref, within)
+}
 func (a *Attachment) InvalidateMedia(chatID int64, msgID int, slot domain.MediaSlot) {
 	a.tell("InvalidateMedia", chatID, msgID, slot)
 }
@@ -74,6 +78,10 @@ func (a *Attachment) LogOut(ctx context.Context, tellTelegram bool) error {
 
 func (a *Attachment) AnswerLogin(ctx context.Context, seq int, value string) error {
 	return do(a, ctx, "AnswerLogin", seq, value)
+}
+
+func (a *Attachment) SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error {
+	return do(a, ctx, "SwitchLogin", seq, to)
 }
 
 func (a *Attachment) SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error {
@@ -150,6 +158,14 @@ func (a *Attachment) Topics(ctx context.Context, chatID int64) ([]project.TopicR
 
 func (a *Attachment) Chat(ctx context.Context, chatID int64) (project.ChatRow, bool, error) {
 	return ask2[project.ChatRow, bool](a, ctx, "Chat", chatID)
+}
+
+func (a *Attachment) ResolveChat(ctx context.Context, name core.ChatName) (project.ChatRow, error) {
+	return ask[project.ChatRow](a, ctx, "ResolveChat", name)
+}
+
+func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
+	return ask[[]domain.Message](a, ctx, "History", h, before, limit)
 }
 
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {

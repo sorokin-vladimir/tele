@@ -2,8 +2,10 @@ package media
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"image"
+	"image/png"
 	"math/rand/v2"
 	"strings"
 
@@ -25,7 +27,13 @@ const maxKittyID = 0xFFFFFF
 type KittyStore struct {
 	idByPhoto   map[int64]uint32
 	colsByPhoto map[int64]int // cols the current placement was transmitted at
-	next        uint32
+	// backByPhoto is the second id of an animated photo: its next frame is
+	// transmitted there, off screen, and Swap puts it on screen (#331).
+	backByPhoto map[int64]uint32
+	// backCols is the width a frame was written behind at, for photos that
+	// have one waiting to be swapped in.
+	backCols map[int64]int
+	next     uint32
 }
 
 // NewKittyStore returns an empty store. Numbering starts at a random point in
@@ -38,22 +46,71 @@ func NewKittyStore() *KittyStore {
 	return &KittyStore{
 		idByPhoto:   make(map[int64]uint32),
 		colsByPhoto: make(map[int64]int),
+		backByPhoto: make(map[int64]uint32),
+		backCols:    make(map[int64]int),
 		next:        1 + rand.Uint32N(maxKittyID),
 	}
 }
 
 // IDFor returns a stable Kitty image id for a photo, assigning one on first use.
 // Ids are kept within 24 bits so they fit the placeholder foreground encoding.
+// It is the id the photo is drawn under; an animated photo's changes at Swap.
 func (s *KittyStore) IDFor(photoID int64) uint32 {
 	if id, ok := s.idByPhoto[photoID]; ok {
 		return id
 	}
+	id := s.newID()
+	s.idByPhoto[photoID] = id
+	return id
+}
+
+// BackIDFor returns the id an animated photo's next frame is transmitted
+// under: never the one it is drawn under, so the frame on screen stays there
+// while the next one loads (#331).
+func (s *KittyStore) BackIDFor(photoID int64) uint32 {
+	if id, ok := s.backByPhoto[photoID]; ok {
+		return id
+	}
+	s.IDFor(photoID)
+	id := s.newID()
+	s.backByPhoto[photoID] = id
+	return id
+}
+
+// MarkBackTransmitted records that an animated photo's next frame is written
+// under its back id, at cols.
+func (s *KittyStore) MarkBackTransmitted(photoID int64, cols int) {
+	s.backCols[photoID] = cols
+}
+
+// BackReady reports whether an animated photo has a frame written behind,
+// waiting for Swap.
+func (s *KittyStore) BackReady(photoID int64) bool {
+	_, ok := s.backCols[photoID]
+	return ok
+}
+
+// Swap draws an animated photo under its back id from now on, with the frame
+// written there, and leaves the id it was drawn under for its next frame. With
+// no frame written behind it does nothing: it would draw an empty id.
+func (s *KittyStore) Swap(photoID int64) {
+	cols, ok := s.backCols[photoID]
+	if !ok {
+		return
+	}
+	back := s.BackIDFor(photoID)
+	s.backByPhoto[photoID] = s.idByPhoto[photoID]
+	s.idByPhoto[photoID] = back
+	s.colsByPhoto[photoID] = cols
+	delete(s.backCols, photoID)
+}
+
+func (s *KittyStore) newID() uint32 {
 	id := s.next
 	s.next++
 	if s.next > maxKittyID {
 		s.next = 1 // wrap; a TUI session will not hold 16M distinct photos
 	}
-	s.idByPhoto[photoID] = id
 	return id
 }
 
@@ -80,6 +137,7 @@ func (s *KittyStore) MarkTransmitted(photoID int64, cols int) {
 // the live placements (DeleteLiveSeq) so images re-transmit on demand.
 func (s *KittyStore) Clear() {
 	clear(s.colsByPhoto)
+	clear(s.backCols)
 }
 
 // DeleteLiveSeq returns the concatenated delete-by-id sequences (d=I, freeing
@@ -93,14 +151,19 @@ func (s *KittyStore) DeleteLiveSeq(photoIDs []int64) string {
 		if id, ok := s.idByPhoto[pid]; ok {
 			b.WriteString(DeleteSeq(id))
 		}
+		if id, ok := s.backByPhoto[pid]; ok {
+			b.WriteString(DeleteSeq(id))
+		}
 	}
 	return b.String()
 }
 
 // Untransmit marks a single photo's placement as gone (after deleting it from
 // the terminal), so it re-transmits on demand. The id mapping is kept stable.
+// A frame written behind is gone with it.
 func (s *KittyStore) Untransmit(photoID int64) {
 	delete(s.colsByPhoto, photoID)
+	delete(s.backCols, photoID)
 }
 
 // DeleteSeq returns the Kitty sequence that deletes a single image by id and
@@ -167,7 +230,55 @@ func scaleForTransmit(img image.Image, cols int) image.Image {
 func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
 	img = scaleForTransmit(img, cols)
 	var buf bytes.Buffer
-	opts := &kitty.Options{
+	if err := kitty.EncodeGraphics(&buf, img, transmitOptions(id, cols, rows)); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// TransmitFrameSeq is TransmitSeq for a frame of an animation. Its PNG is
+// encoded for speed rather than size: at the default level a large frame took
+// longer to encode than a frame lasts, about three times as long as this,
+// for a fifth less data (#331). The kitty package offers no level, so the
+// chunks are written here, the way it writes them.
+func TransmitFrameSeq(id uint32, img image.Image, cols, rows int) (string, error) {
+	img = scaleForTransmit(img, cols)
+	var data bytes.Buffer
+	enc := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := enc.Encode(&data, img); err != nil {
+		return "", err
+	}
+	o := transmitOptions(id, cols, rows)
+	payload := base64.StdEncoding.EncodeToString(data.Bytes())
+	var b strings.Builder
+	for start := 0; start < len(payload) || start == 0; start += kitty.MaxChunkSize {
+		end := min(start+kitty.MaxChunkSize, len(payload))
+		first, last := start == 0, end == len(payload)
+		var keys []string
+		if first {
+			keys = o.Options()
+		} else {
+			keys = []string{fmt.Sprintf("q=%d", o.Quite)}
+		}
+		switch {
+		case first && last: // one chunk carries no m=
+		case last:
+			keys = append(keys, "m=0")
+		default:
+			keys = append(keys, "m=1")
+		}
+		b.WriteString(ansi.KittyGraphics([]byte(payload[start:end]), keys...))
+		if last {
+			break
+		}
+	}
+	return b.String(), nil
+}
+
+// transmitOptions transmits an image as PNG under id and places it virtually
+// over cols×rows cells, quietly.
+func transmitOptions(id uint32, cols, rows int) *kitty.Options {
+	return &kitty.Options{
 		Action: kitty.TransmitAndPut,
 		ID:     int(id),
 		// PNG is self-describing: the terminal reads dimensions from the data,
@@ -180,10 +291,6 @@ func TransmitSeq(id uint32, img image.Image, cols, rows int) (string, error) {
 		Rows:             rows,
 		Quite:            2,
 	}
-	if err := kitty.EncodeGraphics(&buf, img, opts); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
 
 // KittyRenderer emits Unicode-placeholder grids that reference images already
@@ -207,11 +314,12 @@ func (r *KittyRenderer) Render(photoID int64, img image.Image, cols int) []strin
 	if !r.store.Ready(photoID, cols) {
 		return nil
 	}
-	k := blockKey{photoID: photoID, cols: cols}
+	id := r.store.IDFor(photoID)
+	k := blockKey{photoID: photoID, cols: cols, kittyID: id}
 	return r.cache.get(k, func() []string {
 		b := img.Bounds()
 		rows := PhotoRows(b.Dx(), b.Dy(), cols, CellAspect())
-		return placeholderLines(r.store.IDFor(photoID), cols, rows)
+		return placeholderLines(id, cols, rows)
 	})
 }
 

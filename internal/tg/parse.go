@@ -110,6 +110,9 @@ func parseHistory(result tg.MessagesMessagesClass, chatID int64) []domain.Messag
 			if msg.SenderName == "" && msg.SenderID == 0 && !msg.IsOut {
 				// nil FromID: sender is the chat peer (private chat → user)
 				// or the chat entity itself (channel/group anonymous post)
+				if isPeerUser(raw) {
+					msg.SenderID = chatID
+				}
 				if name := nameMap[chatID]; name != "" {
 					msg.SenderName = name
 				} else {

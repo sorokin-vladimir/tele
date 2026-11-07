@@ -13,6 +13,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/config"
 	"github.com/sorokin-vladimir/tele/internal/core"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/proxy"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
@@ -28,7 +29,7 @@ type heldConnection struct {
 }
 
 func (c *heldConnection) Connect(ctx context.Context, _ *internaltg.AuthFlow,
-	_ chan<- struct{}, _ func(int64, string)) error {
+	_ chan<- struct{}, _ func(domain.User)) error {
 	<-ctx.Done()
 	c.ended.Store(true)
 	return ctx.Err()

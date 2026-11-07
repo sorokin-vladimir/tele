@@ -435,6 +435,28 @@ func TestParseHistory_ChannelPost_SenderNameIsChannelTitle(t *testing.T) {
 	msgs := parseHistory(raw, 500)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "Tech News", msgs[0].SenderName)
+	assert.Equal(t, int64(0), msgs[0].SenderID)
+}
+
+func TestParseHistory_GroupChatMessage_SenderNameIsGroupTitle(t *testing.T) {
+	now := time.Now()
+	raw := &tg.MessagesMessages{
+		Messages: []tg.MessageClass{
+			&tg.Message{
+				ID:      1,
+				PeerID:  &tg.PeerChat{ChatID: 200},
+				Message: "group message",
+				Date:    int(now.Unix()),
+			},
+		},
+		Chats: []tg.ChatClass{
+			&tg.Chat{ID: 200, Title: "Team Chat"},
+		},
+	}
+	msgs := parseHistory(raw, 200)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "Team Chat", msgs[0].SenderName)
+	assert.Equal(t, int64(0), msgs[0].SenderID)
 }
 
 func TestParseHistory_ChannelPost_OutgoingNotOverridden(t *testing.T) {
@@ -479,6 +501,7 @@ func TestParseHistory_PrivateChat_IncomingNilFromID_SenderNameIsPeerName(t *test
 	msgs := parseHistory(raw, 42)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "Alice", msgs[0].SenderName)
+	assert.Equal(t, int64(42), msgs[0].SenderID)
 }
 
 func TestParseHistory_UserMessage_SenderNameFromUsers(t *testing.T) {

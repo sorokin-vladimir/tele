@@ -52,7 +52,7 @@ nfpms:
     vendor: sorokin-vladimir
     homepage: https://github.com/sorokin-vladimir/tele
     maintainer: "Vladimir Sorokin <v.sorokin@hey.com>"
-    description: TUI Telegram client for the terminal.
+    description: "Telegram client for the terminal: a keyboard-first TUI and a CLI."
     license: GPL-3.0-only
     formats: [deb, rpm, apk]
     file_name_template: "{{ .ConventionalFileName }}"
@@ -87,7 +87,7 @@ sboms:
 #   - name:
 #     ids: [tarballs]
 #     homepage: https://github.com/sorokin-vladimir/tele
-#     description: TUI Telegram client for the terminal.
+#     description: "Telegram client for the terminal: a keyboard-first TUI and a CLI."
 #     maintainers: ["Vladimir Sorokin <v.sorokin@hey.com>"]
 #     license: GPL-3.0-only
 #     private_key: "{{ .Env.AUR_KEY }}"
@@ -110,7 +110,7 @@ scoops:
       name: scoop-tele
       token: "{{ .Env.SCOOP_WINGET_TOKEN }}"
     homepage: https://github.com/sorokin-vladimir/tele
-    description: TUI Telegram client for the terminal.
+    description: "Telegram client for the terminal: a keyboard-first TUI and a CLI."
     license: GPL-3.0-only
     # Publish only on stable tags AND once SCOOP_WINGET_TOKEN is configured.
     skip_upload: '{{ if .Prerelease }}true{{ else if eq (index .Env "SCOOP_WINGET_TOKEN") "" }}true{{ else }}false{{ end }}'
@@ -123,7 +123,7 @@ winget:
     package_identifier: sorokin-vladimir.tele
     license: GPL-3.0-only
     homepage: https://github.com/sorokin-vladimir/tele
-    short_description: TUI Telegram client for the terminal.
+    short_description: "Telegram client for the terminal: a keyboard-first TUI and a CLI."
     repository:
       owner: sorokin-vladimir
       name: winget-pkgs
@@ -143,7 +143,7 @@ winget:
 snapcrafts:
   - name: tele
     publish: true
-    summary: TUI Telegram client for the terminal.
+    summary: "Telegram client for the terminal: a keyboard-first TUI and a CLI."
     description: |
       tele is a terminal user-interface client for Telegram. Browse chats, read
       and send messages, and view media without leaving the terminal.

@@ -67,7 +67,7 @@ func TestUnsentCount_CountsWhatHasNotGoneOut(t *testing.T) {
 // both of which only the owner knows.
 func TestLogOutPreview_NamesTheAccountAndWhatGoesWithIt(t *testing.T) {
 	o, _, _ := newTestOwner(t)
-	o.onAuth(42, "ada")
+	o.onAuth(domain.User{ID: 42, Username: "ada"})
 
 	p := o.LogOutPreview()
 
@@ -77,7 +77,7 @@ func TestLogOutPreview_NamesTheAccountAndWhatGoesWithIt(t *testing.T) {
 
 func TestLogOutPreview_AnAccountWithNoUsername(t *testing.T) {
 	o, _, _ := newTestOwner(t)
-	o.onAuth(42, "")
+	o.onAuth(domain.User{ID: 42})
 
 	assert.Equal(t, "this account", o.LogOutPreview().Name)
 }

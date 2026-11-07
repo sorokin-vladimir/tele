@@ -10,6 +10,7 @@ TODO.md
 .opencode.json
 .windsurfrules
 AGENTS.md
+!cmd/tele/agents.md
 CLAUDE.md
 CONTEXT.md
 GEMINI.md

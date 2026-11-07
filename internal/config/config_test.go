@@ -301,6 +301,9 @@ func TestExpandTilde(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, filepath.Join(home, "x", "y"), config.ExpandTilde("~/x/y"))
+	// The platform's own separator after the tilde is a home directory too:
+	// on Windows that is how the default config path is written.
+	assert.Equal(t, filepath.Join(home, "x", "y"), config.ExpandTilde(filepath.Join("~", "x", "y")))
 	assert.Equal(t, "/absolute/path", config.ExpandTilde("/absolute/path"))
 	assert.Equal(t, "relative/path", config.ExpandTilde("relative/path"))
 }

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -305,6 +306,10 @@ func (a *Attachment) AnswerLogin(ctx context.Context, seq int, value string) err
 	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.AnswerLogin(ctx, seq, value) })
 }
 
+func (a *Attachment) SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error {
+	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.SwitchLogin(ctx, seq, to) })
+}
+
 func (a *Attachment) SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) error {
 	return do(a, ctx, func(ctx context.Context, s *seat) error { return s.SetMuted(ctx, h, muted) })
 }
@@ -373,6 +378,10 @@ func (a *Attachment) DiscardOutbox(ref string) error {
 	return do(a, context.Background(), func(_ context.Context, s *seat) error { return s.DiscardOutbox(ref) })
 }
 
+func (a *Attachment) AwaitSend(ctx context.Context, ref string, within time.Duration) (SendOutcome, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (SendOutcome, error) { return s.AwaitSend(ctx, ref, within) })
+}
+
 func (a *Attachment) SearchContacts(ctx context.Context, q string, limit int) ([]project.ChatRow, error) {
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]project.ChatRow, error) { return s.SearchContacts(ctx, q, limit) })
 }
@@ -395,6 +404,14 @@ func (a *Attachment) Chat(ctx context.Context, chatID int64) (project.ChatRow, b
 		return found{row, ok}, err
 	})
 	return f.row, f.ok, err
+}
+
+func (a *Attachment) ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (project.ChatRow, error) { return s.ResolveChat(ctx, name) })
+}
+
+func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) { return s.History(ctx, h, before, limit) })
 }
 
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {

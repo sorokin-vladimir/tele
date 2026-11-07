@@ -17,6 +17,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ipc/protocol"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -27,22 +28,38 @@ type Attachment interface {
 	core.Surface
 	SubscribeAs(id project.SubID, w project.Window) error
 	Stream() <-chan any
+	// Tell puts ev on the client's stream, for what the host says to it
+	// rather than what an owner does.
+	Tell(ev any)
 	Detach()
 }
 
 var _ Attachment = (*core.Attachment)(nil)
 
+// Greeter is an attachment that wants the client's hello: whoever serves it
+// learns from it what kind of client is on the other end (#213).
+type Greeter interface {
+	Greeted(wire.Hello)
+}
+
 // Host is the host's own end of a connection: what it says of itself, and the
 // calls about it rather than about an account, answered with no owner seated
 // as well (#315).
+//
+// Restart answers, and says what to do once the answer is written: a host
+// that stopped first would leave the client that asked without it. What it
+// says must not block, since the connection is not done until it returns.
 type Host interface {
 	Hello() wire.Hello
 	Settings() wire.HostSettings
 	SetSetting(wire.SetParams) wire.SetResult
 	Reload() wire.ReloadResult
 	Status() wire.HostStatus
-	Restart() wire.RestartResult
+	Restart() (wire.RestartResult, func())
 	Uninstall() wire.UninstallResult
+	// AccountCommands is cli.account_commands as the host holds it now: what
+	// a command may do with the account (#181).
+	AccountCommands() wire.CommandAccess
 }
 
 // Conn serves att over conn until the client goes, ctx ends, or one side says
@@ -111,6 +128,10 @@ func (c *served) greet(dec *wire.Decoder, host wire.Hello) error {
 	if err := json.Unmarshal(f.Params, &client); err != nil {
 		return fmt.Errorf("%w: hello: %v", wire.ErrProtocol, err)
 	}
+	c.kind = client.Kind
+	if g, ok := c.att.(Greeter); ok {
+		g.Greeted(client)
+	}
 	raw, err := json.Marshal(host)
 	if err != nil {
 		return err
@@ -136,6 +157,9 @@ type served struct {
 	att  Attachment
 	host Host
 	enc  *wire.Encoder
+	// kind is what the client said it is in its hello. A command is held to
+	// cli.account_commands and never changes the host's settings (#181).
+	kind wire.ClientKind
 
 	mu sync.Mutex
 	// calls holds what calls off each call still running, by request id.
@@ -206,7 +230,7 @@ func (c *served) read(ctx context.Context, dec *wire.Decoder, running *sync.Wait
 
 // request makes the call f asks for.
 func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGroup) error {
-	if answer, ok, err := c.hostCall(f); ok {
+	if answer, then, ok, err := c.hostCall(f); ok {
 		if err != nil {
 			return err
 		}
@@ -215,6 +239,9 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 			return c.fail(f.ID, err)
 		}
 		_ = c.enc.Encode(wire.Reply(f.ID, raw))
+		if then != nil {
+			then()
+		}
 		return nil
 	}
 	call, ok := protocol.Calls[f.Method]
@@ -223,6 +250,18 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 			Kind: telerr.Internal, Op: f.Method, Detail: "the host has no such call",
 		}))
 		return nil
+	}
+	if access := c.host.AccountCommands(); c.kind == wire.KindCommand && !commandMay(access, f.Method) {
+		err := &telerr.Error{
+			Kind: telerr.CommandsOff, Op: f.Method,
+			Detail: fmt.Sprintf("cli.account_commands is %s for the tele holding the account", access),
+		}
+		if f.Method == protocol.MethodSubscribe {
+			// Nobody waits on a subscription's reply: its first delta is the
+			// answer, so the refusal is told where that would have come.
+			c.att.Tell(core.HostFailure{Err: err})
+		}
+		return c.fail(f.ID, err)
 	}
 	args, err := call.Args(f.Params)
 	if err != nil {
@@ -243,6 +282,9 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 		return c.reply(f.ID, call, outs)
 	}
 	callCtx, stop := context.WithCancel(ctx)
+	if f.Background {
+		callCtx = priority.InBackground(callCtx)
+	}
 	c.mu.Lock()
 	c.calls[f.ID] = stop
 	c.mu.Unlock()
@@ -263,30 +305,57 @@ func (c *served) request(ctx context.Context, f wire.Frame, running *sync.WaitGr
 	return nil
 }
 
+// commandMay reports whether a command may make the call method under access:
+// any with all, a read with read, none with none. A value the host does not
+// know lets nothing through.
+func commandMay(access wire.CommandAccess, method string) bool {
+	switch access {
+	case wire.CommandsAll:
+		return true
+	case wire.CommandsRead:
+		_, read := protocol.Reads[method]
+		return read
+	default:
+		return false
+	}
+}
+
 // hostCall makes f when it is a call about the host, and reports whether it
-// was. These run on the reading goroutine, in the order they were asked: each
-// is a read or a write of one file, and a set followed by a reload must find
-// the set done.
-func (c *served) hostCall(f wire.Frame) (answer any, ok bool, err error) {
+// was, and what to do once it is answered. These run on the reading
+// goroutine, in the order they were asked: each is a read or a write of one
+// file, and a set followed by a reload must find the set done.
+func (c *served) hostCall(f wire.Frame) (answer any, then func(), ok bool, err error) {
+	// A command never changes the host's settings: one that could would turn
+	// cli.account_commands back on (#181).
+	const commandsDoNotSet = "A command does not change the settings of the tele holding the account."
+	if c.kind == wire.KindCommand {
+		switch f.Method {
+		case wire.MethodSet:
+			return wire.SetResult{Refused: commandsDoNotSet}, nil, true, nil
+		case wire.MethodReload:
+			return wire.ReloadResult{Failed: commandsDoNotSet}, nil, true, nil
+		}
+	}
 	switch f.Method {
 	case wire.MethodSettings:
-		return c.host.Settings(), true, nil
+		return c.host.Settings(), nil, true, nil
 	case wire.MethodReload:
-		return c.host.Reload(), true, nil
+		return c.host.Reload(), nil, true, nil
 	case wire.MethodStatus:
-		return c.host.Status(), true, nil
+		return c.host.Status(), nil, true, nil
 	case wire.MethodRestart:
-		return c.host.Restart(), true, nil
+		answer, then := c.host.Restart()
+		return answer, then, true, nil
 	case wire.MethodUninstall:
-		return c.host.Uninstall(), true, nil
+		return c.host.Uninstall(), nil, true, nil
 	case wire.MethodSet:
 		var p wire.SetParams
 		if err := json.Unmarshal(f.Params, &p); err != nil || p.Key == "" {
-			return nil, true, fmt.Errorf("%w: %s names no setting", wire.ErrProtocol, f.Method)
+			return nil, nil, true, fmt.Errorf("%w: %s names no setting", wire.ErrProtocol, f.Method)
 		}
-		return c.host.SetSetting(p), true, nil
+		return c.host.SetSetting(p), nil, true, nil
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }
 
 // reply answers request id with what call answered. A reply that cannot be

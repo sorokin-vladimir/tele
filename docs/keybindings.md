@@ -12,12 +12,11 @@
 | `,`                       | Settings        |
 | `g L`                     | Log out         |
 
-`g L` asks first, naming what goes with the account: the session, the local
-history, cached media and avatars, and any messages still waiting to be sent.
+`g L` asks first, naming what goes with the account: the session, the local history, cached media and avatars, and any messages still waiting to be sent.
 
-On the login screen only `Ctrl+Q` and `Ctrl+C` quit, at every step, including
-while tele is still connecting. A bare `q` is typed into the field. A quit you
-rebind works there only if it uses `ctrl` or `alt`.
+On the login screen only `Ctrl+Q` and `Ctrl+C` quit, at every step, including while tele is still connecting.
+A bare `q` is typed into the field.
+A quit you rebind works there only if it uses `ctrl` or `alt`.
 
 ## Chat list
 
@@ -33,8 +32,8 @@ rebind works there only if it uses `ctrl` or `alt`.
 
 ## Forum topics
 
-A forum's topics fill the chat list pane while it is open. The chat list keys
-move through them.
+A forum's topics fill the chat list pane while it is open.
+The chat list keys move through them.
 
 | Key       | Action                                   |
 | --------- | ---------------------------------------- |
@@ -62,18 +61,16 @@ move through them.
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
 | `g`       | Jump to original (for replies) |
-| `o`       | Open / view media - photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
+| `o`       | Open / view media: photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
 | `P`       | Profile of the selected message's author, or of the person in a private chat |
 | `Space`   | Context menu                   |
 | `Enter`   | Retry a failed send (when one is selected) |
 
-A message that could not be sent stays in the chat, marked `✕` in its bottom
-border; selecting it names the reason in the status bar. `Enter` queues it
-again, and `Space` opens a short menu offering Retry and Discard. `x` is
-unaffected - it still clears a staged reply, edit or upload, never a queued
-send.
+A message that could not be sent stays in the chat, marked `✕` in its bottom border; selecting it names the reason in the status bar.
+`Enter` queues it again, and `Space` opens a short menu offering Retry and Discard.
+`x` is unaffected: it still clears a staged reply, edit or upload, never a queued send.
 
 ## Compose (insert mode)
 
@@ -105,16 +102,14 @@ send.
 | `y`     | Copy the username                            |
 | `Esc`   | Close                                       |
 
-The overlay opens on whatever is known at once and fills in the rest when
-Telegram answers. Mute is absent for someone you have never messaged: there is
-no chat to mute, and a guessed state would be worse than none.
+The overlay opens on whatever is known at once and fills in the rest when Telegram answers.
+Mute is absent for someone you have never messaged: there is no chat to mute, and a guessed state would be worse than none.
 
 ## Customizing keybindings
 
-Override default keys in the `keybindings:` section of
-`~/.config/tele/config.yml`. The generated config already lists **every action
-with its current default keys**, commented out - just uncomment a line and
-change the key(s). Bindings are grouped by **context**, then by **action**:
+Override default keys in the `keybindings:` section of `~/.config/tele/config.yml`.
+The generated config already lists **every action with its current default keys**, commented out: uncomment a line and change the key(s).
+Bindings are grouped by **context**, then by **action**:
 
 ```yaml
 keybindings:
@@ -125,22 +120,17 @@ keybindings:
     confirm: "l"
 ```
 
-- **Replace semantics:** the keys you list become the _only_ keys for that
-  action in that context. Actions you don't mention keep their defaults.
-- **Chords:** a multi-key sequence is written as space-separated key tokens -
-  `"g g"` means press `g` then `g`. Tokens use the terminal key names
-  (`ctrl+d`, `enter`, `esc`, `space`, `up`, ...).
-- **Conflicts** (an unknown action/context, an empty key, a key reused for two
-  actions, or a single key that shadows a chord) are logged as warnings on
-  startup and skipped or applied last-wins; a bad section never crashes the app.
+- **Replace semantics:** the keys you list become the _only_ keys for that action in that context.
+  Actions you don't mention keep their defaults.
+- **Chords:** a multi-key sequence is written as space-separated key tokens: `"g g"` means press `g` then `g`.
+  Tokens use the terminal key names (`ctrl+d`, `enter`, `esc`, `space`, `up`, ...).
+- **Conflicts** (an unknown action/context, an empty key, a key reused for two actions, or a single key that shadows a chord) are logged as warnings on startup and skipped or applied last-wins; a bad section never crashes the app.
 
-**Contexts:** `global`, `folders`, `chatlist`, `chat`, `composer`, `search`,
-`context_menu`, `delete_submenu`, `chat_menu`, `folder_submenu`, `filepicker`.
+**Contexts:** `global`, `folders`, `chatlist`, `chat`, `composer`, `search`, `context_menu`, `delete_submenu`, `chat_menu`, `folder_submenu`, `filepicker`.
 
 ## Configurable actions
 
-These are the action names usable as YAML keys in the `keybindings:` section
-(grouped by `context`).
+These are the action names usable as YAML keys in the `keybindings:` section (grouped by `context`).
 
 ### Focus & app - context `global`
 
@@ -154,9 +144,7 @@ These are the action names usable as YAML keys in the `keybindings:` section
 | `quit`          | Quit the app               |
 | `log_out`       | Log out of this account    |
 
-> With `ui.confirm_quit` on, every quit binding asks first: `y` or `enter`
-> quits, `n`, `esc` or `q` cancels, and a modifier quit binding (`ctrl+c`,
-> `ctrl+q`) pressed again quits without asking.
+> With `ui.confirm_quit` on, every quit binding asks first: `y` or `enter` quits, `n`, `esc` or `q` cancels, and a modifier quit binding (`ctrl+c`, `ctrl+q`) pressed again quits without asking.
 
 ### Navigation & scrolling - contexts `folders`, `chatlist`, `chat`, `context_menu`, `delete_submenu`, `search`
 
@@ -180,7 +168,7 @@ These are the action names usable as YAML keys in the `keybindings:` section
 | `normal`            | Leave insert mode / close the chat       |
 | `search`            | Open chat search                         |
 | `open_context_menu` | Open the message context menu            |
-| `open_in_viewer`    | Open / view the selected media - photo in the OS viewer, video inline or in the system player |
+| `open_in_viewer`    | Open / view the selected media: photo in the OS viewer, video inline or in the system player |
 | `open_external`     | Open the selected video in the external player |
 | `play_voice`        | Play the selected voice message in-app    |
 | `reply`             | Reply to the selected message            |
@@ -245,11 +233,8 @@ These are the action names usable as YAML keys in the `keybindings:` section
 | `confirm` | Pick the highlighted file         |
 | `cancel`  | Dismiss the file picker           |
 
-> Key tokens use the terminal names: letters/digits as-is (`r`, `G`, `2`),
-> modifiers like `ctrl+d`, and named keys `enter`, `esc`, `space`, `up`, `down`,
-> `left`, `right`.
+> Key tokens use the terminal names: letters/digits as-is (`r`, `G`, `2`), modifiers like `ctrl+d`, and named keys `enter`, `esc`, `space`, `up`, `down`, `left`, `right`.
 
-> **Keyboard layout:** letter bindings also fire on the **same physical key**
-> under a Russian (ЙЦУКЕН) layout - e.g. `r`/Reply works whether the key types
-> `r` or `к`. Bindings are still written with Latin keys; no duplication needed.
+> **Keyboard layout:** letter bindings also fire on the **same physical key** under a Russian (ЙЦУКЕН) layout: `r`/Reply works whether the key types `r` or `к`.
+> Bindings are still written with Latin keys; no duplication needed.
 > (Only the Russian layout is mapped today.)

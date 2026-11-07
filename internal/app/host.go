@@ -120,13 +120,13 @@ const (
 	bannedNotice    = "Telegram has banned the account tele was logged in to, and tele no longer delivers messages."
 )
 
-// tellNobodyWatching raises a desktop notification saying body when no client
-// is attached to say it instead. It is not a notification about a chat: it
-// goes through no notification decision, and the desktop sink's setting does
-// not reach it, since it is the one way to learn the service stopped
-// delivering (#211).
+// tellNobodyWatching raises a desktop notification saying body when no window
+// is attached to say it instead; a command running is not a person looking
+// (#213). It is not a notification about a chat: it goes through no
+// notification decision, and the desktop sink's setting does not reach it,
+// since it is the one way to learn the service stopped delivering (#211).
 func (h *Host) tellNobodyWatching(body string) {
-	if h.clients.Count() > 0 {
+	if h.clients.Windows() > 0 {
 		return
 	}
 	if err := h.notifier.Notify("tele", body); err != nil {

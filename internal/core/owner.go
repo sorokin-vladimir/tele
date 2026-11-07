@@ -23,7 +23,7 @@ import (
 // two so the owner can be built over a test double.
 type Connection interface {
 	internaltg.Client
-	Connect(ctx context.Context, af *internaltg.AuthFlow, readyCh chan<- struct{}, onAuth func(int64, string)) error
+	Connect(ctx context.Context, af *internaltg.AuthFlow, readyCh chan<- struct{}, onAuth func(domain.User)) error
 }
 
 // Owner holds the Telegram connection and everything that may only exist once
@@ -117,6 +117,10 @@ type Owner struct {
 	// worker goroutine, read by whichever goroutine serves the discard.
 	uploadMu      sync.Mutex
 	uploadCancels map[string]context.CancelFunc
+	// outboxMove is closed when a send goes, fails, is put off or is
+	// discarded, for whoever waits on one (#181). Nil until somebody does.
+	outboxMoveMu sync.Mutex
+	outboxMove   chan struct{}
 }
 
 func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection, n Notifier) *Owner {
@@ -125,7 +129,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		state:         st,
 		client:        client,
 		notifier:      n,
-		authFlow:      internaltg.NewAuthFlow(),
+		authFlow:      internaltg.NewAuthFlow(log),
 		clients:       make(map[clientID]*seat),
 		now:           time.Now,
 		readyCh:       make(chan struct{}),
@@ -193,11 +197,11 @@ func (o *Owner) SetConfig(cfg *config.Config) {
 // can record the self identity. Set before Start.
 func (o *Owner) SetOnAuth(fn func(userID int64, username string)) { o.onAuthFn = fn }
 
-func (o *Owner) onAuth(userID int64, username string) {
-	o.selfName.Store(&username)
-	o.loggedIn(userID, username)
+func (o *Owner) onAuth(self domain.User) {
+	o.selfName.Store(&self.Username)
+	o.loggedIn(self)
 	if o.onAuthFn != nil {
-		o.onAuthFn(userID, username)
+		o.onAuthFn(self.ID, self.Username)
 	}
 }
 

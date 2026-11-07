@@ -119,6 +119,7 @@ func (o *Owner) DiscardOutbox(ref string) error {
 	if err := o.outbox.Delete(ref); err != nil {
 		return &telerr.Error{Kind: telerr.Internal, Op: "outbox.discard", Detail: err.Error(), Cause: err}
 	}
+	o.outboxMoved()
 	o.Refresh()
 	o.wakeOutbox()
 	return nil

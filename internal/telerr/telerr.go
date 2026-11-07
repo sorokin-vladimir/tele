@@ -55,6 +55,11 @@ const (
 	// may be somebody else's, and a request meant for one must not land in
 	// another (#309). It is the owner's to give, never Telegram's.
 	AccountEnded Kind = "account_ended"
+	// CommandsOff means the tele holding the account does not let commands
+	// act on it: cli.account_commands is off there. A window is not refused.
+	// It is the host's to give, never Telegram's, and nothing but changing the
+	// setting lifts it (#181).
+	CommandsOff Kind = "commands_off"
 )
 
 // Reason refines Rejected: what about the content was refused. The set is

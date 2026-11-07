@@ -36,19 +36,28 @@ const (
 	LoginPhone LoginStepKind = iota
 	LoginCode
 	LoginPassword
+	// LoginQR shows a QR code for an app already logged in to scan (#330).
+	LoginQR
 )
 
 // LoginStep is the step of the login waiting for an answer. It is state, not a
 // question put to one client: whoever attaches while it waits sees it, and
-// whoever answers first moves it on. It carries no secret, only what the
-// screen says about the step.
+// whoever answers first moves it on. It carries nothing the person typed, only
+// what the screen says about the step, and on the QR step the login token to
+// draw: shown to whoever looks, and never logged.
 type LoginStep struct {
 	Kind LoginStepKind
 	// Hint is how the code was sent, for the code step.
 	Hint string
 	// Err says why the step is asked again: the answer given last time was
-	// refused. Empty the first time (#285).
+	// refused. Empty the first time (#285). On the QR step it says why no QR
+	// code is shown.
 	Err string
+	// Token is the URL the QR code draws, and Expires when it stops being
+	// good; empty while there is none to draw. A new token is new content of
+	// the same asking, under the same Seq.
+	Token   string
+	Expires time.Time
 	// Seq tells one asking of a step from the next, so an answer names the
 	// asking it answers and one for an asking already gone is refused.
 	Seq int
@@ -75,12 +84,25 @@ type AccountContents struct {
 	// host's setting, and a client sizes its history window by it rather than
 	// by a setting of its own (#208).
 	HistoryPage int
+	// Throttle is the flood wait somebody's call ran into that ends last; zero
+	// before any, and over once its Until has passed (#212).
+	Throttle Throttle
+}
+
+// Throttle is a method Telegram asked to wait for, and until when. Nothing
+// says it ended: a client counts down to Until and stops there.
+type Throttle struct {
+	Method string
+	Until  time.Time
 }
 
 // LoggedInUser is the user an account is logged in as.
 type LoggedInUser struct {
 	ID       int64
 	Username string
+	// Name is the user's first and last name, as a command names the
+	// author of a message the account sent (#181).
+	Name string
 }
 
 // AccountDelta carries the account whole: it is small, and a part of it

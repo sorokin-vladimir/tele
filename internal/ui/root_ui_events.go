@@ -48,6 +48,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.logo.SetWidth(msg.Width)
+		m.login.SetRoom(loginRoom(msg.Width, msg.Height))
 		m.statusBar.SetWidth(msg.Width)
 		m.toasts.SetSize(msg.Width, msg.Height)
 		lay := computeLayout(msg.Width, msg.Height, m.chat.ComposerHeight(),
@@ -116,7 +117,7 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.subscribeChatList()
 		// The spinner loop is (re)started by ensureAnimationTicks when an actual
 		// spinner is active (e.g. chats still loading); no unconditional start.
-		return m, nil
+		return m, m.noticeAfterLoginCmd()
 
 	case screens.CloseSearchMsg:
 		m.searchModel = nil

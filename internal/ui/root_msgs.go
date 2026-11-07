@@ -49,6 +49,18 @@ type videoProbedMsg struct {
 // videoTickMsg advances the modal video by one frame. gen drops stale ticks.
 type videoTickMsg struct{ gen int }
 
+// videoFrameEncodedMsg carries a modal frame encoded for the terminal, to be
+// written under the back id; gen drops one from a closed or reopened modal.
+type videoFrameEncodedMsg struct {
+	gen int
+	id  uint32 // the image id the frame was encoded for
+	seq string
+}
+
+// videoFrameWrittenMsg reports that a modal frame is written under the back
+// id, so the next tick may show it (#331).
+type videoFrameWrittenMsg struct{ gen int }
+
 type FullPhotoReadyMsg struct {
 	PhotoID int64
 	Image   image.Image
@@ -61,9 +73,17 @@ type FullPhotoReadyMsg struct {
 // See issue #95.
 type kittyEncodedMsg struct {
 	photoID int64
+	id      uint32 // the image id the photo was encoded for
 	cols    int
 	seq     string
+	// behind says the frame goes under the photo's back id, to be swapped in
+	// at the next tick of its animation (#331).
+	behind bool
 }
+
+// gifFrameFailedMsg reports that a frame of an animated photo failed to
+// encode, so its animation stops waiting for it (#331).
+type gifFrameFailedMsg struct{ photoID int64 }
 
 // kittyTransmittedMsg is emitted after a photo's Kitty virtual placement has
 // been written to the terminal. Only then is the image marked ready, so the
@@ -71,6 +91,7 @@ type kittyEncodedMsg struct {
 type kittyTransmittedMsg struct {
 	photoID int64
 	cols    int
+	behind  bool
 }
 
 // voicePlayReadyMsg carries a downloaded voice file ready to be played.

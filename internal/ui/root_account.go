@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
@@ -35,8 +37,14 @@ func (m RootModel) handleAccountDelta(next project.AccountContents) (RootModel, 
 	if next.ClockSkew != prev.ClockSkew {
 		m = m.handleClockSkew(next.ClockSkew)
 	}
+	if next.Throttle != prev.Throttle {
+		updated, cmd := m.handleThrottle(next.Throttle.Until, time.Now())
+		m = updated
+		cmds = append(cmds, cmd)
+	}
 	if next.Phase == project.AccountLoggingIn && next.Login != prev.Login {
-		route(screens.AuthRequestMsg{Step: next.Login.Kind, Hint: next.Login.Hint, Err: next.Login.Err, Seq: next.Login.Seq})
+		route(screens.AuthRequestMsg{Step: next.Login.Kind, Hint: next.Login.Hint, Err: next.Login.Err,
+			Seq: next.Login.Seq, Token: next.Login.Token})
 	}
 	if next.LoginFailed != "" && next.LoginFailed != prev.LoginFailed {
 		route(screens.AuthErrorMsg{Text: next.LoginFailed})
@@ -68,7 +76,26 @@ func (m RootModel) handleLoginAnswer(msg screens.LoginAnswerMsg) (RootModel, tea
 	ctx, owner := m.ctx, m.owner
 	return m, func() tea.Msg {
 		if err := owner.AnswerLogin(ctx, msg.Seq, msg.Value); telerr.Of(err) == telerr.Forbidden {
-			return screens.LoginRefusedMsg{Seq: msg.Seq, Text: "This login is being answered in another window."}
+			return screens.LoginRefusedMsg{Seq: msg.Seq, Text: loginElsewhere}
+		}
+		return nil
+	}
+}
+
+// loginElsewhere is what an answer or a switch refused for another window's
+// login says under the field (#211).
+const loginElsewhere = "This login is being answered in another window."
+
+// handleLoginSwitch hands a switch of the login to the owner, refused the way
+// an answer is: only another window driving it is worth saying (#330).
+func (m RootModel) handleLoginSwitch(msg screens.LoginSwitchMsg) (RootModel, tea.Cmd) {
+	if m.owner == nil {
+		return m, nil
+	}
+	ctx, owner := m.ctx, m.owner
+	return m, func() tea.Msg {
+		if err := owner.SwitchLogin(ctx, msg.Seq, msg.To); telerr.Of(err) == telerr.Forbidden {
+			return screens.LoginRefusedMsg{Seq: msg.Seq, Text: loginElsewhere}
 		}
 		return nil
 	}

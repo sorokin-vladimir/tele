@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
@@ -26,6 +28,11 @@ func (h *Host) AccountStatus() *wire.AccountStatus {
 	}
 	if a.Ended != nil {
 		s.Ended = a.Ended.Error()
+	}
+	// A wait that is over holds nothing, and nothing says it ended, so it is
+	// left out rather than told as a time in the past (#212).
+	if t := a.Throttle; t.Until.After(time.Now()) {
+		s.Throttle = &wire.Throttle{Method: t.Method, Until: t.Until}
 	}
 	return s
 }

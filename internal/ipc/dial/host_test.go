@@ -33,11 +33,12 @@ type hostEnd struct {
 	sets        []wire.SetParams
 }
 
-func (h *hostEnd) Hello() wire.Hello           { return h.hello }
-func (h *hostEnd) Settings() wire.HostSettings { return h.settings }
-func (h *hostEnd) Reload() wire.ReloadResult   { return h.reload }
-func (h *hostEnd) Status() wire.HostStatus     { return h.status }
-func (h *hostEnd) Restart() wire.RestartResult { return h.restart }
+func (h *hostEnd) Hello() wire.Hello                     { return h.hello }
+func (h *hostEnd) Settings() wire.HostSettings           { return h.settings }
+func (h *hostEnd) Reload() wire.ReloadResult             { return h.reload }
+func (h *hostEnd) Status() wire.HostStatus               { return h.status }
+func (h *hostEnd) Restart() (wire.RestartResult, func()) { return h.restart, nil }
+func (h *hostEnd) AccountCommands() wire.CommandAccess   { return wire.CommandsAll }
 func (h *hostEnd) Uninstall() wire.UninstallResult {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -208,7 +209,7 @@ func TestAskStatus_TheHostSaysHowItIsDoing(t *testing.T) {
 	since := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	host := &hostEnd{hello: said, status: wire.HostStatus{
 		Since:   since,
-		Clients: 2,
+		Windows: 2,
 		Account: &wire.AccountStatus{
 			Phase: wire.PhaseReady, User: "ada", Link: wire.LinkUp, LinkSince: since.Add(time.Minute),
 			LastUpdate: since.Add(time.Hour), Outbox: 3,
@@ -220,7 +221,7 @@ func TestAskStatus_TheHostSaysHowItIsDoing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, said, gotHello)
 	assert.True(t, got.Since.Equal(since))
-	assert.Equal(t, 2, got.Clients)
+	assert.Equal(t, 2, got.Windows)
 	require.NotNil(t, got.Account)
 	assert.Equal(t, wire.PhaseReady, got.Account.Phase)
 	assert.Equal(t, "ada", got.Account.User)
@@ -235,7 +236,7 @@ func TestAskStatus_TheHostSaysHowItIsDoing(t *testing.T) {
 func TestAskStatus_AHostOnAnotherProtocolIsOnlyNamed(t *testing.T) {
 	said := hello
 	said.Protocol, said.Binary = hello.Protocol+1, "3.0.0"
-	host := &hostEnd{hello: said, status: wire.HostStatus{Clients: 7}}
+	host := &hostEnd{hello: said, status: wire.HostStatus{Windows: 7}}
 
 	gotHello, _, err := askStatusOf(t, host, hello)
 
@@ -251,12 +252,12 @@ func TestAskStatus_AnOlderServiceIsAskedNotRestarted(t *testing.T) {
 	said.Binary, said.Kept = "2.0.0-beta.1", wire.KeptByService
 	mine := hello
 	mine.Binary = "2.0.0"
-	host := &hostEnd{hello: said, status: wire.HostStatus{Clients: 1}}
+	host := &hostEnd{hello: said, status: wire.HostStatus{Windows: 1}}
 
 	_, got, err := askStatusOf(t, host, mine)
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, got.Clients)
+	assert.Equal(t, 1, got.Windows)
 }
 
 // What was wrong with the host's settings when it started is said in its

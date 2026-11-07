@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -54,6 +55,13 @@ func (r run) hello() wire.Hello {
 	return wire.Hello{Protocol: wire.ProtocolVersion, Binary: version.Version, Config: r.cfgPath}
 }
 
+// helloAs is what this process says of itself as a client of kind (#213).
+func (r run) helloAs(kind wire.ClientKind) wire.Hello {
+	h := r.hello()
+	h.Kind = kind
+	return h
+}
+
 // host runs this process as the host, with its own TUI attached to it through
 // the endpoint like any other client (#208).
 func (r run) host() error {
@@ -70,8 +78,13 @@ func (r run) host() error {
 	cfg := r.cfgStore.Current()
 	return r.runClient(att, app.ClientConfig{
 		// This window is one of the host's clients; the rest close with it.
-		OtherWindows: func() int { return max(h.clients.Count()-1, 0) },
-		Notices:      app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned),
+		// A command attached is not one: quitting does not close anything
+		// anybody looks at for it (#213).
+		OtherWindows: func() int { return max(h.clients.Windows()-1, 0) },
+		// Only a tele that hosts offers its service: one that only attaches
+		// is a window of a host that may be the service already (#208).
+		Notices: app.StartupNotices(cfg.StateDir, h.stateMoved, cfg.SessionPinned,
+			systemInstaller(io.Discard, nil).offer(options{cfgPath: r.cfgPath})),
 	})
 }
 
@@ -176,7 +189,7 @@ func (r run) startHost(kept wire.Keeper) (*hosted, error) {
 		return nil, fmt.Errorf("init: %w", err)
 	}
 	end.ApplyTo(host.Apply)
-	end.StatusFrom(clients.Count, host.AccountStatus)
+	end.StatusFrom(clients.Windows, clients.Commands, host.AccountStatus)
 	host.Start(ctx)
 	return h, nil
 }
@@ -188,12 +201,12 @@ func (r run) startHost(kept wire.Keeper) (*hosted, error) {
 func (r run) client() error {
 	ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
 	defer cancel()
-	att, err := hosting.Attach(ctx, r.reached, r.hello())
+	att, err := hosting.Attach(ctx, r.reached, r.helloAs(wire.KindWindow))
 	if err != nil {
 		return errors.New(reachFailure(err, r.cfgStore.Current().StateDir))
 	}
 	return r.runClient(att, app.ClientConfig{
-		Notices: app.StartupNotices(r.cfgStore.Current().StateDir, false, false),
+		Notices: app.StartupNotices(r.cfgStore.Current().StateDir, false, false, nil),
 	})
 }
 
@@ -205,7 +218,7 @@ func (r run) attach(ep ipc.Endpoint) (*dial.Attachment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reaching this tele's own host: %w", err)
 	}
-	att, err := dial.Dial(ctx, conn, r.hello())
+	att, err := dial.Dial(ctx, conn, r.helloAs(wire.KindWindow))
 	if err != nil {
 		return nil, fmt.Errorf("attaching to this tele's own host: %w", err)
 	}

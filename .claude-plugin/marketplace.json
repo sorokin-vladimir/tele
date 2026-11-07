@@ -1,0 +1,14 @@
+{
+  "name": "tele",
+  "description": "tele, a terminal Telegram client, for AI agents",
+  "owner": {
+    "name": "Vladimir Sorokin"
+  },
+  "plugins": [
+    {
+      "name": "tele",
+      "source": "./plugins/tele",
+      "description": "Read and send Telegram messages through the tele command line"
+    }
+  ]
+}

@@ -16,17 +16,28 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
-// The host counts the clients attached to it, leaving out the one asking: a
-// `tele daemon status` is not a window (#208).
-func TestHostEnd_StatusCountsTheClientsButTheOneAsking(t *testing.T) {
+// The host counts its windows apart from its commands, leaving out the one
+// asking: `tele daemon status` is a command itself (#208, #213).
+func TestHostEnd_StatusCountsWindowsAndCommandsButTheOneAsking(t *testing.T) {
 	e, _, _ := hostEndAt(t, "")
-	e.StatusFrom(func() int { return 3 }, func() *wire.AccountStatus { return nil })
+	e.StatusFrom(func() int { return 2 }, func() int { return 3 }, func() *wire.AccountStatus { return nil })
 
 	got := e.Status()
 
-	assert.Equal(t, 2, got.Clients)
+	assert.Equal(t, 2, got.Windows)
+	assert.Equal(t, 2, got.Commands)
 	assert.False(t, got.Since.IsZero(), "the host says when it started")
 	assert.Nil(t, got.Account, "between accounts there is no account to tell of")
+}
+
+// The host says what it lets commands do with the account, so that a script
+// refused with exit 7 can be told why (#181).
+func TestHostEnd_StatusSaysWhatCommandsMayDo(t *testing.T) {
+	all, _, _ := hostEndAt(t, "")
+	none, _, _ := hostEndAt(t, "cli:\n  account_commands: none\n")
+
+	assert.Equal(t, wire.CommandsAll, all.Status().AccountCommands)
+	assert.Equal(t, wire.CommandsNone, none.Status().AccountCommands)
 }
 
 // Asked before anything is there to count, the host says what it knows.
@@ -35,7 +46,8 @@ func TestHostEnd_StatusBeforeTheHostHasClients(t *testing.T) {
 
 	got := e.Status()
 
-	assert.Equal(t, 0, got.Clients)
+	assert.Zero(t, got.Windows)
+	assert.Zero(t, got.Commands)
 	assert.Nil(t, got.Account)
 }
 
@@ -56,13 +68,17 @@ func restartingEnd(t *testing.T, kept wire.Keeper) (*HostEnd, *int) {
 }
 
 // A service restarts when a newer client asks: its service manager starts it
-// again, on the binary installed now (#183).
+// again, on the binary installed now (#183). It stops only once the client
+// asking has its answer.
 func TestHostEnd_AServiceRestartsWhenAsked(t *testing.T) {
 	e, restarts := restartingEnd(t, wire.KeptByService)
 
-	got := e.Restart()
+	got, then := e.Restart()
 
 	assert.Empty(t, got.Refused)
+	require.NotNil(t, then)
+	assert.Zero(t, *restarts, "not before the answer is written")
+	then()
 	assert.Equal(t, 1, *restarts)
 }
 
@@ -72,9 +88,10 @@ func TestHostEnd_OnlyAServiceRestarts(t *testing.T) {
 	for _, kept := range []wire.Keeper{wire.KeptByWindow, wire.KeptByDaemon} {
 		e, restarts := restartingEnd(t, kept)
 
-		got := e.Restart()
+		got, then := e.Restart()
 
 		assert.NotEmpty(t, got.Refused, kept)
+		assert.Nil(t, then, kept)
 		assert.Zero(t, *restarts, kept)
 	}
 }
@@ -123,6 +140,24 @@ func TestHost_SaysHowItsAccountIsDoing(t *testing.T) {
 	got = h.host.AccountStatus()
 	assert.Equal(t, wire.LinkUp, got.Link)
 	assert.False(t, got.LinkSince.IsZero())
+}
+
+// A flood wait somebody's call ran into is told while it lasts, and not once
+// it is over (#212).
+func TestHost_SaysAWaitTelegramAskedForWhileItLasts(t *testing.T) {
+	h := testHostWith(t, &heldConnection{updates: make(chan store.Event)})
+	acct := h.host.current()
+	until := time.Now().Add(time.Minute)
+
+	acct.owner.SetThrottle("messages.getHistory", until)
+	got := h.host.AccountStatus()
+	require.NotNil(t, got.Throttle)
+	assert.Equal(t, "messages.getHistory", got.Throttle.Method)
+	assert.True(t, got.Throttle.Until.Equal(until))
+
+	over := testHostWith(t, &heldConnection{updates: make(chan store.Event)})
+	over.host.current().owner.SetThrottle("messages.getHistory", time.Now().Add(-time.Second))
+	assert.Nil(t, over.host.AccountStatus().Throttle, "a wait that is over holds nothing")
 }
 
 // A connection that ended says why.

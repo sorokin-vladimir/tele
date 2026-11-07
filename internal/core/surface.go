@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -29,6 +30,11 @@ type Surface interface {
 	// by its Seq. An answer for a step already answered, here or by another
 	// client, is refused (#309).
 	AnswerLogin(ctx context.Context, seq int, value string) error
+	// SwitchLogin leaves the login step named by seq for the other way to log
+	// in: the QR step for the phone number (to LoginPhone), any other step for
+	// the QR code (to LoginQR). A switch that does not fit the step, or names
+	// one no longer asked, is refused (#330).
+	SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error
 
 	// Commands. Each applies its own optimistic change and undoes it if
 	// Telegram refuses, so the client only decides how a failure looks.
@@ -65,6 +71,10 @@ type Surface interface {
 	SendMedia(ctx context.Context, req MediaSendRequest) error
 	RetryOutbox(ref string) error
 	DiscardOutbox(ref string) error
+	// AwaitSend waits up to within for a send to become a message or fail,
+	// and answers with where it stands then; a command waits on its send this
+	// way, a window watches the projection (#181).
+	AwaitSend(ctx context.Context, ref string, within time.Duration) (SendOutcome, error)
 
 	// Queries. One-off answers nobody subscribes to. They take a context and
 	// may fail because in v2 each is a round trip to another process, and the
@@ -77,6 +87,13 @@ type Surface interface {
 	Topics(ctx context.Context, chatID int64) ([]project.TopicRow, error)
 	// Chat is one chat the owner holds; false for a person it can only address.
 	Chat(ctx context.Context, chatID int64) (project.ChatRow, bool, error)
+	// ResolveChat answers with the chat a command named, by id, username or
+	// as me; one nobody holds is PeerNotFound (#181).
+	ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error)
+	// History answers with up to limit messages of a history older than
+	// before, the newest for zero, oldest first, fetching what the store
+	// lacks. It is how a command reads; a window subscribes (#181).
+	History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without asking

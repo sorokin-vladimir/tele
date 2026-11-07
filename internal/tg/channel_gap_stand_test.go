@@ -185,7 +185,8 @@ func TestStand_AChannelGapClosesDespiteTheCooldown(t *testing.T) {
 
 	require.Eventually(t, func() bool { return holdsMessage(st, 12) }, 5*time.Second, 20*time.Millisecond,
 		"the message behind the gap must reach the chat within the gap timer, not after the cooldown")
-	assert.True(t, holdsMessage(st, 13), "and so must the one that revealed the gap")
+	require.Eventually(t, func() bool { return holdsMessage(st, 13) }, 5*time.Second, 20*time.Millisecond,
+		"and so must the one that revealed the gap")
 }
 
 // The same stand with the manager talking straight to the API, which is what

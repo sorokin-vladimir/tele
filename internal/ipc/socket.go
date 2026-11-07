@@ -22,7 +22,7 @@ var ErrNoHost = errors.New("ipc: no host at the endpoint")
 // not stop a bind, so binding over whatever is there could take the endpoint
 // from a live host. The socket is the user's alone, and goes when the listener
 // is closed.
-func Listen(ep Endpoint) (net.Listener, error) {
+func Listen(ep Endpoint) (*Listener, error) {
 	if ep.own != "" {
 		if err := os.MkdirAll(ep.own, 0o700); err != nil {
 			return nil, fmt.Errorf("the socket directory: %w", err)
@@ -31,10 +31,11 @@ func Listen(ep Endpoint) (net.Listener, error) {
 	if _, err := os.Lstat(ep.Path); err == nil {
 		return nil, fmt.Errorf("%w: %s", ErrInUse, ep.Path)
 	}
-	l, err := net.Listen("unix", ep.Path)
+	ul, err := net.ListenUnix("unix", &net.UnixAddr{Name: ep.Path, Net: "unix"})
 	if err != nil {
 		return nil, fmt.Errorf("serving %s: %w", ep.Path, err)
 	}
+	l := &Listener{UnixListener: ul}
 	// Windows has no mode bits on a socket: the state directory's ACL, which
 	// is the user's, protects it there.
 	if runtime.GOOS != "windows" {
@@ -69,7 +70,7 @@ func Dial(ctx context.Context, ep Endpoint) (net.Conn, error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", ep.Path)
 	if err == nil {
-		return conn, nil
+		return wake(conn), nil
 	}
 	if noHost(err) {
 		return nil, fmt.Errorf("%w: %s", ErrNoHost, ep.Path)

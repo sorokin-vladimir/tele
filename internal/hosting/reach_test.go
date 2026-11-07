@@ -3,7 +3,6 @@ package hosting_test
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -105,7 +104,7 @@ func TestReach_ASocketLeftBehindIsNoHost(t *testing.T) {
 	require.NoError(t, err)
 	dead, err := ipc.Listen(ep)
 	require.NoError(t, err)
-	dead.(*net.UnixListener).SetUnlinkOnClose(false)
+	dead.SetUnlinkOnClose(false)
 	require.NoError(t, dead.Close())
 	_, err = os.Lstat(ep.Path)
 	require.NoError(t, err, "the dead host's socket is still there")

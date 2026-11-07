@@ -405,6 +405,7 @@ func TestSQLite_MigratesMissingChatColumns(t *testing.T) {
 	assert.False(t, c.UnreadMark)
 	assert.False(t, c.IsArchived)
 	assert.Equal(t, 0, c.UnreadReactionsCount)
+	assert.Empty(t, c.Username)
 }
 
 // A database written before forums were told apart holds every chat's
@@ -437,6 +438,25 @@ func TestSQLite_LegacyMessagesReadAsTheChatsHistory(t *testing.T) {
 	require.Len(t, got, 2)
 	assert.Equal(t, "old", got[0].Text)
 	assert.Equal(t, 2, s.TailMessageID(7))
+}
+
+// A chat's username outlives a restart: a command names a chat by it before
+// the dialog list is loaded again (#181).
+func TestSQLite_Username_Persists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tele.db")
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(domain.Chat{ID: 42, Title: "Bob", Username: "bob"})
+	require.NoError(t, s.Close())
+
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	c, ok := s2.GetChat(42)
+	require.True(t, ok)
+	assert.Equal(t, "bob", c.Username)
 }
 
 func TestSQLite_UnreadReactionsCount_Persist(t *testing.T) {

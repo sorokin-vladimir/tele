@@ -58,6 +58,20 @@ func TestConvertUser_Bot(t *testing.T) {
 	assert.Equal(t, int64(55), chat.Peer.AccessHash)
 }
 
+// A chat keeps its public username, without the @, so a command can name it by
+// one and print it (#181).
+func TestConvertUser_KeepsTheUsername(t *testing.T) {
+	chat, ok := convertUser(&tg.User{ID: 100, FirstName: "Alice", Username: "alice"})
+	require.True(t, ok)
+	assert.Equal(t, "alice", chat.Username)
+}
+
+func TestConvertChannel_KeepsTheUsername(t *testing.T) {
+	chat, ok := convertChannel(&tg.Channel{ID: 300, Title: "News", Username: "news"})
+	require.True(t, ok)
+	assert.Equal(t, "news", chat.Username)
+}
+
 func TestConvertUser_Self(t *testing.T) {
 	user := &tg.User{ID: 1, FirstName: "Me", Self: true, AccessHash: 7}
 	chat, ok := convertUser(user)

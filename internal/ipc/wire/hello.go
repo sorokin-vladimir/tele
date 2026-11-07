@@ -7,7 +7,7 @@ import (
 // ProtocolVersion is the shape of what this binary says on the wire. It goes up
 // with any change the other side could misread. Two binaries with the same one
 // understand each other, whatever their own versions.
-const ProtocolVersion = 3
+const ProtocolVersion = 6
 
 // MethodHello is the first thing a client says, and the host's answer is its
 // own. Nothing else is said before it.
@@ -29,7 +29,21 @@ type Hello struct {
 	// PID is the host's process, said by a host only, so whoever finds it in
 	// the way can name it.
 	PID int `json:"pid,omitempty"`
+	// Kind is what kind of client this is, said by a client only (#213).
+	Kind ClientKind `json:"kind,omitempty"`
 }
+
+// ClientKind is what kind of client is attached. Only a window is someone
+// looking: it alone focuses a history, draws a notification and counts as
+// someone watching, while a command asks once and leaves.
+type ClientKind string
+
+const (
+	// KindWindow: a client a person looks at and drives.
+	KindWindow ClientKind = "window"
+	// KindCommand: a client that asks once, prints the answer and ends.
+	KindCommand ClientKind = "command"
+)
 
 // Keeper is what keeps a host running. Only a service is started again when
 // it exits, which is why a newer client may ask only a service to restart: any

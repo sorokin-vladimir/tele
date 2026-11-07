@@ -67,6 +67,19 @@ type OutboxMediaPart struct {
 	SendAs MediaKind `json:"send_as,omitempty"`
 }
 
+// SentSend is a send that became a message, remembered by its ref after it
+// left the queue: what a command waiting on it is told, and what keeps the
+// same ref from being sent twice (#181).
+type SentSend struct {
+	Ref     string
+	ChatID  int64
+	TopicID int
+	// MsgIDs are the messages it became: one for a text, one per part of an
+	// album.
+	MsgIDs []int
+	At     time.Time
+}
+
 // OutboxEntry is one durable send. It crosses the owner boundary inside the
 // chat projection and is JSON on the wire in v2, which is why it lives in
 // domain rather than beside the queue that stores it.

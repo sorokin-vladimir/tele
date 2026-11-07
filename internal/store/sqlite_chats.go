@@ -13,7 +13,7 @@ func (s *SQLiteStore) loadChats() error {
 	rows, err := s.db.Query(`SELECT id, title, peer_type, peer_access_hash, pinned,
 		unread_count, read_inbox_max_id, read_outbox_max_id, last_message,
 		is_contact, is_bot, is_muted, online, unread_mark, is_archived,
-		unread_reactions_count, unread_mentions_count, is_forum FROM chats`)
+		unread_reactions_count, unread_mentions_count, is_forum, username FROM chats`)
 	if err != nil {
 		return err
 	}
@@ -27,7 +27,7 @@ func (s *SQLiteStore) loadChats() error {
 			&pinned, &c.UnreadCount, &c.ReadInboxMaxID, &c.ReadOutboxMaxID,
 			&lastMsgJSON, &isContact, &isBot, &isMuted, &online,
 			&unreadMark, &isArchived, &c.UnreadReactionsCount, &c.UnreadMentionsCount,
-			&isForum,
+			&isForum, &c.Username,
 		)
 		if err != nil {
 			return err
@@ -74,14 +74,14 @@ func (s *SQLiteStore) persistChat(c domain.Chat) {
 		(id, title, peer_type, peer_access_hash, pinned, unread_count,
 		 read_inbox_max_id, read_outbox_max_id, last_message,
 		 is_contact, is_bot, is_muted, online, unread_mark, is_archived,
-		 unread_reactions_count, unread_mentions_count, is_forum)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 unread_reactions_count, unread_mentions_count, is_forum, username)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, c.Title, c.Peer.Type, c.Peer.AccessHash,
 		boolInt(c.Pinned), c.UnreadCount, c.ReadInboxMaxID, c.ReadOutboxMaxID,
 		lastMsgJSON,
 		boolInt(c.IsContact), boolInt(c.IsBot), boolInt(c.IsMuted), boolInt(c.Online),
 		boolInt(c.UnreadMark), boolInt(c.IsArchived), c.UnreadReactionsCount, c.UnreadMentionsCount,
-		boolInt(c.IsForum),
+		boolInt(c.IsForum), c.Username,
 	)
 	if err != nil {
 		s.log.Error("persist chat failed", zap.Int64("chat_id", c.ID), zap.Error(err))

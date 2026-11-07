@@ -106,6 +106,10 @@ type RootModel struct {
 	// clockSkew is how far the local clock is from Telegram's, zero when it is
 	// close enough to be accepted (#277).
 	clockSkew time.Duration
+	// throttleUntil is when the flood wait somebody's call ran into is over,
+	// and throttleTicking whether its countdown is running (#212).
+	throttleUntil   time.Time
+	throttleTicking bool
 	// hostAway is set while the host is away, and absences counts how many
 	// times it has been: the timer that names an absence carries its number,
 	// so one that fires after the host is back, or gone again, names nothing
@@ -169,6 +173,17 @@ type RootModel struct {
 	lastPhotoCols  int
 	lastPaneHeight int
 	retransmitGen  int
+
+	// gifBehind is the frame sent under the active GIF's back id, shown at a
+	// later tick once it is written (#331). gifInFlight says it is being
+	// encoded or written, and gifWrittenAt when it was written.
+	gifBehind    image.Image
+	gifInFlight  bool
+	gifWrittenAt time.Time
+
+	// now is the clock animations are timed by; time.Now when nil.
+	now func() time.Time
+
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
 	// photo ids currently transmitted (or in flight); kittyLRU orders them by last
@@ -549,6 +564,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.noticeTick(), noticeTickCmd()
+	case throttleTickMsg:
+		return m.handleThrottleTick(msg)
 	// projection deltas and events from the connection owner (#194)
 	case project.Delta:
 		return m.handleDelta(msg)
@@ -584,12 +601,21 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGifFramesReady(msg)
 	case gifTickMsg:
 		return m.handleGifTick(msg)
+	case gifFrameFailedMsg:
+		if msg.photoID == m.gifActiveID {
+			m.gifInFlight = false
+		}
+		return m, nil
 	case videoFileReadyMsg:
 		return m.handleVideoFileReady(msg)
 	case videoProbedMsg:
 		return m.handleVideoProbed(msg)
 	case videoTickMsg:
 		return m.handleVideoTick(msg)
+	case videoFrameEncodedMsg:
+		return m.handleVideoFrameEncoded(msg)
+	case videoFrameWrittenMsg:
+		return m.handleVideoFrameWritten(msg)
 	case reactionFailedMsg:
 		return m.handleReactionFailed(msg)
 	case reactionNotKeptMsg:
@@ -641,6 +667,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConnectFailed(msg.Err)
 	case screens.LoginAnswerMsg:
 		return m.handleLoginAnswer(msg)
+	case screens.LoginSwitchMsg:
+		return m.handleLoginSwitch(msg)
 	case HostLostMsg:
 		return m.handleHostLost(msg)
 	case HostAwayMsg:
@@ -781,7 +809,10 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// key input
 	case tea.KeyPressMsg:
 		// A startup notice swallows every key until its countdown ends, then
-		// consumes one more to dismiss itself.
+		// consumes one more to dismiss itself; one that asks waits for its answer.
+		if next, cmd, handled := m.handleNoticeAnswer(msg); handled {
+			return next, cmd
+		}
 		if next, handled := m.handleNoticeKey(); handled {
 			return next, nil
 		}

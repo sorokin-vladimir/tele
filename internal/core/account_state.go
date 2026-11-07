@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -57,6 +59,15 @@ func (o *Owner) runLogin(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case req := <-af.Requests:
+			if req.Update {
+				// New content of the asking on screen - a token, or none
+				// and why - under the same Seq, so an answer on its way still
+				// names it (#330).
+				o.updateAccount(func(c *project.AccountContents) {
+					c.Login.Token, c.Login.Expires, c.Login.Err = req.Token, req.Expires, req.Err
+				})
+				continue
+			}
 			o.log.Debug("auth step requested", zap.Int("step", int(req.Step)))
 			o.acct.mu.Lock()
 			abandoned := o.acct.abandoned
@@ -111,9 +122,10 @@ func (o *Owner) loadAccount(ctx context.Context) {
 
 // loggedIn records who the account is logged in as, for every client watching
 // it.
-func (o *Owner) loggedIn(userID int64, username string) {
+func (o *Owner) loggedIn(self domain.User) {
+	name := strings.TrimSpace(self.FirstName + " " + self.LastName)
 	o.updateAccount(func(c *project.AccountContents) {
-		c.LoggedInUser = project.LoggedInUser{ID: userID, Username: username}
+		c.LoggedInUser = project.LoggedInUser{ID: self.ID, Username: self.Username, Name: name}
 	})
 }
 
@@ -155,6 +167,49 @@ func (o *Owner) answerLogin(ctx context.Context, from clientID, seq int, value s
 		return ctx.Err()
 	}
 }
+
+// SwitchLogin leaves, for the client, the step of the login named by seq for
+// the other way to log in. It is held to what an answer is: one for an asking
+// gone is refused, and only the driver leaves a step it drives (#330).
+func (s *seat) SwitchLogin(ctx context.Context, seq int, to project.LoginStepKind) error {
+	return s.switchLogin(ctx, s.id, seq, to)
+}
+
+func (o *Owner) switchLogin(ctx context.Context, from clientID, seq int, to project.LoginStepKind) error {
+	o.acct.mu.Lock()
+	kind := o.acct.c.Login.Kind
+	var leave error
+	switch {
+	case kind == project.LoginQR && to == project.LoginPhone:
+		leave = internaltg.ErrLoginByPhone
+	case kind != project.LoginQR && to == project.LoginQR:
+		leave = internaltg.ErrLoginBackToQR
+	}
+	if !o.acct.waiting || o.acct.c.Login.Seq != seq || leave == nil {
+		o.acct.mu.Unlock()
+		return &telerr.Error{Kind: telerr.NotFound, Op: "login", Detail: "this login step is no longer on screen"}
+	}
+	if o.acct.driver != 0 && o.acct.driver != from {
+		o.acct.mu.Unlock()
+		return &telerr.Error{Kind: telerr.Forbidden, Op: "login", Detail: "this login is being answered in another window"}
+	}
+	// The QR code belongs to nobody: back at it, the attempt by number has
+	// ended, and with it the driver's hold.
+	o.acct.driver = 0
+	o.acct.waiting = false
+	o.acct.mu.Unlock()
+	select {
+	case o.authFlow.Responses <- internaltg.AuthResponse{Err: leave}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// SetWatched says whether a window is attached to the host, which is when the
+// login issues a QR code to show (#330). It is the host's to say: only the
+// host tells a window from a command.
+func (o *Owner) SetWatched(on bool) { o.authFlow.SetWatched(on) }
 
 // driverGone abandons the login driven by the client id, which has gone. A
 // step waiting for its answer is answered as abandoned at once; with none
@@ -200,6 +255,8 @@ func (o *Owner) connectionEnded(ctx context.Context, err error) {
 
 func loginStepKind(s internaltg.AuthStep) project.LoginStepKind {
 	switch s {
+	case internaltg.AuthStepQR:
+		return project.LoginQR
 	case internaltg.AuthStepCode:
 		return project.LoginCode
 	case internaltg.AuthStepPassword:

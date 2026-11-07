@@ -284,7 +284,7 @@ func TestEditFile_KeepsLFLineEndings(t *testing.T) {
 
 func TestSiblingOrder(t *testing.T) {
 	assert.Equal(t,
-		[]string{"telegram", "proxy", "state_dir", "ui", "photos", "avatars", "keybindings"},
+		[]string{"telegram", "proxy", "state_dir", "ui", "photos", "avatars", "cli", "keybindings"},
 		siblingOrder(nil),
 		"the file's own order, exclusions included")
 	// The proxy section reads the way it is filled in: what kind of proxy,

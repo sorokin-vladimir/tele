@@ -117,12 +117,14 @@ func TestRegistry_EveryEntrySaysWhoseItIs(t *testing.T) {
 }
 
 // The host's settings are what reaches Telegram and how, where the state
-// lives, what the owner keeps and fetches, and the desktop notification sink;
-// the rest are the client's. The split was settled setting by setting, so it
-// is written out here rather than derived.
+// lives, what the owner keeps and fetches, the desktop notification sink, and
+// whether commands may act on the account; the rest are the client's. The
+// split was settled setting by setting, so it is written out here rather than
+// derived.
 func TestRegistry_TheHostsSettings(t *testing.T) {
 	want := []string{
 		"avatars.disk_cache_size",
+		"cli.account_commands",
 		"photos.disk_cache_size",
 		"proxy.password",
 		"proxy.port",

@@ -120,7 +120,7 @@ func TestAudit_SummarisesInOneWarningAndNamesWhereTheDetailIs(t *testing.T) {
 	require.Len(t, warnings, 1, "a warning per finding is what this must not be")
 	assert.Contains(t, warnings[0], "theme mine:")
 	assert.Contains(t, warnings[0], "unreadable on its canvas")
-	assert.Contains(t, warnings[0], "--theme-check")
+	assert.Contains(t, warnings[0], "tele theme check")
 }
 
 // sender_palette is one token holding a list. Three bad entries are one badly

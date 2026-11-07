@@ -210,6 +210,7 @@ func TestSetupDispatcher_PrivateMessage_NilFromID_SenderNameIsPeerName(t *testin
 	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Alice", evt.Message.SenderName)
+		assert.Equal(t, int64(42), evt.Message.SenderID)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}
@@ -322,6 +323,36 @@ func TestSetupDispatcher_NewChannelMessage_SenderNameIsChannelTitle(t *testing.T
 	case evt := <-mustDeliver:
 		assert.Equal(t, store.EventNewMessage, evt.Kind)
 		assert.Equal(t, "Tech News", evt.Message.SenderName)
+		assert.Equal(t, int64(0), evt.Message.SenderID)
+	case <-time.After(time.Second):
+		t.Fatal("no event received")
+	}
+}
+
+func TestSetupDispatcher_GroupChatMessage_SenderNameIsChatTitle(t *testing.T) {
+	dispatcher, mustDeliver, _ := newTestDispatcher(t, noSuppress)
+
+	ctx := context.Background()
+	rawMsg := &tg.Message{
+		ID:      15,
+		PeerID:  &tg.PeerChat{ChatID: 456},
+		Message: "group message",
+		Date:    int(time.Now().Unix()),
+		// FromID is nil — anonymous group message
+	}
+	update := &tg.UpdateNewMessage{Message: rawMsg, Pts: 1, PtsCount: 1}
+
+	err := dispatcher.Handle(ctx, &tg.Updates{
+		Updates: []tg.UpdateClass{update},
+		Chats:   []tg.ChatClass{&tg.Chat{ID: 456, Title: "Team Chat"}},
+	})
+	require.NoError(t, err)
+
+	select {
+	case evt := <-mustDeliver:
+		assert.Equal(t, store.EventNewMessage, evt.Kind)
+		assert.Equal(t, "Team Chat", evt.Message.SenderName)
+		assert.Equal(t, int64(0), evt.Message.SenderID)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}
@@ -352,6 +383,7 @@ func TestSetupDispatcher_NewChannelMessage_EmitsEvent(t *testing.T) {
 		assert.Equal(t, "supergroup message", evt.Message.Text)
 		assert.Equal(t, int64(600), evt.Message.ChatID)
 		assert.Equal(t, "Supergroup", evt.Message.SenderName)
+		assert.Equal(t, int64(0), evt.Message.SenderID)
 	case <-time.After(time.Second):
 		t.Fatal("no event received for channel message")
 	}
@@ -604,6 +636,41 @@ func TestExtractPeerID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := extractPeerID(tc.raw)
 			assert.Equal(t, tc.wantID, got)
+		})
+	}
+}
+
+func TestIsPeerUser(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  tg.MessageClass
+		want bool
+	}{
+		{
+			name: "PeerUser",
+			raw:  &tg.Message{PeerID: &tg.PeerUser{UserID: 42}},
+			want: true,
+		},
+		{
+			name: "PeerChat",
+			raw:  &tg.Message{PeerID: &tg.PeerChat{ChatID: 100}},
+			want: false,
+		},
+		{
+			name: "PeerChannel",
+			raw:  &tg.Message{PeerID: &tg.PeerChannel{ChannelID: 200}},
+			want: false,
+		},
+		{
+			name: "ServiceMessage",
+			raw:  &tg.MessageService{ID: 1},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isPeerUser(tc.raw))
 		})
 	}
 }

@@ -52,12 +52,28 @@ type RestartResult struct {
 type HostStatus struct {
 	// Since is when the host started.
 	Since time.Time `json:"since"`
-	// Clients is how many clients are attached, the one asking left out.
-	Clients int `json:"clients"`
+	// Windows and Commands are how many of each are attached, the command
+	// asking left out (#213).
+	Windows  int `json:"windows"`
+	Commands int `json:"commands"`
+	// AccountCommands is cli.account_commands: what the host lets commands do
+	// with the account (#181).
+	AccountCommands CommandAccess `json:"account_commands"`
 	// Account is how the account is doing, nil between one account and the
 	// next.
 	Account *AccountStatus `json:"account,omitempty"`
 }
+
+// CommandAccess is what the host lets commands do with the account, as
+// cli.account_commands says: everything, read it and change nothing, or
+// nothing at all. A window is never held to it (#181).
+type CommandAccess string
+
+const (
+	CommandsAll  CommandAccess = "all"
+	CommandsRead CommandAccess = "read"
+	CommandsNone CommandAccess = "none"
+)
 
 // AccountStatus is how the host's account is doing.
 type AccountStatus struct {
@@ -75,6 +91,15 @@ type AccountStatus struct {
 	LastUpdate time.Time `json:"last_update,omitzero"`
 	// Outbox is how many sends have not gone out yet.
 	Outbox int `json:"outbox"`
+	// Throttle is the flood wait somebody's call ran into, nil when there is
+	// none or it is over (#212).
+	Throttle *Throttle `json:"throttle,omitempty"`
+}
+
+// Throttle is a method Telegram asked to wait for, and until when.
+type Throttle struct {
+	Method string    `json:"method"`
+	Until  time.Time `json:"until"`
 }
 
 // Phase is where the account stands.

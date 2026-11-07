@@ -12,6 +12,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/priority"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
@@ -26,8 +27,10 @@ type topicConn struct {
 	pages map[int64]internaltg.ForumTopicsPage
 	byID  map[int64]internaltg.ForumTopicsPage
 	asked []int64
-	byIDs [][]int
-	gate  chan struct{}
+	// askedInBackground is, for each of asked, whether it was background work.
+	askedInBackground []bool
+	byIDs             [][]int
+	gate              chan struct{}
 	// topicPages is what getReplies answers for each topic.
 	topicPages map[int][]domain.Message
 	replies    []repliesCall
@@ -47,7 +50,7 @@ func newTopicConn() *topicConn {
 
 func (c *topicConn) GetArchivedDialogs(context.Context) ([]domain.Chat, error) { return nil, nil }
 
-func (c *topicConn) GetForumTopics(_ context.Context, peer domain.Peer, after internaltg.TopicsOffset, _ int) (internaltg.ForumTopicsPage, error) {
+func (c *topicConn) GetForumTopics(ctx context.Context, peer domain.Peer, after internaltg.TopicsOffset, _ int) (internaltg.ForumTopicsPage, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if after != (internaltg.TopicsOffset{}) {
@@ -55,6 +58,7 @@ func (c *topicConn) GetForumTopics(_ context.Context, peer domain.Peer, after in
 		return c.nextPages[peer.ID], nil
 	}
 	c.asked = append(c.asked, peer.ID)
+	c.askedInBackground = append(c.askedInBackground, priority.IsBackground(ctx))
 	return c.pages[peer.ID], nil
 }
 
@@ -343,4 +347,20 @@ func TestOwner_BootstrapLoadsEachForumsTopics(t *testing.T) {
 
 	require.Eventually(t, func() bool { return len(s.Store().Topics(forumChat)) == 2 }, time.Second, 5*time.Millisecond)
 	assert.Equal(t, []int64{forumChat}, c.askedFor(), "an ordinary group has no topics to ask about")
+}
+
+// Nobody waits on the topics read at connect: the main screen comes up on the
+// dialog list, and a forum's badge can follow. So they yield to what someone
+// is waiting on (#212).
+func TestOwner_TheTopicsReadAtConnectAreBackgroundWork(t *testing.T) {
+	c := newTopicConn()
+	c.dialogs = []domain.Chat{forumDialog()}
+	o, _ := newOwnerWithClient(t, c)
+
+	require.NoError(t, o.Bootstrap(context.Background()))
+
+	require.Eventually(t, func() bool { return len(c.askedFor()) == 1 }, time.Second, 5*time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	assert.Equal(t, []bool{true}, c.askedInBackground)
 }

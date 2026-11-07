@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -139,9 +138,8 @@ func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji
 }
 
 // holdsOnlyOurs reports whether set marks exactly sent as ours, or nothing as
-// ours when sent is empty (a retract). The picker sends some emoji with a
-// variation selector that Telegram's reply leaves out ("❤️" comes back as
-// "❤"), so the two are compared without it.
+// ours when sent is empty (a retract). Both are spelled in emoji presentation:
+// the reply's set by the tg boundary, the pick by the picker (#294).
 func holdsOnlyOurs(set []domain.Reaction, sent string) bool {
 	var ours []string
 	for _, r := range set {
@@ -152,11 +150,7 @@ func holdsOnlyOurs(set []domain.Reaction, sent string) bool {
 	if sent == "" {
 		return len(ours) == 0
 	}
-	return len(ours) == 1 && withoutVariationSelector(ours[0]) == withoutVariationSelector(sent)
-}
-
-func withoutVariationSelector(emoji string) string {
-	return strings.ReplaceAll(emoji, "️", "")
+	return len(ours) == 1 && ours[0] == sent
 }
 
 // reactionToSend is the emoji sent to Telegram: empty retracts, which is what

@@ -453,16 +453,14 @@ func (ml *MessageList) alignBubbleLines(allLines []string, isOut, selected bool)
 			}
 			allLines[i] = margin + allLines[i]
 		}
-	} else {
+	} else if selected && ml.showIndicator && len(allLines) > 2 {
 		// Draw indicator bar on every content line to the right of the bubble.
-		if selected && ml.showIndicator && len(allLines) > 2 {
-			bubbleW := lipgloss.Width(allLines[0])
-			available := ml.viewWidth - bubbleW
-			if available >= indicatorGap+1 {
-				bar := trailingIndicator()
-				for i := 1; i < len(allLines)-1; i++ {
-					allLines[i] = allLines[i] + bar
-				}
+		bubbleW := lipgloss.Width(allLines[0])
+		available := ml.viewWidth - bubbleW
+		if available >= indicatorGap+1 {
+			bar := trailingIndicator()
+			for i := 1; i < len(allLines)-1; i++ {
+				allLines[i] += bar
 			}
 		}
 	}
@@ -574,7 +572,7 @@ func (ml *MessageList) alignBareLines(lines []string, blockW int, selected, isOu
 		if available := ml.viewWidth - blockW; available >= indicatorGap+1 {
 			bar := trailingIndicator()
 			for i := range lines {
-				lines[i] = lines[i] + bar
+				lines[i] += bar
 			}
 		}
 	}

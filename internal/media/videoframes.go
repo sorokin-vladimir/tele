@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -86,7 +87,7 @@ func (fs *FrameSource) read(stdout io.Reader, w, h int) {
 	for {
 		frame, err := readFrame(stdout, w, h)
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				fs.err = err
 			}
 			break

@@ -801,7 +801,7 @@ func typingActionToTG(a domain.TypingAction) tg.SendMessageActionClass {
 func (c *GotdClient) SetTyping(ctx context.Context, peer domain.Peer, topicID int, action domain.TypingAction) error {
 	api, err := c.acquireAPI()
 	if err != nil {
-		return nil // typing is best-effort; ignore when not connected
+		return nil //nolint:nilerr // typing is best-effort; ignore when not connected
 	}
 	_, err = api.MessagesSetTyping(ctx, buildSetTypingRequest(peerToInput(peer), typingActionToTG(action), topicID))
 	if err != nil {

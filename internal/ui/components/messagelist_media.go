@@ -232,6 +232,7 @@ func (ml *MessageList) cachedImage(id int64) (image.Image, bool) {
 // placeholderFor returns the text label shown for a media message until (and
 // unless) richer content such as photo block-art is available.
 func placeholderFor(m *domain.MediaRef) string {
+	//exhaustive:enforce
 	switch m.Kind {
 	case domain.MediaPhoto:
 		return "📷 photo"
@@ -254,6 +255,8 @@ func placeholderFor(m *domain.MediaRef) string {
 		return fileLabel(m)
 	case domain.MediaLocation:
 		return "📍 location"
+	case domain.MediaOther:
+		fallthrough
 	default:
 		return "📦 media"
 	}

@@ -172,6 +172,7 @@ func mediaLabel(r domain.MediaRef) string {
 	withTime := func(label string) string {
 		return strings.TrimSpace(label + " " + clock(r.Duration))
 	}
+	//exhaustive:enforce
 	switch r.Kind {
 	case domain.MediaPhoto:
 		return "photo"
@@ -195,6 +196,8 @@ func mediaLabel(r domain.MediaRef) string {
 		return strings.TrimSpace("file " + r.FileName)
 	case domain.MediaLocation:
 		return "location"
+	case domain.MediaOther:
+		fallthrough
 	default:
 		return "media"
 	}

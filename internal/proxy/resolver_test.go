@@ -38,7 +38,7 @@ func TestResolver_SOCKS5ReachesTheDataCentreThroughTheProxy(t *testing.T) {
 	defer cancel()
 	conn, err := resolver.Primary(ctx, 2, dc.list())
 	require.NoError(t, err)
-	defer conn.Close() //nolint:errcheck
+	defer conn.Close() //nolint:errcheck // a test's connection, nothing depends on closing it
 
 	targets, logins := socks.seen()
 	assert.Equal(t, []string{dc.addr()}, targets, "the data centre was reached through the proxy")
@@ -182,7 +182,7 @@ func newDataCentre(t *testing.T) *dataCentre {
 				return
 			}
 			go func() {
-				defer conn.Close() //nolint:errcheck
+				defer conn.Close() //nolint:errcheck // a test's connection, nothing depends on closing it
 				buf := make([]byte, 64)
 				n, err := conn.Read(buf)
 				if err != nil && n == 0 {

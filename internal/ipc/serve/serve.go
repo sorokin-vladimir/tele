@@ -106,7 +106,7 @@ func Conn(ctx context.Context, conn io.ReadWriteCloser, att Attachment, host Hos
 	cancel()
 	// The connection's end is the first side's to say; the other side only
 	// has to be done.
-	<-other //nolint:errcheck
+	<-other //nolint:errcheck // its error says nothing the first side's did not
 	running.Wait()
 	return err
 }
@@ -182,7 +182,7 @@ func (c *served) pump(ctx context.Context) error {
 				return fmt.Errorf("%w: %v", wire.ErrProtocol, err)
 			}
 			if err := c.enc.Encode(f); err != nil {
-				return nil
+				return nil //nolint:nilerr // a client that cannot be written to has gone, which is no error
 			}
 			if _, stopping := v.(core.HostStopping); stopping {
 				return nil
@@ -197,7 +197,7 @@ func (c *served) read(ctx context.Context, dec *wire.Decoder, running *sync.Wait
 		f, err := dec.Decode()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return nil //nolint:nilerr // the read failed because this side is ending
 			}
 			return err
 		}

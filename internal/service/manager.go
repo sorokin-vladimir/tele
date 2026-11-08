@@ -365,7 +365,7 @@ func (m TaskScheduler) running(name string) bool {
 func (m TaskScheduler) Installed(name string) (string, bool, error) {
 	printed, err := m.Output("schtasks", "/Query", "/TN", name, "/XML")
 	if err != nil {
-		return "", false, nil
+		return "", false, nil //nolint:nilerr // a query that fails is a task that is not there
 	}
 	var task struct {
 		Command string `xml:"Actions>Exec>Command"`
@@ -421,7 +421,7 @@ func (m TaskScheduler) Install(u Unit) error {
 
 func (m TaskScheduler) Uninstall(name string) (bool, error) {
 	if err := m.Run("schtasks", "/Query", "/TN", name); err != nil {
-		return false, nil
+		return false, nil //nolint:nilerr // a query that fails is a task that is not there
 	}
 	_ = m.Run("schtasks", "/End", "/TN", name)
 	stopped := m.wait().untilGone(func() bool { return !m.running(name) })

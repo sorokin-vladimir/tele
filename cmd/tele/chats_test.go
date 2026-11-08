@@ -161,7 +161,7 @@ func TestCommandsOff_ARefusedCallExitsSeven(t *testing.T) {
 		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
 	}
 	other := errors.New("something else")
-	if commandsOff(other) != other {
+	if commandsOff(other) != other { //nolint:errorlint // the very same error must come back, not one wrapping it
 		t.Error("another error was taken for a refusal")
 	}
 }

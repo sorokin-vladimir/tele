@@ -73,7 +73,7 @@ func readClipboardImagePNG(list, extract *exec.Cmd) ([]byte, string, error) {
 	types, err := list.Output()
 	if err != nil {
 		// Tool missing or clipboard unavailable: fall back to text, no toast.
-		return nil, "", nil
+		return nil, "", nil //nolint:nilerr // documented above: this degrades to a text paste
 	}
 	if !clipboardTypesHavePNG(string(types)) {
 		return nil, "", nil // no image on the clipboard

@@ -29,7 +29,7 @@ func Migrate(dir, legacyDir string, log *zap.Logger) (bool, error) {
 		return false, nil
 	}
 	if _, err := os.Stat(filepath.Join(legacyDir, "session.json")); err != nil {
-		return false, nil
+		return false, nil //nolint:nilerr // no legacy session means nothing to migrate
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return false, fmt.Errorf("create state dir: %w", err)
@@ -73,7 +73,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close() //nolint:errcheck
+	defer in.Close() //nolint:errcheck // opened for reading, closing cannot lose data
 
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {

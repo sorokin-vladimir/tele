@@ -15,7 +15,8 @@ import (
 
 func (m RootModel) View() tea.View {
 	var content string
-	if m.screen == ScreenLogin {
+	switch {
+	case m.screen == ScreenLogin:
 		logoView := m.logo.View()
 		// Place fills everything around the centred block with whitespace, which
 		// on the login screen is almost the whole terminal. Left to itself that
@@ -49,11 +50,11 @@ func (m RootModel) View() tea.View {
 			}
 			content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, combined, fill)
 		}
-	} else if m.width <= 0 || m.height <= 0 {
+	case m.width <= 0 || m.height <= 0:
 		// The panes are laid out from the terminal's size, and a window attached
 		// to an account that is already loaded reaches this screen before the
 		// terminal has reported one. The frame stays empty until it does.
-	} else {
+	default:
 		paneH := m.height + 1
 		innerH := paneH - 2*borderSize
 

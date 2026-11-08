@@ -43,6 +43,7 @@ func EndReasonOf(err error) (EndReason, bool) {
 	if !ok || e.Kind != telerr.Unauthorized {
 		return "", false
 	}
+	//exhaustive:enforce
 	switch e.LogOut {
 	case telerr.LogOutHere:
 		return EndLoggedOutHere, true

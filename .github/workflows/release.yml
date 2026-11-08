@@ -47,9 +47,7 @@ jobs:
         run: govulncheck ./...
 
       - name: lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
+        run: golangci-lint run ./...
 
   # Verify the cgo-free static build and tests on the other target OSes. Audio
   # output is platform-specific (oto on macOS/Windows, PulseAudio on Linux), so

@@ -69,13 +69,19 @@
             go
             golangci-lint
             lefthook
+            mise
             gotools
             xclip
             wl-clipboard
           ];
 
+          # The git hooks run tools nixpkgs lacks or holds at another version.
+          # mise installs those; its shims go last, so what this shell provides
+          # keeps priority.
           shellHook = ''
+            export PATH="$PATH:''${MISE_DATA_DIR:-''${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
             echo "tele dev shell — go $(go version | cut -d' ' -f3)"
+            echo "  mise trust && mise install                           # tools the git hooks run"
             echo "  go run ./cmd/tele/ --config .config/tele/config.yml   # run (dev config)"
             echo "  go test ./...                                        # test"
             echo "  golangci-lint run ./...                              # lint"

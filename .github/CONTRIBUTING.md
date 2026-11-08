@@ -30,7 +30,7 @@ This repo uses [mise](https://mise.jdx.dev/) for tooling and tasks, and
 git clone https://github.com/sorokin-vladimir/tele
 cd tele
 
-mise install        # installs the pinned Go toolchain
+mise install        # installs the pinned Go toolchain and checking tools
 mise run hooks      # installs git hooks via lefthook
 ```
 
@@ -54,7 +54,7 @@ go build \
 Run the full check locally — this is also what the git hooks enforce on push:
 
 ```sh
-mise run check      # go vet ./... + golangci-lint run ./... + go test ./...
+mise run check      # go vet ./... + golangci-lint run ./... + go test ./... + govulncheck ./...
 ```
 
 Individual tasks are available too:
@@ -64,6 +64,7 @@ Individual tasks are available too:
 | `mise run test`  | `go test ./...`               |
 | `mise run lint`  | `golangci-lint run ./...`     |
 | `mise run vet`   | `go vet ./...`                |
+| `mise run vuln`  | `govulncheck ./...`           |
 | `mise run tidy`  | `go mod tidy`                 |
 
 Code is formatted with `gofmt` (run automatically on commit via lefthook).

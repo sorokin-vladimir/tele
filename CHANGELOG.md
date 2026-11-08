@@ -17,6 +17,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   shrugging man are drawn as emoji, not as text symbols, and picking one
   again takes it back, also on messages stored by an earlier version (#294).
 
+### Security
+
+- Official builds are made with Go 1.26.10 and updated network, image and
+  compression libraries, closing known vulnerabilities in the code tele
+  calls.
+
 ## [2.1.2] - 2026-11-06
 
 ### Fixed

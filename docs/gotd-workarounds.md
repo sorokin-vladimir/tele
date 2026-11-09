@@ -32,7 +32,7 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 | Workaround | Where | Issue | Retired by | Status (gotd v0.163.0) |
 |---|---|---|---|---|
-| Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1852](https://github.com/gotd/td/issues/1852) | open, no fix yet |
+| Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1866](https://github.com/gotd/td/pull/1866), for [gotd/td#1852](https://github.com/gotd/td/issues/1852) | PR open, not merged |
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
 | Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1856](https://github.com/gotd/td/issues/1856) | open, no fix yet |

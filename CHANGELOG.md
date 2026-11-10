@@ -19,6 +19,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   `tele show --mark-read`, set `cli.account_commands: all` in the config of
   the `tele` holding the account. A refused command says what the setting is
   and what to set it to.
+- A new message toast stays for 8 seconds instead of 5, so it is still there
+  to open the chat after a click on the desktop notification brought the
+  terminal forward.
 
 ### Fixed
 

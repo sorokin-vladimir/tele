@@ -33,7 +33,8 @@ func newChatsCmd(o *options) *cobra.Command {
 			}
 			return askAccount(cmd.Context(), *o, readyTimeout, func(ctx context.Context, a heldAccount) error {
 				q.nameWidth = a.cfg.CLI.NameWidth
-				return listChats(ctx, a, cmd.OutOrStdout(), q)
+				q.listLimit = a.cfg.CLI.ListLimit
+				return listChats(ctx, a, cmd.OutOrStdout(), cmd.ErrOrStderr(), q)
 			})
 		},
 	}
@@ -42,8 +43,10 @@ func newChatsCmd(o *options) *cobra.Command {
 	f.BoolVar(&q.unread, "unread", false, "only the chats with something unread")
 	f.BoolVar(&archived, "archived", false, "the archived chats instead of the main list")
 	f.IntVar(&q.folder, "folder", 0, "the chats of the folder with this id instead of the main list")
+	f.BoolVar(&q.all, "all", false, "print every chat, lifting cli.list_limit")
 	f.IntVar(&q.limit, "limit", 0, "how many chats at most, the first of the list; all when left out")
 	cmd.MarkFlagsMutuallyExclusive("archived", "folder")
+	cmd.MarkFlagsMutuallyExclusive("all", "limit")
 	return cmd
 }
 
@@ -54,9 +57,13 @@ type chatsQuery struct {
 	folder int
 	unread bool
 	asJSON bool
+	// all lifts cli.list_limit for this run.
+	all bool
 	// limit is how many chats to print at most, of what the other flags
 	// leave; 0 prints them all.
 	limit int
+	// listLimit is how many chats to print by default when no --limit is given.
+	listLimit int
 	// nameWidth is the columns a title gets before it is cut short.
 	nameWidth int
 }
@@ -67,6 +74,25 @@ func firstOf[T any](rows []T, limit int) []T {
 		return rows[:limit]
 	}
 	return rows
+}
+
+// effectiveListLimit returns the row limit to apply. An explicit --limit
+// overrides the default; --all lifts any limit; --json ignores cli.list_limit
+// and only respects an explicit --limit (#329).
+func effectiveListLimit(limit int, all, asJSON bool, defaultLimit int) int {
+	if all {
+		return 0
+	}
+	if limit > 0 {
+		return limit
+	}
+	if asJSON {
+		return 0
+	}
+	if defaultLimit > 0 {
+		return defaultLimit
+	}
+	return 0
 }
 
 // listLimit refuses a --limit below 1 as a mistake in the command line. Left
@@ -81,7 +107,7 @@ func listLimit(cmd *cobra.Command, n int) error {
 // listChats prints the chats of the list q names, in its order: as text, or
 // as JSON Lines. The list is the one a window would show, folder rules and
 // all, since only the owner holds what they are judged on.
-func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQuery) error {
+func listChats(ctx context.Context, acc accountSurface, out, errOut io.Writer, q chatsQuery) error {
 	d, err := firstDelta(ctx, acc, project.ChatListWindow{Folder: q.folder, Limit: math.MaxInt32})
 	if err != nil {
 		return err
@@ -100,12 +126,20 @@ func listChats(ctx context.Context, acc accountSurface, out io.Writer, q chatsQu
 			rows = append(rows, c)
 		}
 	}
-	rows = firstOf(rows, q.limit)
+	total := len(rows)
+	lim := effectiveListLimit(q.limit, q.all, q.asJSON, q.listLimit)
+	rows = firstOf(rows, lim)
 	if q.asJSON {
 		return chatsJSON(out, rows)
 	}
 	_, err = io.WriteString(out, chatsText(rows, q.nameWidth))
-	return err
+	if err != nil {
+		return err
+	}
+	if errOut != nil && len(rows) < total {
+		fmt.Fprintf(errOut, "%d of %d chats; --all for the rest\n", len(rows), total)
+	}
+	return nil
 }
 
 func hasFolder(filters []domain.FolderFilter, id int) bool {

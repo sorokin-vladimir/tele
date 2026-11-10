@@ -11,6 +11,13 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- `cli.list_limit` sets how many rows `tele chats` and `tele topics` print as
+  text when no `--limit` is given (20 by default; 0 prints them all). `--all`
+  lifts it for one run. When the list is cut short, a note on stderr says so
+  (#329).
+
 ### Changed
 
 - Commands may only read by default: `cli.account_commands` is now `read`,

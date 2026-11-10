@@ -107,7 +107,7 @@ On a Claude Code older than 2.1.275, add the marketplace first: `claude plugin m
 
 </details>
 
-`cli.account_commands` decides how far commands may go: `read` lets them read and not send, `none` keeps them out.
+`cli.account_commands` decides how far commands may go: by default, `read`, they read and do not send, `all` lets them send as well, and `none` keeps them out.
 [docs/cli.md](docs/cli.md#keeping-commands-out-of-your-chats)
 
 ---

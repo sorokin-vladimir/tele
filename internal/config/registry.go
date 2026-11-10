@@ -308,7 +308,7 @@ var registry = []settings.Entry{
 		Process: settings.Host,
 		Group:   "cli",
 		Label:   "Account commands",
-		Help:    "What tele chats, tele topics, tele show and tele send may do with your chats. all: everything. read: list and show, and change nothing, so no sending and no marking read. none: nothing at all. What is not allowed exits 7, so a script or an AI agent allowed to run tele cannot go further through it. It does not stop a program that reads the state directory itself.",
+		Help:    "What tele chats, tele topics, tele show and tele send may do with your chats. all: everything. read, the default: list and show, and change nothing, so no sending and no marking read. none: nothing at all. What is not allowed exits 7, so a script or an AI agent allowed to run tele cannot go further through it. It does not stop a program that reads the state directory itself.",
 		Widget:  settings.Choice,
 		Applies: settings.Immediate,
 		Choices: []string{"all", "read", "none"},

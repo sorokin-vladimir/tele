@@ -40,6 +40,9 @@ SENDING
 Send a message only when the person asked for that message to be sent, with
 the text they approved.
 
+By default commands may only read: `tele send` and `--mark-read` exit 7 until
+the person sets cli.account_commands to all. Do not change it yourself.
+
     tele send CHAT --ref KEY --json "text"
     printf '%s' "$text" | tele send CHAT --ref KEY --json
 

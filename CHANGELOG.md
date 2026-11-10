@@ -11,6 +11,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Changed
+
+- Commands may only read by default: `cli.account_commands` is now `read`,
+  so a script or an AI agent allowed to run `tele` cannot send or mark chats
+  read until you set it to `all`. If you use `tele send` or
+  `tele show --mark-read`, set `cli.account_commands: all` in the config of
+  the `tele` holding the account. A refused command says what the setting is
+  and what to set it to.
+
 ### Fixed
 
 - Reactions such as the red heart, the writing hand, the dove and the

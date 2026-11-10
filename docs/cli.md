@@ -35,11 +35,11 @@ Anything else exits 2, and a name that is no chat exits 5.
 
 | Value  | What commands may do                                                           |
 | ------ | ------------------------------------------------------------------------------ |
-| `all`  | Everything, the default                                                        |
-| `read` | List and show, and change nothing: `tele send` and `tele show --mark-read` are refused |
+| `all`  | Everything                                                                     |
+| `read` | List and show, and change nothing: `tele send` and `tele show --mark-read` are refused. The default |
 | `none` | Nothing: every command acting on the account is refused                        |
 
-What is refused exits 7.
+What is refused exits 7, with a message that says what the setting is and what to set it to.
 It is meant for a script or an AI agent you let run `tele`: with `read` it can read your chats and not write to them, with `none` it gets nothing.
 It is the setting of the `tele` holding the account, not of the command, so a command given another config file is held to it all the same, and a command can never change the settings of the `tele` it asks.
 `tele daemon status` says what is allowed.
@@ -184,7 +184,7 @@ A message that did not go prints nothing: the exit code (6 or 75) and stderr say
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
-  "account_commands": "all",
+  "account_commands": "read",
   "account": {
     "phase": "ready",
     "user": "ada",

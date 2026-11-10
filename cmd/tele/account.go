@@ -13,6 +13,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/hosting"
 	"github.com/sorokin-vladimir/tele/internal/ipc"
 	"github.com/sorokin-vladimir/tele/internal/ipc/dial"
+	"github.com/sorokin-vladimir/tele/internal/ipc/protocol"
 	"github.com/sorokin-vladimir/tele/internal/ipc/wire"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/version"
@@ -135,14 +136,26 @@ const notFoundCode = 5
 const commandsOffCode = 7
 
 // commandsOff turns the refusal of a tele that does not let commands reach
-// the account into exit 7, naming the setting; any other error is left as it
-// is.
+// the account into exit 7, saying what the setting is and what to set it to;
+// any other error is left as it is. The refused call tells the setting apart:
+// a read is refused only under none, a write only under read or none, and
+// every command reads before it writes, so a refused write means read.
 func commandsOff(err error) error {
-	if telerr.Of(err) != telerr.CommandsOff {
+	te := telerr.From(err)
+	if te == nil || te.Kind != telerr.CommandsOff {
 		return err
 	}
-	return &exitCode{code: commandsOffCode, msg: "The tele holding the account does not let commands do this: " +
-		"cli.account_commands in its config says what they may do."}
+	const where = " in the config of the tele holding the account, or in Settings in one of its windows."
+	msg := "Not allowed: the tele holding the account does not let commands do this. " +
+		"cli.account_commands says what they may do; change it" + where
+	if _, read := protocol.Reads[te.Op]; read {
+		msg = "Not allowed: the tele holding the account lets commands do nothing, as cli.account_commands is none. " +
+			"To let them read your chats, set cli.account_commands to read (or to all, to send as well)" + where
+	} else if _, write := protocol.Writes[te.Op]; write {
+		msg = "Not allowed: the tele holding the account lets commands read and change nothing, as cli.account_commands is read. " +
+			"To let them send messages and mark chats read, set cli.account_commands to all" + where
+	}
+	return &exitCode{code: commandsOffCode, msg: msg}
 }
 
 // awaitReady returns once the account is ready to be asked: its chat list is

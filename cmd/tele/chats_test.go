@@ -141,7 +141,7 @@ func TestAwaitReady_AHostGoneExitsThree(t *testing.T) {
 // (#181).
 func TestAwaitReady_CommandsTurnedOffExitSeven(t *testing.T) {
 	acc := newFakeAccount()
-	acc.stream <- core.HostFailure{Err: &telerr.Error{Kind: telerr.CommandsOff}}
+	acc.stream <- core.HostFailure{Err: &telerr.Error{Kind: telerr.CommandsOff, Op: "Subscribe"}}
 
 	_, err := awaitReady(shortCtx(t), acc)
 
@@ -150,6 +150,39 @@ func TestAwaitReady_CommandsTurnedOffExitSeven(t *testing.T) {
 		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
 	}
 	assertSays(t, code.msg, "cli.account_commands")
+}
+
+// A refused read can only mean commands may do nothing: the refusal says the
+// setting is none and what to set it to (#181).
+func TestCommandsOff_ARefusedReadSaysNoneAndHowToAllow(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff, Op: "Subscribe"}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands is none")
+	assertSays(t, code.msg, "set cli.account_commands to read")
+}
+
+// A refused write means commands may only read: the refusal says so, and how
+// to let them write.
+func TestCommandsOff_ARefusedWriteSaysReadAndHowToAllow(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff, Op: "Send"}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands is read")
+	assertSays(t, code.msg, "set cli.account_commands to all")
+}
+
+// A refusal naming no call, as from a host that does not say it, still names
+// the setting and where to change it.
+func TestCommandsOff_ARefusalWithNoCallNamesTheSetting(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands")
+	assertSays(t, code.msg, "Settings")
 }
 
 // A call refused the same way exits 7 too, whichever call it was.

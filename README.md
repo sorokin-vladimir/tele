@@ -38,7 +38,8 @@ Telegram Desktop, the web client and the mobile apps are built around the mouse.
 If you live in the terminal, with Neovim, yazi, k9s or tmux, switching to a GUI messenger breaks your flow.
 
 `tele` keeps Telegram in the terminal.
-You drive it from the keyboard the way you drive lazygit, it works over SSH, and it uses about 50 MB of memory at idle, where desktop clients take several hundred.
+You drive it from the keyboard the way you drive lazygit, and it works over SSH.
+At startup the background service and a window take about 50 MB of memory each, more once media is cached, where desktop clients take several hundred.
 Its author uses it every day.
 
 The same `tele` answers on the command line: you, or an AI agent you let run it, can list chats, read one and send a message without opening a window.
@@ -214,7 +215,8 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-Signed `.deb` files are also attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+This repository is installed without a signature check: apt takes whatever it serves ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.deb` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo apt install ./tele_<version>_amd64.deb`.
 
 </details>
 
@@ -232,7 +234,8 @@ EOF
 sudo dnf install tele   # or: sudo zypper install tele
 ```
 
-Signed `.rpm` files are also attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+This repository is installed without a signature check: dnf and zypper take whatever it serves ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.rpm` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo dnf install ./tele-<version>-1.x86_64.rpm`.
 
 </details>
 
@@ -243,6 +246,9 @@ Signed `.rpm` files are also attached to every [release](https://github.com/soro
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
+
+`--allow-untrusted` turns off apk's signature check: the package is not signed yet ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.apk` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo apk add --allow-untrusted ./tele_<version>_x86_64.apk`.
 
 </details>
 
@@ -317,6 +323,21 @@ environment.systemPackages = [
 </details>
 
 AUR and Snap packages are planned but not published yet.
+
+### Checking a download
+
+Every release carries `checksums.txt`, with the SHA-256 of every binary, archive and package in it, signed by the release workflow with [Sigstore](https://www.sigstore.dev/).
+To check a file you downloaded, put it next to `checksums.txt` and `checksums.txt.sigstore.json` from the same release, and run:
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sorokin-vladimir/tele/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+The first command shows that `checksums.txt` came from tele's release workflow, the second that your file matches it.
 
 ---
 

@@ -1,6 +1,6 @@
 # 配置
 
-> 本文译自 [configuration.md](../configuration.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [configuration.md](../configuration.md)，对应提交 `23c1c3f`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 使用一个 YAML 文件，首次运行时创建：
 
@@ -66,7 +66,7 @@ avatars:
 
 cli:
   name_width: 20 # columns a command gives a name or title before cutting it short
-  account_commands: all # all | read | none: what commands may do with your chats
+  account_commands: read # all | read | none: what commands may do with your chats
 
 # keybindings: see keybindings.md
 ```

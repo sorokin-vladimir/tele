@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `2556c34`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `23c1c3f`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -95,7 +95,7 @@ Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace ad
 
 </details>
 
-命令能做到哪一步由 `cli.account_commands` 决定：设为 `read` 时它们可以读取但不能发送，设为 `none` 时它们什么也拿不到。[docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)
+命令能做到哪一步由 `cli.account_commands` 决定：默认值为 `read`，此时它们可以读取但不能发送；设为 `all` 时它们还可以发送；设为 `none` 时它们什么也拿不到。[docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)
 
 ---
 

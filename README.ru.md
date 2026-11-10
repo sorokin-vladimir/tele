@@ -1,6 +1,6 @@
 # tele
 
-> Перевод [README.md](README.md) на коммит `bfe07cb`. Если перевод расходится с английской версией, верна английская.
+> Перевод [README.md](README.md) на коммит `2556c34`. Если перевод расходится с английской версией, верна английская.
 
 ```
   _            _
@@ -41,7 +41,8 @@ Telegram Desktop, веб-клиент и мобильные приложения
 Если вы живёте в терминале и пользуетесь Neovim, yazi, k9s или tmux, переход в графический мессенджер сбивает с ритма.
 
 `tele` оставляет Telegram в терминале.
-Им управляют с клавиатуры, как lazygit, он работает по SSH и в простое занимает около 50 МБ памяти, тогда как десктопным клиентам нужно несколько сотен.
+Им управляют с клавиатуры, как lazygit, и он работает по SSH.
+На старте фоновый сервис и окно занимают около 50 МБ памяти каждый, а когда накопится кэш медиа, больше, тогда как десктопным клиентам нужно несколько сотен.
 Автор пользуется им каждый день.
 
 Тот же `tele` отвечает и в командной строке: вы или ИИ-агент, которому вы разрешили его запускать, можете посмотреть список чатов, прочитать чат и отправить сообщение, не открывая окна.
@@ -224,7 +225,8 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-Подписанные файлы `.deb` также приложены к каждому [релизу](https://github.com/sorokin-vladimir/tele/releases/latest).
+Этот репозиторий подключается без проверки подписи: apt ставит всё, что он отдаёт ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+Чтобы поставить проверенный пакет, скачайте `.deb` из [последнего релиза](https://github.com/sorokin-vladimir/tele/releases/latest), проверьте его, как описано в разделе [Проверка загрузки](#checking-a-download), и выполните `sudo apt install ./tele_<версия>_amd64.deb`.
 
 </details>
 
@@ -242,7 +244,8 @@ EOF
 sudo dnf install tele   # или: sudo zypper install tele
 ```
 
-Подписанные файлы `.rpm` также приложены к каждому [релизу](https://github.com/sorokin-vladimir/tele/releases/latest).
+Этот репозиторий подключается без проверки подписи: dnf и zypper ставят всё, что он отдаёт ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+Чтобы поставить проверенный пакет, скачайте `.rpm` из [последнего релиза](https://github.com/sorokin-vladimir/tele/releases/latest), проверьте его, как описано в разделе [Проверка загрузки](#checking-a-download), и выполните `sudo dnf install ./tele-<версия>-1.x86_64.rpm`.
 
 </details>
 
@@ -253,6 +256,9 @@ sudo dnf install tele   # или: sudo zypper install tele
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
+
+`--allow-untrusted` выключает проверку подписи в apk: пакет пока не подписан ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+Чтобы поставить проверенный пакет, скачайте `.apk` из [последнего релиза](https://github.com/sorokin-vladimir/tele/releases/latest), проверьте его, как описано в разделе [Проверка загрузки](#checking-a-download), и выполните `sudo apk add --allow-untrusted ./tele_<версия>_x86_64.apk`.
 
 </details>
 
@@ -327,6 +333,22 @@ environment.systemPackages = [
 </details>
 
 Пакеты для AUR и Snap запланированы, но пока не опубликованы.
+
+<a id="checking-a-download"></a>
+### Проверка загрузки
+
+К каждому релизу приложен `checksums.txt` с SHA-256 всех бинарников, архивов и пакетов, подписанный в release workflow через [Sigstore](https://www.sigstore.dev/).
+Чтобы проверить скачанный файл, положите рядом с ним `checksums.txt` и `checksums.txt.sigstore.json` из того же релиза и выполните:
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sorokin-vladimir/tele/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+Первая команда показывает, что `checksums.txt` сделан release workflow tele, вторая — что ваш файл с ним совпадает.
 
 ---
 

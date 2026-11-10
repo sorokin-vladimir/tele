@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `bfe07cb`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `2556c34`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -39,7 +39,7 @@
 
 Telegram Desktop、网页版和手机应用都是围绕鼠标设计的。如果你的日常工作都在终端里，用着 Neovim、yazi、k9s 或 tmux，切换到图形界面的聊天软件会打断你的节奏。
 
-`tele` 让 Telegram 留在终端里。你可以像用 lazygit 一样用键盘操作它，它能通过 SSH 使用，空闲时只占约 50 MB 内存，而桌面客户端要占几百 MB。作者每天都在用它。
+`tele` 让 Telegram 留在终端里。你可以像用 lazygit 一样用键盘操作它，它能通过 SSH 使用。刚启动时，后台服务和一个窗口各占约 50 MB 内存，缓存媒体后会更多，而桌面客户端要占几百 MB。作者每天都在用它。
 
 同一个 `tele` 也能在命令行中使用：你，或者你允许运行它的 AI 代理，可以列出聊天、读取聊天并发送消息，而无需打开窗口。
 
@@ -200,7 +200,7 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.deb` 文件。
+这个软件源在添加时不检查签名：它提供什么，apt 就安装什么（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.deb`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo apt install ./tele_<版本>_amd64.deb`。
 
 </details>
 
@@ -218,7 +218,7 @@ EOF
 sudo dnf install tele   # 或：sudo zypper install tele
 ```
 
-每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.rpm` 文件。
+这个软件源在添加时不检查签名：它提供什么，dnf 和 zypper 就安装什么（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.rpm`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo dnf install ./tele-<版本>-1.x86_64.rpm`。
 
 </details>
 
@@ -229,6 +229,8 @@ sudo dnf install tele   # 或：sudo zypper install tele
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
+
+`--allow-untrusted` 会关闭 apk 的签名检查：软件包目前尚未签名（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.apk`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo apk add --allow-untrusted ./tele_<版本>_x86_64.apk`。
 
 </details>
 
@@ -300,6 +302,21 @@ environment.systemPackages = [
 </details>
 
 AUR 和 Snap 软件包已在计划中，但尚未发布。
+
+<a id="checking-a-download"></a>
+### 检查下载的文件
+
+每个版本都附带 `checksums.txt`，其中列出所有二进制文件、压缩包和软件包的 SHA-256，并由发布工作流通过 [Sigstore](https://www.sigstore.dev/) 签名。要检查下载的文件，请把同一版本的 `checksums.txt` 和 `checksums.txt.sigstore.json` 放在它旁边，然后运行：
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sorokin-vladimir/tele/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+第一条命令证明 `checksums.txt` 来自 tele 的发布工作流，第二条证明你的文件与它一致。
 
 ---
 

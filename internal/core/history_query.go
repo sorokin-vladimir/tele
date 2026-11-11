@@ -20,15 +20,16 @@ import (
 // adjacent. Neither is a chat known by its address alone kept, since the
 // account has no dialog with it.
 func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
-	peer, err := o.peer(h.ChatID)
+	chat, err := o.chatOf(ctx, h.ChatID)
 	if err != nil {
 		return nil, err
 	}
-	st := o.state.Store()
-	chat, held := st.GetChat(h.ChatID)
-	if held && chat.IsForum && h.TopicID == 0 {
-		return nil, &telerr.Error{Kind: telerr.NotFound, Op: "history", Detail: "a forum's messages are its topics'"}
+	if chat.IsForum && h.TopicID == 0 {
+		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
+	peer := chat.Peer
+	st := o.state.Store()
+	_, held := st.GetChat(h.ChatID)
 	fetch := func(offsetID int) ([]domain.Message, error) {
 		page := max(limit, o.Config().UI.HistoryLimit)
 		if h.TopicID != 0 {

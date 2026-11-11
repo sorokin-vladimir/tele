@@ -10,7 +10,6 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
-	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // serverHistory is Telegram holding one history: it answers a page of up to
@@ -22,9 +21,19 @@ type serverHistory struct {
 	// fetchedFrom is every offset a page was asked from.
 	fetchedFrom []int
 	repliesOf   []int
+	// chats is what FetchChat answers with by id; any other address is an
+	// ordinary chat.
+	chats map[int64]domain.Chat
 }
 
 func (s *serverHistory) Updates() <-chan store.Event { return nil }
+
+func (s *serverHistory) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat, error) {
+	if c, ok := s.chats[peer.ID]; ok {
+		return c, nil
+	}
+	return domain.Chat{ID: peer.ID, Peer: peer}, nil
+}
 
 func (s *serverHistory) page(offsetID, limit int) []domain.Message {
 	s.fetchedFrom = append(s.fetchedFrom, offsetID)
@@ -169,7 +178,22 @@ func TestHistory_AForumWithoutATopicIsNone(t *testing.T) {
 
 	_, err := o.History(context.Background(), oneChat, 0, 5)
 
-	assert.Equal(t, telerr.NotFound, telerr.Of(err), "got %v", err)
+	assert.True(t, IsNoTopic(err), "got %v", err)
+}
+
+// A forum the owner knows by its address alone has no history of its own
+// either: asked whole, it says it is a forum, and its topics are not read
+// mixed together as one (#348).
+func TestHistory_AForumKnownByAddressWithoutATopicIsNone(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverHistory{chats: map[int64]domain.Chat{20: club}}
+	o, s := newOwnerWithClient(t, server)
+	s.RememberAddress(club.Peer)
+
+	_, err := o.History(context.Background(), domain.HistoryKey{ChatID: 20}, 0, 5)
+
+	assert.True(t, IsNoTopic(err), "got %v", err)
+	assert.Empty(t, server.fetchedFrom, "no page was asked")
 }
 
 // A chat reached by its address alone, such as one named by a username the

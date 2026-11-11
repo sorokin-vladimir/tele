@@ -414,6 +414,18 @@ func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, l
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) { return s.History(ctx, h, before, limit) })
 }
 
+func (a *Attachment) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) {
+		return s.HistoryAround(ctx, h, id, limit)
+	})
+}
+
+func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) ([]project.FoundMessage, error) {
+		return s.SearchMessages(ctx, scope, text, limit)
+	})
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.FolderFilter, error) { return s.FolderFilters(ctx) })
 }

@@ -168,6 +168,14 @@ func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, l
 	return ask[[]domain.Message](a, ctx, "History", h, before, limit)
 }
 
+func (a *Attachment) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
+	return ask[[]domain.Message](a, ctx, "HistoryAround", h, id, limit)
+}
+
+func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
+	return ask[[]project.FoundMessage](a, ctx, "SearchMessages", scope, text, limit)
+}
+
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {
 	return ask[[]domain.FolderFilter](a, ctx, "FolderFilters")
 }

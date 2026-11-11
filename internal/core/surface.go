@@ -94,6 +94,13 @@ type Surface interface {
 	// before, the newest for zero, oldest first, fetching what the store
 	// lacks. It is how a command reads; a window subscribes (#181).
 	History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error)
+	// HistoryAround answers with up to limit messages of a history around a
+	// message, oldest first, from Telegram and kept nowhere; a message that is
+	// not there is NotFound (#348).
+	HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error)
+	// SearchMessages asks Telegram which messages hold a text within a scope,
+	// newest first (#348).
+	SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without asking

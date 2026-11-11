@@ -255,6 +255,14 @@ func (o *ownerStub) History(context.Context, domain.HistoryKey, int, int) ([]dom
 	return nil, o.err
 }
 
+func (o *ownerStub) HistoryAround(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
+	return nil, o.err
+}
+
+func (o *ownerStub) SearchMessages(context.Context, project.SearchScope, string, int) ([]project.FoundMessage, error) {
+	return nil, o.err
+}
+
 func (o *ownerStub) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {
 	c, ok := o.state.Store().GetChat(chatID)
 	if !ok {

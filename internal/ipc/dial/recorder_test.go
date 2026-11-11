@@ -205,6 +205,14 @@ func (r *recorder) History(_ context.Context, h domain.HistoryKey, before, limit
 	err := r.took("History", h, before, limit)
 	return result[[]domain.Message](r, "History", 0), err
 }
+func (r *recorder) HistoryAround(_ context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
+	err := r.took("HistoryAround", h, id, limit)
+	return result[[]domain.Message](r, "HistoryAround", 0), err
+}
+func (r *recorder) SearchMessages(_ context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
+	err := r.took("SearchMessages", scope, text, limit)
+	return result[[]project.FoundMessage](r, "SearchMessages", 0), err
+}
 func (r *recorder) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	err := r.took("FolderFilters")
 	return result[[]domain.FolderFilter](r, "FolderFilters", 0), err

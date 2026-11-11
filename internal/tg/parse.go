@@ -85,26 +85,42 @@ func selectMessageByID(msgs []domain.Message, id int) (domain.Message, bool) {
 }
 
 func parseHistory(result tg.MessagesMessagesClass, chatID int64) []domain.Message {
-	var rawMsgs []tg.MessageClass
-	var rawUsers []tg.UserClass
-	var rawChats []tg.ChatClass
-
-	switch v := result.(type) {
-	case *tg.MessagesMessages:
-		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
-	case *tg.MessagesMessagesSlice:
-		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
-	case *tg.MessagesChannelMessages:
-		rawMsgs, rawUsers, rawChats = v.Messages, v.Users, v.Chats
-	default:
+	rawMsgs, rawUsers, rawChats, ok := unpackMessages(result)
+	if !ok {
 		return nil
 	}
+	out := convertMessages(rawMsgs, rawUsers, rawChats, func(tg.MessageClass) int64 { return chatID })
+	// Telegram API returns newest-first; reverse to chronological order.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
 
+// unpackMessages is the messages, users and chats of an answer that lists
+// messages, whichever of its shapes it came in; false for any other answer.
+func unpackMessages(result tg.MessagesMessagesClass) ([]tg.MessageClass, []tg.UserClass, []tg.ChatClass, bool) {
+	switch v := result.(type) {
+	case *tg.MessagesMessages:
+		return v.Messages, v.Users, v.Chats, true
+	case *tg.MessagesMessagesSlice:
+		return v.Messages, v.Users, v.Chats, true
+	case *tg.MessagesChannelMessages:
+		return v.Messages, v.Users, v.Chats, true
+	}
+	return nil, nil, nil, false
+}
+
+// convertMessages converts rawMsgs in the order given, each in the chat chatOf
+// names for it, with its sender and forward named from the users and chats
+// the answer carried.
+func convertMessages(rawMsgs []tg.MessageClass, rawUsers []tg.UserClass, rawChats []tg.ChatClass, chatOf func(tg.MessageClass) int64) []domain.Message {
 	nameMap := buildNameMap(rawUsers)
 	chatNameMap := buildChatNameMap(rawChats)
 
 	out := make([]domain.Message, 0, len(rawMsgs))
 	for _, raw := range rawMsgs {
+		chatID := chatOf(raw)
 		if msg, ok := convertMessage(raw, chatID); ok {
 			msg.SenderName = nameMap[msg.SenderID]
 			if msg.SenderName == "" && msg.SenderID == 0 && !msg.IsOut {
@@ -131,10 +147,6 @@ func parseHistory(result tg.MessagesMessagesClass, chatID int64) []domain.Messag
 			}
 			out = append(out, msg)
 		}
-	}
-	// Telegram API returns newest-first; reverse to chronological order.
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
 	}
 	return out
 }

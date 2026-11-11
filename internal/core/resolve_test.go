@@ -12,6 +12,14 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
+func (s *stubClient) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat, error) {
+	s.fetched = append(s.fetched, peer)
+	if s.err != nil {
+		return domain.Chat{}, s.err
+	}
+	return s.byPeer, nil
+}
+
 func (s *stubClient) ResolveUsername(_ context.Context, username string) (domain.Chat, error) {
 	s.resolved = append(s.resolved, username)
 	if s.err != nil {
@@ -84,6 +92,26 @@ func TestResolveChat_AUsernameNotAmongTheChatsIsAskedOfTelegram(t *testing.T) {
 	peer, err := o.peer(42)
 	require.NoError(t, err)
 	assert.Equal(t, bob, peer)
+}
+
+// An id the owner holds no chat for, but an address, is asked of Telegram by
+// that address: a chat a message search found is named by its id next, and
+// is answered whole, a forum saying it is one, without becoming a chat of the
+// list (#348).
+func TestResolveChat_AnIDKnownByAddressIsAskedOfTelegram(t *testing.T) {
+	club := domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}
+	c := &stubClient{byPeer: domain.Chat{ID: 20, Title: "Club", IsForum: true, Peer: club}}
+	o, st := newCmdOwner(t, c)
+	o.state.RememberAddress(club)
+
+	got, err := o.ResolveChat(context.Background(), ChatName{ID: 20})
+
+	require.NoError(t, err)
+	assert.Equal(t, []domain.Peer{club}, c.fetched)
+	assert.Equal(t, "Club", got.Title)
+	assert.True(t, got.IsForum)
+	_, held := st.GetChat(20)
+	assert.False(t, held, "a chat with no dialog is not one of the list")
 }
 
 // A username Telegram does not know names nothing.

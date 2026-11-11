@@ -103,7 +103,7 @@ func foundSample() []project.FoundMessage {
 // Each message found is a JSON object a line, in the shape tele show prints,
 // with the chat it was found in first and its topic in a forum, whatever was
 // searched (#348).
-func TestSearchJSON(t *testing.T) {
+func TestSearchJSON_PutsTheChatBeforeTheMessageAsShowPrintsIt(t *testing.T) {
 	var out bytes.Buffer
 
 	if err := searchJSON(&out, foundSample(), me); err != nil {
@@ -120,7 +120,7 @@ func TestSearchJSON(t *testing.T) {
 
 // As a person reads it, a message found is a line: its id first, as that is
 // what tele show --around takes, then when, where and who, and how it starts.
-func TestSearchText(t *testing.T) {
+func TestSearchText_PutsTheIDFirstAndAlignsTheColumns(t *testing.T) {
 	got := searchText(foundSample(), 20, time.UTC)
 
 	want := "" +

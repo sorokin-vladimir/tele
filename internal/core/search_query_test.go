@@ -31,9 +31,22 @@ type serverSearch struct {
 	aroundTopic int
 	aroundID    int
 	aroundLimit int
+	aroundErr   error
+	aroundAsked bool
+
+	// chats is what FetchChat answers with, by id.
+	chats map[int64]domain.Chat
 }
 
 func (s *serverSearch) Updates() <-chan store.Event { return nil }
+
+func (s *serverSearch) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat, error) {
+	c, ok := s.chats[peer.ID]
+	if !ok {
+		return domain.Chat{}, &telerr.Error{Kind: telerr.PeerNotFound}
+	}
+	return c, nil
+}
 
 func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topicID int, text string, limit int) (internaltg.FoundMessages, error) {
 	s.searched = true
@@ -42,7 +55,11 @@ func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topi
 }
 
 func (s *serverSearch) GetHistoryAround(_ context.Context, peer domain.Peer, topicID, id, limit int) ([]domain.Message, error) {
+	s.aroundAsked = true
 	s.aroundIn, s.aroundTopic, s.aroundID, s.aroundLimit = peer, topicID, id, limit
+	if s.aroundErr != nil {
+		return nil, s.aroundErr
+	}
 	return s.around, nil
 }
 
@@ -159,7 +176,22 @@ func TestHistoryAround_AMessageNotThereIsNotFound(t *testing.T) {
 
 	_, err := o.HistoryAround(context.Background(), oneChat, 50, 5)
 
-	assert.Equal(t, telerr.NotFound, telerr.Of(err))
+	assert.True(t, IsNoMessage(err), "got %v", err)
+	assert.False(t, IsNoTopic(err))
+}
+
+// A topic Telegram does not know is no topic, not a missing message:
+// messages.getReplies answers a bad topic with MSG_ID_INVALID, which reads as
+// NotFound (#348).
+func TestHistoryAround_ATopicNotThereIsNoTopic(t *testing.T) {
+	server := &serverSearch{aroundErr: &telerr.Error{Kind: telerr.NotFound, Detail: "MSG_ID_INVALID"}}
+	forum := domain.Chat{ID: 2, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 2, Type: domain.PeerSuperGroup}}
+	o := newSearchOwner(t, server, forum)
+
+	_, err := o.HistoryAround(context.Background(), domain.HistoryKey{ChatID: 2, TopicID: 999}, 50, 5)
+
+	assert.True(t, IsNoTopic(err), "got %v", err)
+	assert.False(t, IsNoMessage(err))
 }
 
 // A forum's messages are its topics', as for History.
@@ -170,5 +202,68 @@ func TestHistoryAround_AForumNeedsATopic(t *testing.T) {
 
 	_, err := o.HistoryAround(context.Background(), domain.HistoryKey{ChatID: 2}, 50, 5)
 
-	assert.Equal(t, telerr.NotFound, telerr.Of(err))
+	assert.True(t, IsNoTopic(err), "got %v", err)
+	assert.False(t, server.aroundAsked)
+}
+
+// A forum the owner knows by its address alone needs a topic all the same:
+// asked whole, it says it is a forum, and its messages are not mixed from
+// every topic (#348).
+func TestHistoryAround_AForumKnownByAddressNeedsATopic(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverSearch{chats: map[int64]domain.Chat{20: club}}
+	o := newSearchOwner(t, server)
+	o.state.RememberAddress(club.Peer)
+
+	_, err := o.HistoryAround(context.Background(), domain.HistoryKey{ChatID: 20}, 50, 5)
+
+	assert.True(t, IsNoTopic(err), "got %v", err)
+	assert.False(t, server.aroundAsked)
+}
+
+// At the newest message there is nothing newer: what Telegram gives is the
+// answer.
+func TestHistoryAround_AtTheNewestMessage(t *testing.T) {
+	server := &serverSearch{around: []domain.Message{{ID: 8, ChatID: 1}, {ID: 9, ChatID: 1}, {ID: 10, ChatID: 1}}}
+	o := newSearchOwner(t, server, adaChat)
+
+	got, err := o.HistoryAround(context.Background(), oneChat, 10, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []int{8, 9, 10}, ids(got))
+}
+
+// A message far older than anything stored is asked of Telegram, and what is
+// stored stays as it was, the stretch between still unclaimed.
+func TestHistoryAround_FarBackLeavesTheStoreAlone(t *testing.T) {
+	server := &serverSearch{around: []domain.Message{{ID: 4, ChatID: 1}, {ID: 5, ChatID: 1}, {ID: 6, ChatID: 1}}}
+	o := newSearchOwner(t, server, adaChat)
+	stored := messagesUpTo(100)[90:]
+	o.state.Store().MergeMessages(oneChat, stored)
+
+	got, err := o.HistoryAround(context.Background(), oneChat, 5, 3)
+
+	require.NoError(t, err)
+	assert.Equal(t, []int{4, 5, 6}, ids(got))
+	assert.Equal(t, ids(stored), ids(o.state.Store().Messages(oneChat)))
+}
+
+// A message found in a forum's General carries no topic, as Telegram names
+// General by naming none: the answer names General, so a command can read it
+// next with --topic (#348).
+func TestSearchMessages_AMessageInGeneralIsInGeneral(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverSearch{found: internaltg.FoundMessages{
+		Messages: []domain.Message{{ID: 9, ChatID: 20}, {ID: 8, ChatID: 20, TopicID: 12}, {ID: 4, ChatID: 1}},
+		Chats:    []domain.Chat{club, adaChat},
+	}}
+	o := newSearchOwner(t, server, adaChat)
+
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", 30)
+
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, domain.GeneralTopicID, got[0].Message.TopicID)
+	assert.Equal(t, 12, got[1].Message.TopicID)
+	assert.Equal(t, 0, got[2].Message.TopicID, "outside a forum there is no topic")
 }

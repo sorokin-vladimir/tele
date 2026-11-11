@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
@@ -85,7 +86,7 @@ func showMessages(ctx context.Context, a heldAccount, out io.Writer, chat string
 	var msgs []domain.Message
 	if q.around != 0 {
 		msgs, err = a.HistoryAround(ctx, h, q.around, q.limit)
-		if telerr.Of(err) == telerr.NotFound {
+		if core.IsNoMessage(err) {
 			return &exitCode{code: notFoundCode, msg: fmt.Sprintf("No message %d in %s.", q.around, row.Title)}
 		}
 	} else {

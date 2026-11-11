@@ -44,6 +44,9 @@ type Client interface {
 	// names (one topic of it when topicID is not zero), or in every chat of
 	// the main list when peer is nil (#348).
 	SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, limit int) (FoundMessages, error)
+	// FetchChat asks Telegram for the chat an address names, one the account
+	// has no dialog with; one it does not answer with is PeerNotFound (#348).
+	FetchChat(ctx context.Context, peer domain.Peer) (domain.Chat, error)
 	// GetForumTopicsByID fetches the current state of named topics of a forum.
 	GetForumTopicsByID(ctx context.Context, peer domain.Peer, ids []int) (ForumTopicsPage, error)
 	// RefreshMessage re-fetches a single message to obtain fresh media file

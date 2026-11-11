@@ -9,11 +9,37 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
+// What a NotFound from HistoryAround was about: a topic, or a message. Both
+// are NotFound to Telegram (messages.getReplies answers a bad topic with
+// MSG_ID_INVALID), so the owner says which in the error's Op, and a client
+// tells them apart with IsNoTopic and IsNoMessage (#348).
+const (
+	OpNoTopic   = "no topic"
+	OpNoMessage = "no message"
+)
+
+// IsNoTopic reports whether err says the topic named is not there, or that a
+// forum was named with no topic.
+func IsNoTopic(err error) bool {
+	te := telerr.From(err)
+	return te != nil && te.Kind == telerr.NotFound && te.Op == OpNoTopic
+}
+
+// IsNoMessage reports whether err says the message named is not there.
+func IsNoMessage(err error) bool {
+	te := telerr.From(err)
+	return te != nil && te.Kind == telerr.NotFound && te.Op == OpNoMessage
+}
+
 // SearchMessages asks Telegram which messages hold text within scope, and
 // answers newest first, as Telegram does. It is a query: the answer covers
 // the whole history rather than what is stored, and nothing of it is kept but
 // the addresses of the chats found, since a command names one of them by id
 // next, and the search is where its address came from (#348).
+//
+// A message in a forum's General names no topic, which is how Telegram names
+// General; the answer names General outright, so a client can read it next
+// by its topic.
 func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
 	var in *domain.Peer
 	if scope.ChatID != 0 {
@@ -28,18 +54,21 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 		return nil, err
 	}
 	st := o.state.Store()
-	titles := make(map[int64]string, len(found.Chats))
+	chats := make(map[int64]domain.Chat, len(found.Chats))
 	for _, c := range found.Chats {
 		o.state.RememberAddress(c.Peer)
-		titles[c.ID] = c.Title
+		chats[c.ID] = c
 	}
 	out := make([]project.FoundMessage, 0, len(found.Messages))
 	for _, m := range found.Messages {
-		title := titles[m.ChatID]
+		chat, known := chats[m.ChatID]
 		if held, ok := st.GetChat(m.ChatID); ok {
-			title = held.Title
+			chat, known = held, true
 		}
-		out = append(out, project.FoundMessage{Message: m, Chat: title})
+		if known {
+			m.TopicID = chat.HistoryOf(m).TopicID
+		}
+		out = append(out, project.FoundMessage{Message: m, Chat: chat.Title})
 	}
 	return out, nil
 }
@@ -48,16 +77,24 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 // oldest first: the message itself, and as many newer and older as Telegram
 // gives either side. It always asks Telegram and keeps nothing: a stretch far
 // from what is stored would sit in the store with the history between missing
-// (#348). A message that is not there is NotFound.
+// (#348). A topic that is not there, a forum named with no topic, and a
+// message that is not there are each NotFound, told apart by IsNoTopic and
+// IsNoMessage.
 func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
-	peer, err := o.peer(h.ChatID)
+	chat, err := o.chatOf(ctx, h.ChatID)
 	if err != nil {
 		return nil, err
 	}
-	if chat, held := o.state.Store().GetChat(h.ChatID); held && chat.IsForum && h.TopicID == 0 {
-		return nil, &telerr.Error{Kind: telerr.NotFound, Op: "history", Detail: "a forum's messages are its topics'"}
+	if chat.IsForum && h.TopicID == 0 {
+		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
-	msgs, err := o.client.GetHistoryAround(ctx, peer, h.TopicID, id, limit)
+	msgs, err := o.client.GetHistoryAround(ctx, chat.Peer, h.TopicID, id, limit)
+	if telerr.Of(err) == telerr.NotFound {
+		if h.TopicID != 0 {
+			return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: fmt.Sprintf("no topic %d", h.TopicID)}
+		}
+		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoMessage, Detail: fmt.Sprintf("no message %d", id)}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -66,5 +103,27 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 			return msgs, nil
 		}
 	}
-	return nil, &telerr.Error{Kind: telerr.NotFound, Op: "history", Detail: fmt.Sprintf("no message %d", id)}
+	return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoMessage, Detail: fmt.Sprintf("no message %d", id)}
+}
+
+// chatOf is the chat id names: the one the owner holds, or else the one its
+// address reaches, asked of Telegram whole, since an address alone says
+// neither a chat's title nor whether it is a forum. It does not become a chat
+// of the list: the account has no dialog with it. With neither, it is
+// PeerNotFound: Telegram knows a chat by its address, not by its id alone.
+func (o *Owner) chatOf(ctx context.Context, id int64) (domain.Chat, error) {
+	st := o.state.Store()
+	if c, ok := st.GetChat(id); ok {
+		return c, nil
+	}
+	peer, ok := st.Address(id)
+	if !ok || id == 0 {
+		return domain.Chat{}, &telerr.Error{Kind: telerr.PeerNotFound, Op: "resolve chat"}
+	}
+	c, err := o.client.FetchChat(ctx, peer)
+	if err != nil {
+		return domain.Chat{}, err
+	}
+	o.state.RememberAddress(c.Peer)
+	return c, nil
 }

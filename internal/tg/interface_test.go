@@ -65,6 +65,10 @@ func (m *mockClient) GetHistoryAround(_ context.Context, _ domain.Peer, _, _, _ 
 	return m.history, nil
 }
 
+func (m *mockClient) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat, error) {
+	return domain.Chat{ID: peer.ID, Peer: peer}, nil
+}
+
 func (m *mockClient) SearchMessages(_ context.Context, _ *domain.Peer, _ int, _ string, _ int) (internaltg.FoundMessages, error) {
 	return internaltg.FoundMessages{}, nil
 }

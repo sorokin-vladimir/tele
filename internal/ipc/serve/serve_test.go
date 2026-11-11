@@ -251,6 +251,39 @@ func TestCommandsRead_ACommandReadsAndWritesNothing(t *testing.T) {
 	}
 }
 
+// A message search and the history around a message only read: with read a
+// command may make them, with none it is refused them like anything else
+// (#348).
+func TestCommandAccess_SearchAndAroundAreReads(t *testing.T) {
+	calls := map[string][]any{
+		"SearchMessages": {project.SearchScope{}, "hello", 5},
+		"HistoryAround":  {domain.HistoryKey{ChatID: 1}, 50, 5},
+	}
+	answer := func(c rawClient, id uint64, method string) wire.Frame {
+		t.Helper()
+		params, err := protocol.Calls[method].Params(calls[method]...)
+		require.NoError(t, err)
+		require.NoError(t, c.enc.Encode(wire.Request(id, method, params)))
+		for {
+			f, err := c.dec.Decode()
+			require.NoError(t, err)
+			if f.ID == id {
+				return f
+			}
+		}
+	}
+	read := serveAs(t, wire.KindCommand, wire.CommandsRead)
+	none := serveAs(t, wire.KindCommand, wire.CommandsNone)
+	for i, method := range []string{"SearchMessages", "HistoryAround"} {
+		if f := answer(read, uint64(2+i), method); f.Error != nil {
+			assert.NotEqual(t, telerr.CommandsOff, f.Error.Kind, "%s was refused under read", method)
+		}
+		f := answer(none, uint64(2+i), method)
+		require.NotNil(t, f.Error, "%s: %+v", method, f)
+		assert.Equal(t, telerr.CommandsOff, f.Error.Kind, method)
+	}
+}
+
 // A subscription is answered by its first delta, not by a reply a client
 // waits on: the refusal of one is also told on the stream, where a command
 // waiting for the account is reading.

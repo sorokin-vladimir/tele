@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
-	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // ChatName is how a command names a chat: by its id, by its username, or as
@@ -19,9 +18,11 @@ type ChatName struct {
 }
 
 // ResolveChat answers with the chat name names. An id and me name a chat the
-// owner holds. A username is looked for among those chats first, and asked of
-// Telegram only when none has it; the address Telegram answers with is kept,
-// so the chat is reached by its id from then on (#181).
+// owner holds, or one it holds an address for, such as one a message search
+// found, which is asked of Telegram whole (#348). A username is looked for
+// among the chats first, and asked of Telegram only when none has it; the
+// address Telegram answers with is kept, so the chat is reached by its id
+// from then on (#181).
 func (o *Owner) ResolveChat(ctx context.Context, name ChatName) (project.ChatRow, error) {
 	st := o.state.Store()
 	id := name.ID
@@ -29,9 +30,9 @@ func (o *Owner) ResolveChat(ctx context.Context, name ChatName) (project.ChatRow
 		id = o.Account().LoggedInUser.ID
 	}
 	if name.Username == "" {
-		c, ok := st.GetChat(id)
-		if !ok || id == 0 {
-			return project.ChatRow{}, &telerr.Error{Kind: telerr.PeerNotFound, Op: "resolve chat"}
+		c, err := o.chatOf(ctx, id)
+		if err != nil {
+			return project.ChatRow{}, err
 		}
 		return project.Row(c, st.Topics(c.ID)), nil
 	}

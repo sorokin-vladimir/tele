@@ -129,13 +129,13 @@ func parseFound(res tg.MessagesMessagesClass) FoundMessages {
 		return peerIDFromPeer(messagePeer(raw))
 	})
 
-	in := make(map[int64]bool, len(msgs))
+	withMessages := make(map[int64]bool, len(msgs))
 	for _, m := range msgs {
-		in[m.ChatID] = true
+		withMessages[m.ChatID] = true
 	}
 	var chats []domain.Chat
 	for _, u := range rawUsers {
-		if user, ok := u.(*tg.User); ok && in[user.ID] {
+		if user, ok := u.(*tg.User); ok && withMessages[user.ID] {
 			if chat, ok := convertUser(user); ok {
 				chats = append(chats, chat)
 			}
@@ -150,7 +150,7 @@ func parseFound(res tg.MessagesMessagesClass) FoundMessages {
 		case *tg.Channel:
 			chat, ok = convertChannel(ch)
 		}
-		if ok && in[chat.ID] {
+		if ok && withMessages[chat.ID] {
 			chats = append(chats, chat)
 		}
 	}

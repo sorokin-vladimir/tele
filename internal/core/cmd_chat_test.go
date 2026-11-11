@@ -28,6 +28,11 @@ type stubClient struct {
 	byUsername domain.Chat
 	resolved   []string
 
+	// byPeer is what FetchChat answers with; fetched is every address it was
+	// asked.
+	byPeer  domain.Chat
+	fetched []domain.Peer
+
 	mutedWith     *bool
 	archivedWith  *bool
 	unreadWith    *bool

@@ -54,7 +54,7 @@ func TestBuildSearchGlobalRequest_LooksInTheMainList(t *testing.T) {
 // The history around a message holds it, up to half the rest newer than it
 // and the other half older: Telegram pages back from offset_id, and a negative
 // add_offset moves that many of the page past it.
-func TestBuildAroundRequest(t *testing.T) {
+func TestBuildAroundRequest_PutsTheMessageInTheMiddle(t *testing.T) {
 	peer := &tg.InputPeerUser{UserID: 5}
 
 	req := buildAroundRequest(peer, 100, 21)
@@ -66,7 +66,7 @@ func TestBuildAroundRequest(t *testing.T) {
 }
 
 // The same holds in one topic of a forum.
-func TestBuildAroundRepliesRequest(t *testing.T) {
+func TestBuildAroundRepliesRequest_PutsTheMessageInTheMiddleOfItsTopic(t *testing.T) {
 	peer := &tg.InputPeerChannel{ChannelID: 7}
 
 	req := buildAroundRepliesRequest(peer, 12, 100, 20)

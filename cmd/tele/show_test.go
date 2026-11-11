@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -199,7 +200,7 @@ func TestShow_AroundAsksAroundTheMessage(t *testing.T) {
 func TestShow_AroundAMessageNotThereExitsFive(t *testing.T) {
 	acc := newFakeAccount()
 	acc.byName = map[core.ChatName]project.ChatRow{{ID: 42}: {ID: 42, Title: "Bob"}}
-	acc.aroundErr = &telerr.Error{Kind: telerr.NotFound}
+	acc.aroundErr = &telerr.Error{Kind: telerr.NotFound, Op: core.OpNoMessage}
 
 	err := showMessages(shortCtx(t), held(acc), &bytes.Buffer{}, "42", showQuery{limit: 7, around: 50})
 
@@ -207,7 +208,26 @@ func TestShow_AroundAMessageNotThereExitsFive(t *testing.T) {
 	if !errors.As(err, &code) || code.code != notFoundCode {
 		t.Fatalf("got %v, want exit %d", err, notFoundCode)
 	}
-	assertSays(t, code.msg, "50", "Bob")
+	assertSays(t, code.msg, "No message 50", "Bob")
+}
+
+// A topic that is not there exits 5 and says it is the topic, not the
+// message, that is missing (#348).
+func TestShow_AroundInATopicNotThereSaysTheTopic(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	acc.aroundErr = &telerr.Error{Kind: telerr.NotFound, Op: core.OpNoTopic}
+
+	err := showMessages(shortCtx(t), held(acc), &bytes.Buffer{}, "300", showQuery{limit: 7, around: 50, topic: 999})
+
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != notFoundCode {
+		t.Fatalf("got %v, want exit %d", err, notFoundCode)
+	}
+	assertSays(t, code.msg, "No topic 999", "Gophers")
+	if strings.Contains(code.msg, "message") {
+		t.Errorf("blames the message: %q", code.msg)
+	}
 }
 
 // A topic of a forum is asked for by its id.

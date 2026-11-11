@@ -22,7 +22,7 @@ A command names a chat in one of three ways, the same in every command:
 
 | Name        | Which chat                                                                     |
 | ----------- | ------------------------------------------------------------------------------ |
-| `42`        | The chat with that id, as `tele chats` prints it                               |
+| `42`        | The chat with that id, as `tele chats` or `tele search` prints it              |
 | `@username` | The user, bot or channel with that username, in any case. One that is not among your chats is asked of Telegram |
 | `me`        | Your own chat, Saved Messages                                                  |
 

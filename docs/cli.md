@@ -72,7 +72,7 @@ Keeping a program away from those is the job of file permissions or a sandbox.
 | 2    | The command line could not be read: an unknown flag, command or argument        |
 | 3    | No `tele` holds the account to ask                                              |
 | 4    | The account is not logged in                                                    |
-| 5    | No such chat, topic or folder                                                   |
+| 5    | No such chat, topic, folder or message                                          |
 | 6    | A message could not be sent, and trying again will not change that              |
 | 7    | The `tele` holding the account does not let commands do this: see `cli.account_commands` |
 | 75   | Gave up waiting while a message was still queued, or Telegram asked to wait; it may work later |
@@ -87,6 +87,7 @@ One that got 6 stays in the chat, for a person to retry or discard in a window.
   For YAML, `| yq -P`.
 - A command answering with one thing prints one object.
   One answering with a list prints JSON Lines: an object per line, oldest first where order means time.
+  `tele search` is the one exception: it prints newest first, as Telegram finds them.
 - Field names are `snake_case`.
   Times are RFC 3339.
 - A field that does not apply is left out rather than given as zero or null.
@@ -139,13 +140,30 @@ One that got 6 stays in the chat, for a person to retry or discard in a window.
 
 | Field       | What it is                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------- |
-| `id`        | The message's id, what `--before` takes                                                     |
+| `id`        | The message's id, what `--before` and `--around` take                                       |
 | `date`      | When it was sent                                                                            |
 | `sender_id`, `sender` | Who sent it, by id and by name; your own messages carry yours. In a channel, the channel |
 | `out`       | Whether you sent it                                                                         |
 | `text`      | Its text, or a media message's caption; left out when there is none                         |
 | `reply_to`  | The id of the message it answers; left out when it answers none                             |
 | `media`     | What media it carries, left out when it carries none: `kind` (`photo`, `video`, `round_video`, `voice`, `audio`, `sticker`, `gif`, `file`, `location` or `other`) and what the media says about itself: `duration` in seconds, `file_name`, `size` in bytes, `title`, `performer`, `emoji`. Never where a file is: nothing is downloaded |
+
+## `tele search --json`
+
+```json
+{"chat_id":300,"chat":"Gophers","topic_id":17,"id":900,"date":"2026-10-25T09:14:00+03:00","sender_id":42,"sender":"Bob","out":false,"text":"hello there"}
+{"chat_id":42,"chat":"Bob","id":512,"date":"2026-10-24T21:58:00+03:00","sender_id":77,"sender":"Ada Lovelace","out":true,"text":"hello"}
+```
+
+Newest first.
+Each line is the chat the message was found in, then the message in the shape of [`tele show --json`](#tele-show---json), whatever was searched:
+
+| Field      | What it is                                                                      |
+| ---------- | ------------------------------------------------------------------------------- |
+| `chat_id`  | The chat it was found in, what names it in every command                        |
+| `chat`     | That chat's title, or the person's name                                         |
+| `topic_id` | The topic of a forum it is in, what `tele show --topic` takes; left out outside a forum |
+| the rest   | As in `tele show --json`: `id` is what `tele show --around` takes               |
 
 ## `tele send --json`
 

@@ -11,6 +11,15 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- `tele search TEXT` asks Telegram which messages hold a text, over the
+  whole history: in one chat with `--chat`, one topic of a forum with
+  `--topic`, or every chat of the main list. Each message comes with its
+  id, chat and topic, as text or as `--json` (#348).
+- `tele show --around ID` prints a message with the messages around it, so
+  one `tele search` found can be read in its conversation (#348).
+
 ### Changed
 
 - Commands may only read by default: `cli.account_commands` is now `read`,

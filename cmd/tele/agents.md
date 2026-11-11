@@ -21,7 +21,7 @@ the `id`. Titles change and repeat, so the id is what you pass on.
 READING
 
 Pass --json every time. A list comes as JSON Lines: one object per line,
-oldest first where order means time.
+oldest first where order means time (search results come newest first).
 
     tele chats --json [--unread] [--archived | --folder ID] [--limit N]
     tele topics CHAT --json
@@ -34,6 +34,19 @@ time.
 
 Reading changes nothing in the account. Mark a chat read only when the person
 asks for it: `tele show CHAT --mark-read` marks up to the last message printed.
+
+SEARCHING
+
+    tele search TEXT --json [--chat CHAT [--topic ID]] [--limit N]
+
+Telegram searches the whole history, newest first, every chat of the main list
+unless --chat names one. Each line has the message's chat_id (and topic_id in a
+forum) besides its id. To read a message found in its conversation:
+
+    tele show CHAT_ID --json --around ID [--topic TOPIC_ID]
+
+Nothing found prints nothing and exits 0: it means there is nothing, not that
+tele has not loaded it.
 
 SENDING
 
@@ -63,7 +76,7 @@ EXIT CODES
 | 2    | The command line was wrong                            | Fix the call; `tele COMMAND --help` lists the flags |
 | 3    | No tele is running that holds the account             | Tell the person: they open tele, or install the service with `tele daemon install` |
 | 4    | The account is not logged in                          | Tell the person to log in, in a tele window |
-| 5    | No such chat, topic or folder                         | Look the name up again with `tele chats --json` or `tele topics` |
+| 5    | No such chat, topic, folder or message                | Look the name up again with `tele chats --json` or `tele topics` |
 | 6    | The message will not go; stderr says why              | Report the reason. The message waits in the chat for the person to retry or discard it |
 | 7    | The person limited what commands may do               | Stop and tell the person what you were asked to do. Their setting, cli.account_commands, is theirs to change |
 | 75   | Still queued, Telegram asked to wait, or tele was lost | The message goes on its own. To confirm later, run the same send with the same --ref |

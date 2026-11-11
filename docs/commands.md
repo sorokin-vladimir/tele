@@ -9,6 +9,7 @@ What the commands have in common (how they are named, how they name a chat, what
 - [`tele chats`](#tele-chats)
 - [`tele topics`](#tele-topics)
 - [`tele show`](#tele-show)
+- [`tele search`](#tele-search)
 - [`tele send`](#tele-send)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
@@ -81,7 +82,7 @@ The id is what `tele show --topic` takes.
 ## `tele show`
 
 ```console
-tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
+tele show CHAT [--topic ID] [--limit N] [--before ID | --around ID] [--mark-read] [--json]
 ```
 
 Prints the newest messages of a chat, oldest first: a line each with the time, the sender and the text, a date line wherever the day changes, and under a reply a line with what it answers.
@@ -98,8 +99,34 @@ A forum's messages are its topics': name one with `--topic`, or `show` exits 5 a
 | `--topic <id>` | The topic of a forum to show                                                     |
 | `--limit <n>`  | How many messages, 20 by default and 200 at most                                 |
 | `--before <id>` | The messages older than this message, to page back through a history             |
+| `--around <id>` | This message with the messages around it, half of `--limit` newer and half older, to read a message `tele search` found in its conversation. A message that is not there exits 5 |
 | `--mark-read`  | Mark the chat (or the topic) read up to the last message printed                 |
 | `--json`       | A JSON object a message, described in [cli.md](cli.md#tele-show---json)          |
+
+With `--around`, the messages always come from Telegram, and none of them is kept in the local history.
+
+## `tele search`
+
+```console
+tele search TEXT [--chat CHAT [--topic ID]] [--limit N] [--json]
+```
+
+Prints the messages that hold the text, newest first, a line each: the message's id, the date and time, the chat (and the topic, in a forum), the sender and how the message starts.
+The id is what `tele show --around` takes.
+The answer is Telegram's, over the whole history, not what the local history holds: nothing found means there is nothing.
+Nothing found prints nothing and exits 0.
+
+With no `--chat`, it searches every chat of the main list; the archived chats are left out.
+With `--chat` naming a forum and no `--topic`, it searches every topic of that forum.
+
+| Flag           | What it does                                                                     |
+| -------------- | -------------------------------------------------------------------------------- |
+| `--chat <chat>` | Search this chat only, named as [cli.md](cli.md#naming-a-chat) says             |
+| `--topic <id>` | Search one topic of the forum `--chat` names                                     |
+| `--limit <n>`  | How many messages, 20 by default and 100 at most                                 |
+| `--json`       | A JSON object a message, described in [cli.md](cli.md#tele-search---json)        |
+
+`search` only reads, so it is allowed when `cli.account_commands` is `read`.
 
 ## `tele send`
 

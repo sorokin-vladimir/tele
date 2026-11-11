@@ -36,6 +36,14 @@ type fakeAccount struct {
 	historyAsked []historyAsk
 	markedRead   []historyAsk
 	markErr      error
+	// aroundErr is what HistoryAround answers with besides history;
+	// aroundAsked is what it was asked.
+	aroundErr   error
+	aroundAsked []historyAsk
+	// found is what SearchMessages answers with; searched is what it was
+	// asked.
+	found    []project.FoundMessage
+	searched []searchAsk
 	// sent is every send queued; outcomes are what AwaitSend answers, in
 	// turn, and awaited how long it was asked to wait each time.
 	sent     []core.SendRequest

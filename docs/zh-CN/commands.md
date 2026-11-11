@@ -1,6 +1,6 @@
 # 命令
 
-> 本文译自 [commands.md](../commands.md)，对应提交 `f76c4c5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [commands.md](../commands.md)，对应提交 `38230c5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 的全部命令及其参数。命令的共同点（如何命名、如何指定聊天、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
 
@@ -9,6 +9,7 @@
 - [`tele chats`](#tele-chats)
 - [`tele topics`](#tele-topics)
 - [`tele show`](#tele-show)
+- [`tele search`](#tele-search)
 - [`tele send`](#tele-send)
 - [`tele version`](#tele-version)
 - [`tele theme check`](#tele-theme-check)
@@ -76,7 +77,7 @@ tele topics CHAT [--limit N] [--json]
 ## `tele show`
 
 ```console
-tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
+tele show CHAT [--topic ID] [--limit N] [--before ID | --around ID] [--mark-read] [--json]
 ```
 
 按从旧到新的顺序打印聊天的最新消息：每条消息一行，包含时间、发送者和文本；日期变化处有一行日期；回复下方有一行说明它回复的是哪条消息。所有消息的文本都从同一列开始，即最长的发送者名字之后；名字宽于 `cli.name_width` 列（默认 20）时会被截断。媒体只显示名称，从不下载：`[photo]`、`[voice 0:12]`、`[file report.pdf]`。本地历史中没有的消息会从 Telegram 获取，与在窗口中向上滚动时一样。
@@ -90,8 +91,31 @@ tele show CHAT [--topic ID] [--limit N] [--before ID] [--mark-read] [--json]
 | `--topic <id>`  | 要显示的论坛话题                                                                |
 | `--limit <n>`   | 显示多少条消息，默认 20，最多 200                                               |
 | `--before <id>` | 显示比这条消息更早的消息，用于向前翻阅历史                                      |
+| `--around <id>` | 显示这条消息及其前后的消息：`--limit` 的一半更新、一半更早，用于在上下文中阅读 `tele search` 找到的消息。不存在的消息以退出码 5 结束 |
 | `--mark-read`   | 把聊天（或话题）标为已读，直到打印出的最后一条消息为止                          |
 | `--json`        | 每条消息输出一个 JSON 对象，见 [cli.md](cli.md#tele-show---json)                |
+
+使用 `--around` 时，消息总是来自 Telegram，其中任何一条都不会保存到本地历史。
+
+<a id="tele-search"></a>
+## `tele search`
+
+```console
+tele search TEXT [--chat CHAT [--topic ID]] [--limit N] [--json]
+```
+
+按从新到旧打印包含该文本的消息，每条一行：消息的 id、日期和时间、聊天（在论坛中还有话题）、发送者以及消息的开头。`tele show --around` 接受的就是这个 id。结果由 Telegram 给出，覆盖完整的历史，而不只是本地历史中已有的部分：没有找到就意味着确实没有。没有找到时，命令什么也不打印，以退出码 0 结束。
+
+不加 `--chat` 时，它在主列表的所有聊天中搜索，不包括已归档的聊天。如果 `--chat` 指向一个论坛而没有给出 `--topic`，它会在这个论坛的所有话题中搜索。
+
+| 参数            | 作用                                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| `--chat <chat>` | 只在这个聊天中搜索，指定方式见 [cli.md](cli.md#naming-a-chat)                   |
+| `--topic <id>`  | 在 `--chat` 指向的论坛中只搜索一个话题                                          |
+| `--limit <n>`   | 显示多少条消息，默认 20，最多 100                                               |
+| `--json`        | 每条消息输出一个 JSON 对象，见 [cli.md](cli.md#tele-search---json)              |
+
+`search` 只读取，所以在 `cli.account_commands` 为 `read` 时也可以使用。
 
 <a id="tele-send"></a>
 ## `tele send`

@@ -1,6 +1,6 @@
 # 命令行
 
-> 本文译自 [cli.md](../cli.md)，对应提交 `23c1c3f`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [cli.md](../cli.md)，对应提交 `38230c5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 不带命令运行 `tele` 会打开一个窗口。所有命令及其参数见 [commands.md](commands.md)。本页说明所有命令共同遵守的约定：如何命名、以什么退出码结束、JSON 输出是什么样子。
 
@@ -63,7 +63,7 @@
 | 2    | 无法解析命令行：未知的参数、命令或实参                                          |
 | 3    | 没有持有账号、可供询问的 `tele`                                                 |
 | 4    | 账号未登录                                                                      |
-| 5    | 没有这个聊天、话题或文件夹                                                      |
+| 5    | 没有这个聊天、话题、文件夹或消息                                                |
 | 6    | 消息无法发送，重试也不会改变结果                                                |
 | 7    | 持有账号的 `tele` 不允许命令这样做：见 `cli.account_commands`                   |
 | 75   | 消息仍在队列中时放弃等待，或者 Telegram 要求等待；稍后可能会成功                |
@@ -74,7 +74,7 @@
 ## JSON
 
 - `--json` 是唯一面向程序的格式。需要 YAML 时，用 `| yq -P`。
-- 回答单个结果的命令输出一个对象。回答列表的命令输出 JSON Lines：每行一个对象，在顺序代表时间的地方按从旧到新排列。
+- 回答单个结果的命令输出一个对象。回答列表的命令输出 JSON Lines：每行一个对象，在顺序代表时间的地方按从旧到新排列。唯一的例外是 `tele search`：它按从新到旧打印，也就是 Telegram 找到它们的顺序。
 - 字段名使用 `snake_case`。时间使用 RFC 3339 格式。
 - 不适用的字段直接省略，而不是输出零或 null。脚本应把缺失的字段理解为“不存在”，而不是“零”。
 - 本页描述的内容在同一个主版本内保持不变：可能新增字段，但在 tele 3 之前不会重命名或删除任何字段。
@@ -128,13 +128,30 @@
 
 | 字段        | 含义                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------- |
-| `id`        | 消息的 id，`--before` 接受的就是它                                                          |
+| `id`        | 消息的 id，`--before` 和 `--around` 接受的就是它                                            |
 | `date`      | 发送时间                                                                                    |
 | `sender_id`、`sender` | 发送者的 id 和名字；你自己的消息带你的 id 和名字。在频道中是频道本身              |
 | `out`       | 是否是你发送的                                                                              |
 | `text`      | 文本，或媒体消息的说明文字；没有时省略                                                      |
 | `reply_to`  | 它所回复的消息的 id；不是回复时省略                                                         |
 | `media`     | 消息带的媒体，没有时省略：`kind`（`photo`、`video`、`round_video`、`voice`、`audio`、`sticker`、`gif`、`file`、`location` 或 `other`）以及媒体自身提供的信息：`duration`（秒）、`file_name`、`size`（字节）、`title`、`performer`、`emoji`。从不给出文件所在的位置：什么都不会下载 |
+
+<a id="tele-search---json"></a>
+## `tele search --json`
+
+```json
+{"chat_id":300,"chat":"Gophers","topic_id":17,"id":900,"date":"2026-10-25T09:14:00+03:00","sender_id":42,"sender":"Bob","out":false,"text":"hello there"}
+{"chat_id":42,"chat":"Bob","id":512,"date":"2026-10-24T21:58:00+03:00","sender_id":77,"sender":"Ada Lovelace","out":true,"text":"hello"}
+```
+
+按从新到旧排列。无论在哪里搜索，每一行都先给出找到这条消息的聊天，然后是与 [`tele show --json`](#tele-show---json) 形式相同的消息：
+
+| 字段       | 含义                                                                            |
+| ---------- | ------------------------------------------------------------------------------- |
+| `chat_id`  | 找到它的聊天，在所有命令中用它来指定这个聊天                                    |
+| `chat`     | 这个聊天的标题，或对方的名字                                                    |
+| `topic_id` | 它所在的论坛话题，`tele show --topic` 接受的就是它；不在论坛中时省略            |
+| 其余字段   | 与 `tele show --json` 相同：`id` 是 `tele show --around` 接受的值               |
 
 <a id="tele-send---json"></a>
 ## `tele send --json`

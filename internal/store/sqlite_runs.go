@@ -16,6 +16,18 @@ type span struct {
 	atBeginning bool
 }
 
+// Shown is what one window shows of a history: the message it is anchored on,
+// zero for the newest, and how many messages older than it the window asks
+// for. It is what the window asks for rather than what it was last built with,
+// so a page fetched to fill it is shown the moment it lands.
+//
+// How far a window reaches newer than its anchor does not matter to the cap: it
+// trims only the old end of the tail run, and keeps a run far back whole.
+type Shown struct {
+	Anchor int
+	Before int
+}
+
 func (a span) overlaps(b span) bool { return a.lo <= b.hi && b.lo <= a.hi }
 
 func (a span) holds(id int) bool { return a.lo <= id && id <= a.hi }
@@ -151,6 +163,7 @@ func (s *SQLiteStore) MergeAround(h domain.HistoryKey, msgs []domain.Message) in
 	s.ensureTailSpanLocked(h)
 	added := s.mergePageLocked(h, "MergeAround", msgs)
 	s.addSpanLocked(h, sp)
+	s.capMessagesLocked(h)
 	return added
 }
 
@@ -161,6 +174,8 @@ func (s *SQLiteStore) MergeAround(h domain.HistoryKey, msgs []domain.Message) in
 func (s *SQLiteStore) MergeOlder(h domain.HistoryKey, below int, msgs []domain.Message) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Capped once the runs say where the page lies, still under the lock.
+	defer s.capMessagesLocked(h)
 	s.ensureTailSpanLocked(h)
 	added := s.mergePageLocked(h, "MergeOlder", msgs)
 	sp, ok := pageSpan(older(msgs, below))
@@ -187,6 +202,8 @@ func (s *SQLiteStore) MergeOlder(h domain.HistoryKey, below int, msgs []domain.M
 func (s *SQLiteStore) MergeNewer(h domain.HistoryKey, above int, msgs []domain.Message) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Capped once the runs say where the page lies, still under the lock.
+	defer s.capMessagesLocked(h)
 	s.ensureTailSpanLocked(h)
 	added := s.mergePageLocked(h, "MergeNewer", msgs)
 	var newer []domain.Message
@@ -240,7 +257,9 @@ func older(msgs []domain.Message, below int) []domain.Message {
 // A page that adds nothing still lands, because a message can come back edited
 // without changing the count. The caller decides what to do about a zero.
 //
-// Only the history asked for is filled deeper. Caller holds the lock.
+// Only the history asked for grows a run, and the caller caps it once its runs
+// are recorded; any other history the page reaches is capped here. Caller
+// holds the lock.
 func (s *SQLiteStore) mergePageLocked(h domain.HistoryKey, via string, msgs []domain.Message) int {
 	held := s.heldReactionsLocked(h.ChatID)
 	defer s.traceHeldReactionsLocked(h.ChatID, via, held)
@@ -252,11 +271,10 @@ func (s *SQLiteStore) mergePageLocked(h domain.HistoryKey, via string, msgs []do
 		}
 		before := s.messages[key]
 		merged := domain.MergeMessages(before, page)
-		floor := s.msgFloor[key]
-		if key == h {
-			floor = len(merged)
+		s.setMessagesLocked(key, merged, nil)
+		if key != h {
+			s.capMessagesLocked(key)
 		}
-		s.setMessagesLocked(key, merged, floor, nil)
 		added += len(merged) - len(before)
 	}
 	return added
@@ -280,15 +298,16 @@ func (s *SQLiteStore) withinRunsLocked(h domain.HistoryKey, msgs []domain.Messag
 }
 
 // dropFarRunsLocked gives up runs that do not end at the tail, oldest first and
-// each whole, until at least excess messages are gone or none is left, and
-// returns what the history holds after. Caller holds the lock.
-func (s *SQLiteStore) dropFarRunsLocked(h domain.HistoryKey, excess int) []domain.Message {
+// each whole, until at least excess messages are gone or none is left to give,
+// and returns what the history holds after. A run with a shown message in it is
+// not given up. Caller holds the lock.
+func (s *SQLiteStore) dropFarRunsLocked(h domain.HistoryKey, excess int, shown map[int]struct{}) []domain.Message {
 	msgs := s.messages[h]
 	for excess > 0 {
 		i := -1
 		count := 0
 		for j, sp := range s.runs[h] {
-			if sp.atTail {
+			if sp.atTail || showsAny(shown, sp) {
 				continue
 			}
 			if n := countIn(msgs, sp); n > 0 {
@@ -327,23 +346,110 @@ func countIn(msgs []domain.Message, sp span) int {
 	return n
 }
 
-// trimTailSpanLocked moves the tail run's old end up to the oldest message
-// still held after the cap trimmed it: the run starts there now, and no longer
-// reaches the beginning. Caller holds the lock.
-func (s *SQLiteStore) trimTailSpanLocked(h domain.HistoryKey) {
-	oldest := 0
-	for _, m := range s.messages[h] {
-		if m.ID > 0 {
-			oldest = m.ID
-			break
+// showsAny reports whether a span holds a shown message.
+func showsAny(shown map[int]struct{}, sp span) bool {
+	for id := range shown {
+		if sp.holds(id) {
+			return true
 		}
 	}
+	return false
+}
+
+// trimTailRunLocked drops up to excess messages from the old end of the tail
+// run of msgs, stopping at the first one a window shows: what is trimmed must
+// stay one stretch at the end, or the run would have a hole in it. The run
+// then starts at its oldest message left, and no longer reaches the
+// beginning. It returns what the history holds after. Caller holds the lock.
+func (s *SQLiteStore) trimTailRunLocked(h domain.HistoryKey, msgs []domain.Message, excess int, shown map[int]struct{}) []domain.Message {
+	if excess <= 0 {
+		return msgs
+	}
+	tail := -1
 	for i, sp := range s.runs[h] {
-		if sp.atTail && oldest > sp.lo {
-			s.runs[h][i].lo = oldest
-			s.runs[h][i].atBeginning = false
+		if sp.atTail {
+			tail = i
 		}
 	}
+	// With no runs recorded every message is the tail run's.
+	onTail := func(m domain.Message) bool {
+		return len(s.runs[h]) == 0 || (tail >= 0 && s.runs[h][tail].holds(m.ID))
+	}
+	kept := msgs[:0:0]
+	trimming, oldest := true, 0
+	for _, m := range msgs {
+		if m.ID <= 0 || !onTail(m) {
+			kept = append(kept, m)
+			continue
+		}
+		if _, ok := shown[m.ID]; ok {
+			trimming = false
+		}
+		if trimming && excess > 0 {
+			excess--
+			delete(s.msgChat, m.ID)
+			s.markMsgDeletedLocked(h.ChatID, m.ID)
+			continue
+		}
+		if oldest == 0 {
+			oldest = m.ID
+		}
+		kept = append(kept, m)
+	}
+	if tail >= 0 && oldest > s.runs[h][tail].lo {
+		s.runs[h][tail].lo = oldest
+		s.runs[h][tail].atBeginning = false
+	}
+	return kept
+}
+
+// SetShown records what windows show, replacing what was recorded before. It
+// trims nothing by itself: the next write to a history caps it against what is
+// shown then.
+func (s *SQLiteStore) SetShown(shown map[domain.HistoryKey][]Shown) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shown = shown
+}
+
+// shownIDsLocked is the ids of the messages windows show of a history: each
+// window's anchor, as many messages older than it as it asks for, and every
+// newer one, within the run that holds the anchor, since a window never reaches
+// across into another run. A window anchored on a message the store does not
+// hold shows nothing of it yet. Caller holds the lock.
+func (s *SQLiteStore) shownIDsLocked(h domain.HistoryKey) map[int]struct{} {
+	out := make(map[int]struct{})
+	runs := s.runsLocked(h)
+	for _, w := range s.shown[h] {
+		run, idx := anchorIn(runs, w.Anchor)
+		if idx < 0 {
+			continue
+		}
+		for _, m := range run[max(0, idx-w.Before):] {
+			out[m.ID] = struct{}{}
+		}
+	}
+	return out
+}
+
+// anchorIn finds a window's anchor among runs: the newest message of the tail
+// run for zero, else the message with that id. It returns the messages of the
+// run holding it and the anchor's index there, -1 when no run holds it.
+func anchorIn(runs []domain.Run, anchor int) ([]domain.Message, int) {
+	for _, r := range runs {
+		if anchor == 0 {
+			if r.AtTail {
+				return r.Messages, len(r.Messages) - 1
+			}
+			continue
+		}
+		for i, m := range r.Messages {
+			if m.ID == anchor {
+				return r.Messages, i
+			}
+		}
+	}
+	return nil, -1
 }
 
 // runHoldsLocked reports whether a run of the history lies over id. Caller

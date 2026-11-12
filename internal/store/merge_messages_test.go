@@ -89,7 +89,7 @@ func fullChat(t *testing.T) store.Store {
 }
 
 // Scrolling back is somebody asking for more history, so the chat is allowed to
-// grow past the cap and hold what they scrolled to.
+// grow past the cap and hold what their window asks for.
 func TestMergeOlder_DeepensAChatThatIsAlreadyFull(t *testing.T) {
 	s := storeWithChat(t)
 	held := make([]domain.Message, 0, store.MaxMessagesPerChat)
@@ -97,6 +97,7 @@ func TestMergeOlder_DeepensAChatThatIsAlreadyFull(t *testing.T) {
 		held = append(held, mergeMsg(i, int64(i)))
 	}
 	s.SetMessages(7, held)
+	s.SetShown(map[domain.HistoryKey][]store.Shown{{ChatID: 7}: {{Before: store.MaxMessagesPerChat + 50}}})
 
 	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 3, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2)})
 
@@ -105,8 +106,7 @@ func TestMergeOlder_DeepensAChatThatIsAlreadyFull(t *testing.T) {
 }
 
 // A repair is nobody's request. It must not leave the chat costing more to hold
-// than it did before the hole opened, or every gap would raise the floor once
-// and never lower it.
+// than it did before the hole opened: with nobody looking, the oldest make room.
 func TestRepairMessages_LeavesTheChatNoDeeper(t *testing.T) {
 	s := fullChat(t)
 

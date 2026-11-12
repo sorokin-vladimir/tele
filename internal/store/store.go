@@ -40,11 +40,14 @@ type Store interface {
 	// run that holds above. A page with nothing newer than above marks the
 	// run as ending at the tail. It reports how many messages it added.
 	MergeNewer(h domain.HistoryKey, above int, msgs []domain.Message) int
-	// RepairMessages merges a page the way MergeOlder does, laid out among
-	// the chat's histories, but leaves each no deeper than it found it: a page
-	// nobody asked for must not raise what the chat costs to hold. It takes a
-	// chat rather than a history because a gap is the chat's.
+	// RepairMessages merges a page fetched to close a gap, laid out among the
+	// chat's histories on their tail runs. It takes a chat rather than a
+	// history because a gap is the chat's.
 	RepairMessages(chatID int64, msgs []domain.Message) int
+	// SetShown records what windows show of each history, replacing what was
+	// recorded before. The cap never drops what is shown, so a scrollback
+	// somebody loaded is held while somebody looks at it (ADR 0037).
+	SetShown(shown map[domain.HistoryKey][]Shown)
 	// Gap reports the message a chat's missing range opens after, if it has
 	// one. A gap is recorded when it opens rather than noticed later: once
 	// updates resume the tail moves past the hole and nothing can see it.

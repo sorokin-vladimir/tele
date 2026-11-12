@@ -278,6 +278,7 @@ func (a *Attachment) Unsubscribe(id project.SubID) {
 	a.mu.Unlock()
 	if s != nil {
 		s.registry.Unsubscribe(id)
+		s.syncShown()
 	}
 }
 

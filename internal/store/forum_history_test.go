@@ -62,8 +62,13 @@ func TestForum_ABusyTopicDoesNotPushOutAQuietOne(t *testing.T) {
 	assert.Equal(t, []int{1}, ids(s.Messages(topic(30))))
 }
 
-func TestForum_ScrollingBackOneTopicRaisesOnlyItsFloor(t *testing.T) {
+func TestForum_AWindowOnOneTopicSparesOnlyThatTopic(t *testing.T) {
 	s := forumStore(t)
+	// The window opened on the newest message there was, and runs to the newest
+	// whatever arrives, as a window opened at the first unread does.
+	s.SetShown(map[domain.HistoryKey][]store.Shown{
+		topic(12): {{Anchor: store.MaxMessagesPerChat + 50, Before: store.MaxMessagesPerChat + 50}},
+	})
 	page := make([]domain.Message, 0, store.MaxMessagesPerChat+50)
 	for id := 1; id <= store.MaxMessagesPerChat+50; id++ {
 		page = append(page, topicMsg(id, 12))

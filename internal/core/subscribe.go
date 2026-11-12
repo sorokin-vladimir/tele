@@ -3,6 +3,8 @@ package core
 import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // projectionReader is what every projection is built from: the store plus the
@@ -39,6 +41,32 @@ func (o *Owner) Refresh() {
 	for _, a := range o.attached() {
 		a.registry.Refresh()
 	}
+	// A rebuild can pin a first-unread window to the message it opened on,
+	// which moves what that window shows.
+	o.syncShown()
+}
+
+// syncShown tells the store what every attached client's windows show, so the
+// cap never drops it (ADR 0037). It runs whenever a window opens, moves,
+// closes or is pinned, and before any fetch made for that window.
+func (o *Owner) syncShown() {
+	shown := make(map[domain.HistoryKey][]store.Shown)
+	for _, a := range o.attached() {
+		for _, w := range a.registry.HistoryWindows() {
+			shown[w.History()] = append(shown[w.History()], shownOf(w))
+		}
+	}
+	o.state.Store().SetShown(shown)
+}
+
+// shownOf is what a window shows, in the store's terms: its anchor, the newest
+// message for a window anchored there or a first-unread window not pinned yet,
+// and how far back it reaches.
+func shownOf(w project.HistoryWindow) store.Shown {
+	if w.Anchor.Kind == project.AnchorNewest {
+		return store.Shown{Before: w.Before}
+	}
+	return store.Shown{Anchor: w.Anchor.MsgID, Before: w.Before}
 }
 
 // maybeFetch goes to Telegram when the store cannot answer a chat window on its

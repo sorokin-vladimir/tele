@@ -274,15 +274,58 @@ func fullTailRun(t *testing.T) store.Store {
 // far run is a smaller far run nobody asked for.
 func TestRuns_TheCapDropsAFarRunWholeFirst(t *testing.T) {
 	s := fullTailRun(t)
-	s.MergeAround(chat7, msgs(10, 11, 12))
 
-	s.RepairMessages(7, msgs(2000, 2001))
+	s.MergeAround(chat7, msgs(10, 11, 12))
 
 	runs := runsOf(s, chat7)
 	if assert.Len(t, runs, 1) {
 		assert.True(t, runs[0].AtTail)
-		assert.Len(t, runs[0].IDs, store.MaxMessagesPerChat+2, "only the far run made room")
+		assert.Len(t, runs[0].IDs, store.MaxMessagesPerChat, "only the far run made room")
+		assert.Equal(t, 1001, runs[0].IDs[0], "the tail run was not trimmed")
 	}
+}
+
+// A far run a window shows is kept; the tail run's old end makes room instead.
+func TestShown_AFarRunOnScreenIsKept(t *testing.T) {
+	s := fullTailRun(t)
+	s.SetShown(map[domain.HistoryKey][]store.Shown{chat7: {{Anchor: 11, Before: 5}}})
+
+	s.MergeAround(chat7, msgs(10, 11, 12))
+
+	runs := runsOf(s, chat7)
+	if assert.Len(t, runs, 2) {
+		assert.Equal(t, []int{10, 11, 12}, runs[0].IDs)
+		assert.Equal(t, 1004, runs[1].IDs[0], "the tail run's three oldest made room")
+	}
+}
+
+// Trimming stops at the first message a window shows, so the tail run never
+// has a hole cut into it.
+func TestShown_TheTailRunIsTrimmedOnlyBelowWhatIsShown(t *testing.T) {
+	s := fullTailRun(t)
+	s.SetShown(map[domain.HistoryKey][]store.Shown{chat7: {{Anchor: 1002}}})
+
+	s.AppendMessage(mergeMsg(2000, 2000))
+	s.AppendMessage(mergeMsg(2001, 2001))
+
+	ids := runsOf(s, chat7)[0].IDs
+	assert.Equal(t, 1002, ids[0], "only the one message below the shown one went")
+	assert.Len(t, ids, store.MaxMessagesPerChat+1)
+}
+
+// What is shown is what the owner said last: a window that closed holds
+// nothing, and the next write caps as usual.
+func TestShown_AClosedWindowHoldsNothing(t *testing.T) {
+	s := fullTailRun(t)
+	s.SetShown(map[domain.HistoryKey][]store.Shown{chat7: {{Before: store.MaxMessagesPerChat + 50}}})
+	s.MergeOlder(chat7, 1001, msgs(990, 1000))
+
+	s.SetShown(nil)
+	s.AppendMessage(mergeMsg(2000, 2000))
+
+	ids := runsOf(s, chat7)[0].IDs
+	assert.Len(t, ids, store.MaxMessagesPerChat)
+	assert.Equal(t, 2000, ids[len(ids)-1])
 }
 
 // Trimming the tail run's old end moves where the run starts, so it no longer

@@ -236,10 +236,9 @@ func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 	assert.Empty(t, s.RemoveMessagesByID([]int{1}))
 }
 
-// SetMessages is the owner saying what a chat's history is, and how deep it goes
-// is driven by how far the reader scrolled. Capping it would cap the scrollback:
-// the view is built from what the store holds.
-func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
+// SetMessages is a tail reload: a fresh page nobody is looking at yet, capped
+// like anything else. Only what a window shows is held past the cap.
+func TestSQLite_SetMessages_KeepsTheNewestWithNobodyLooking(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
 	msgs := make([]domain.Message, total)
@@ -250,12 +249,13 @@ func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
 	s.SetMessages(1, msgs)
 
 	got := s.Messages(domain.HistoryKey{ChatID: 1})
-	require.Len(t, got, total)
-	assert.Equal(t, 1, got[0].ID)
+	require.Len(t, got, store.MaxMessagesPerChat)
+	assert.Equal(t, 101, got[0].ID)
 	assert.Equal(t, total, got[len(got)-1].ID)
 }
 
-// An arriving message must not trim a scrollback the reader deliberately loaded.
+// An arriving message must not trim a scrollback the reader deliberately loaded
+// and is looking at.
 func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
@@ -263,6 +263,7 @@ func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 	for i := range msgs {
 		msgs[i] = domain.Message{ID: i + 1, ChatID: 1}
 	}
+	s.SetShown(map[domain.HistoryKey][]store.Shown{{ChatID: 1}: {{Anchor: total, Before: total}}})
 	s.SetMessages(1, msgs)
 
 	s.AppendMessage(domain.Message{ID: total + 1, ChatID: 1})

@@ -113,17 +113,18 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	for _, h := range s.chatHistoriesLocked(chatID) {
 		delete(s.runs, h)
 		if _, kept := pages[h]; !kept {
-			s.setMessagesLocked(h, nil, 0, keep)
+			s.setMessagesLocked(h, nil, keep)
 		}
 	}
 	for h, page := range pages {
-		s.setMessagesLocked(h, page, len(page), keep)
+		s.setMessagesLocked(h, page, keep)
 		// The page is the newest Telegram has: whatever else the history held
 		// is gone, and this is its one run.
 		if sp, ok := pageSpan(page); ok {
 			sp.atTail = true
 			s.runs[h] = []span{sp}
 		}
+		s.capMessagesLocked(h)
 	}
 }
 
@@ -147,14 +148,9 @@ func (s *SQLiteStore) detachMovedLocked(h domain.HistoryKey, msgs []domain.Messa
 }
 
 // RepairMessages merges a page in the way MergeOlder does, laying it out
-// among the chat's histories, and leaves each of them no deeper than it found
-// it: the cap applies as if the page had never come, trimming the oldest to
-// make room.
-//
-// The floor exists to protect a scrollback somebody scrolled to, so that an
-// arriving message cannot cap it back down. A page that closes a gap was asked
-// for by nobody, and letting it raise the floor would turn a repair into a
-// permanent rise in what the chat costs to hold, once per hole.
+// among the chat's histories on their tail runs. The cap then trims the oldest
+// to make room, as it does for an arriving message: a page that closes a gap
+// was asked for by nobody, and only what a window shows is spared.
 func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -167,8 +163,9 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 		s.ensureTailSpanLocked(h)
 		before := s.messages[h]
 		merged := domain.MergeMessages(before, page)
-		s.setMessagesLocked(h, merged, s.msgFloor[h], nil)
+		s.setMessagesLocked(h, merged, nil)
 		s.landOnTailLocked(h, page)
+		s.capMessagesLocked(h)
 		// What the page brought, counted before the cap trims the other end: a
 		// repair that adds fifty and pushes fifty older ones out still changed
 		// every window looking at it.
@@ -179,11 +176,11 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 
 // setMessagesLocked replaces one history with msgs, taking a copy: the slice
 // handed in may be the caller's own, or the store's own held slice come back
-// through a merge. floor is how deep this write claims the history was filled,
-// which is what the cap will not trim below. keep names the messages whose rows
-// survive the write wherever they now live; nil means the ones in msgs. Caller
+// through a merge. keep names the messages whose rows survive the write
+// wherever they now live; nil means the ones in msgs. It does not cap: the
+// caller caps once the history's runs say where the new messages lie. Caller
 // holds the lock.
-func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Message, floor int, keep map[int]struct{}) {
+func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Message, keep map[int]struct{}) {
 	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
 
@@ -204,10 +201,6 @@ func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Messa
 	}
 	s.messages[h] = cp
 	s.noteHistoryLocked(h)
-	// Remember how deep this history was filled, so an arriving message does not
-	// cap the scrollback back down (see capMessagesLocked).
-	s.msgFloor[h] = floor
-	s.capMessagesLocked(h)
 	if chat, ok := s.chats[h.ChatID]; ok && sharedPtsBox(chat.Peer) {
 		for _, m := range s.messages[h] {
 			s.msgChat[m.ID] = h.ChatID
@@ -362,7 +355,7 @@ func (s *SQLiteStore) purgePendingLocked(chatID int64) bool {
 }
 
 // discardChatLocked drops everything a chat holds, in memory and on disk: every
-// history, its floor and its loaded mark, and the rows of histories this
+// history, its runs and its loaded mark, and the rows of histories this
 // session never opened. Caller holds the lock.
 func (s *SQLiteStore) discardChatLocked(chatID int64) {
 	for _, h := range s.chatHistoriesLocked(chatID) {
@@ -370,7 +363,6 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 			delete(s.msgChat, m.ID)
 		}
 		delete(s.messages, h)
-		delete(s.msgFloor, h)
 		delete(s.runs, h)
 	}
 	delete(s.histories, chatID)
@@ -535,35 +527,22 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 	}
 }
 
-// capMessagesLocked trims a history to the newest MaxMessagesPerChat, dropping
-// the oldest from the front and clearing their index entries. Caller holds the
+// capMessagesLocked bounds a history to MaxMessagesPerChat, clearing the index
+// entries and queueing the row deletes of what it drops. Caller holds the
 // lock. See issue #73.
 //
-// The cap bounds what arriving messages accumulate; it never trims below what
-// was last set outright. Scrolling far into history sets a longer tail on
-// purpose, and one incoming message must not throw that scrollback away — the
-// view is built from what the store holds, so the trim would be visible.
+// It gives up runs that do not end at the tail first, oldest first and each
+// whole, then trims the old end of the tail run. What a window shows is never
+// dropped: the view is built from what the store holds, so the trim would be
+// visible, and a person who scrolled far back is looking at what they scrolled
+// to. A history may therefore hold more than the cap while somebody looks.
 func (s *SQLiteStore) capMessagesLocked(h domain.HistoryKey) {
-	msgs := s.messages[h]
-	limit := MaxMessagesPerChat
-	if floor := s.msgFloor[h]; floor > limit {
-		limit = floor
-	}
-	if len(msgs) <= limit {
+	if len(s.messages[h]) <= MaxMessagesPerChat {
 		return
 	}
-	msgs = s.dropFarRunsLocked(h, len(msgs)-limit)
-	if len(msgs) <= limit {
-		s.messages[h] = msgs
-		return
-	}
-	drop := len(msgs) - limit
-	for _, m := range msgs[:drop] {
-		delete(s.msgChat, m.ID)
-		s.markMsgDeletedLocked(h.ChatID, m.ID)
-	}
-	s.messages[h] = msgs[drop:]
-	s.trimTailSpanLocked(h)
+	shown := s.shownIDsLocked(h)
+	msgs := s.dropFarRunsLocked(h, len(s.messages[h])-MaxMessagesPerChat, shown)
+	s.messages[h] = s.trimTailRunLocked(h, msgs, len(msgs)-MaxMessagesPerChat, shown)
 }
 
 // BumpChatLastMessage updates a chat's last-message preview and moves it up in
@@ -620,12 +599,6 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 	s.messages[h] = append(s.messages[h], msg)
 	s.noteHistoryLocked(h)
 	s.landOnTailLocked(h, []domain.Message{msg})
-	// A history holding more than the cap is holding a scrollback someone loaded
-	// on purpose. An arriving message adds to it rather than pushing the oldest
-	// out.
-	if s.msgFloor[h] >= MaxMessagesPerChat {
-		s.msgFloor[h]++
-	}
 	s.markMsgDirtyLocked(msg.ChatID, msg.ID)
 	if chat, ok := s.chats[msg.ChatID]; ok {
 		m := msg

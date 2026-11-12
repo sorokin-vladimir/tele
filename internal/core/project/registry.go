@@ -101,6 +101,20 @@ func (g *Registry) Window(id SubID) (Window, bool) {
 	return s.window, true
 }
 
+// HistoryWindows reports every history window the client holds, with the
+// anchor a first-unread window was pinned to once it resolved.
+func (g *Registry) HistoryWindows() []HistoryWindow {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var out []HistoryWindow
+	for _, s := range g.subs {
+		if w, ok := s.window.(HistoryWindow); ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // Refresh rebuilds every subscription and emits whatever actually differs.
 // The owner calls it once per applied state change; a change no window contains
 // produces no deltas, which is the point.

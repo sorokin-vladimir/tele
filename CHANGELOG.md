@@ -40,7 +40,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Security
 
-- Official builds are made with Go 1.26.10 and updated network, image and
+- Official builds are made with Go 1.26.11 and updated network, image and
   compression libraries, closing known vulnerabilities in the code tele
   calls.
 

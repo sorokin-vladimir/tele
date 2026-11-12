@@ -1,6 +1,6 @@
 # 命令
 
-> 本文译自 [commands.md](../commands.md)，对应提交 `38230c5`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [commands.md](../commands.md)，对应提交 `20be390`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 的全部命令及其参数。命令的共同点（如何命名、如何指定聊天、以什么退出码结束、JSON 输出是什么样子）见 [cli.md](cli.md)。`tele help COMMAND` 或在任意命令后加 `--help`，可以直接从程序中看到同样的内容（英文）。
 
@@ -95,7 +95,7 @@ tele show CHAT [--topic ID] [--limit N] [--before ID | --around ID] [--mark-read
 | `--mark-read`   | 把聊天（或话题）标为已读，直到打印出的最后一条消息为止                          |
 | `--json`        | 每条消息输出一个 JSON 对象，见 [cli.md](cli.md#tele-show---json)                |
 
-使用 `--around` 时，消息总是来自 Telegram，其中任何一条都不会保存到本地历史。
+使用 `--around` 时，如果本地历史在所请求消息的两侧都有足够的消息，就由本地历史回答；否则由 Telegram 回答。`show` 获取的消息会保存到本地历史，使用 `--before` 和 `--around` 时也是如此，因此再次请求相同的消息无需联网，之后在这些消息上打开的窗口也会立即显示它们。
 
 <a id="tele-search"></a>
 ## `tele search`

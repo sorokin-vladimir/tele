@@ -73,7 +73,7 @@ func (o *Owner) backfill(ctx context.Context, a *seat, w project.HistoryWindow) 
 	// is not written back out of existence. Nothing added means the page was
 	// entirely history the store already had: the chat has no more to give, and
 	// there is no window to rebuild.
-	_, added := o.state.MergeHistory(w.History(), fetched)
+	_, added := o.state.MergeOlder(w.History(), offsetID, fetched)
 	o.log.Debug("history backfill",
 		zap.Int64("chat", w.ChatID),
 		zap.Int("offset_id", offsetID),

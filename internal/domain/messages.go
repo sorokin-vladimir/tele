@@ -60,3 +60,17 @@ func messageBefore(a, b Message) bool {
 	}
 	return a.ID < b.ID
 }
+
+// Run is one unbroken stretch of a history as it is stored: every message
+// between its two ends is there. A history is stored as one run or several,
+// with history nobody fetched between them, and two runs are never adjacent.
+type Run struct {
+	// Messages are the run's messages, oldest first.
+	Messages []Message
+	// AtTail marks the run live messages land on: it ends at the history's
+	// newest message.
+	AtTail bool
+	// AtBeginning marks a run with no history below it: older history was
+	// asked for there and Telegram had none.
+	AtBeginning bool
+}

@@ -155,7 +155,7 @@ func (s *State) ApplyMediaRef(chatID int64, msgID int, photo *domain.PhotoRef, d
 // ApplyHistory replaces a chat's stored messages with a page outright,
 // dropping whatever was held. It is for the caller that has decided the stored
 // history cannot be reconciled with the server's and is starting again; a page
-// that is meant to join what is already there goes through MergeHistory.
+// that is meant to join what is already there goes through MergeOlder.
 func (s *State) ApplyHistory(chatID int64, msgs []domain.Message) (Change, bool) {
 	s.st.SetMessages(chatID, msgs)
 	c := Change{Kind: ChangeHistory, ChatID: chatID}
@@ -163,16 +163,17 @@ func (s *State) ApplyHistory(chatID int64, msgs []domain.Message) (Change, bool)
 	return c, true
 }
 
-// MergeHistory joins a fetched page to one stored history and publishes one
-// change, so the projections over it rebuild through the same path as every
-// other change. The merge itself happens inside the store, under its lock,
-// which is what keeps a message arriving mid-fetch from being overwritten.
+// MergeOlder joins a page fetched older than message below to one stored
+// history (zero for below: the newest page) and publishes one change, so the
+// projections over it rebuild through the same path as every other change.
+// The merge itself happens inside the store, under its lock, which is what
+// keeps a message arriving mid-fetch from being overwritten.
 //
 // A page that added nothing publishes nothing: it means the fetch reached
 // history the store already had, and rebuilding every window to say so would
 // cost a frame for no news.
-func (s *State) MergeHistory(h domain.HistoryKey, msgs []domain.Message) (Change, bool) {
-	if s.st.MergeMessages(h, msgs) == 0 {
+func (s *State) MergeOlder(h domain.HistoryKey, below int, msgs []domain.Message) (Change, bool) {
+	if s.st.MergeOlder(h, below, msgs) == 0 {
 		return Change{}, false
 	}
 	c := Change{Kind: ChangeHistory, ChatID: h.ChatID}
@@ -181,7 +182,7 @@ func (s *State) MergeHistory(h domain.HistoryKey, msgs []domain.Message) (Change
 }
 
 // RepairHistory joins a page fetched to close a gap. It differs from
-// MergeHistory in what it promises the store: a repair leaves the chat no
+// MergeOlder in what it promises the store: a repair leaves the chat no
 // deeper than it found it, because nobody asked for the page and its cost
 // should not outlive the hole it filled.
 func (s *State) RepairHistory(chatID int64, msgs []domain.Message) (Change, bool) {

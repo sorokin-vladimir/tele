@@ -86,7 +86,7 @@ func newHistoryOwner(t *testing.T, server *serverHistory) *Owner {
 func TestHistory_AnswersFromTheStore(t *testing.T) {
 	server := &serverHistory{}
 	o := newHistoryOwner(t, server)
-	o.state.Store().MergeMessages(oneChat, messagesUpTo(10))
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(10))
 
 	got, err := o.History(context.Background(), oneChat, 0, 3)
 
@@ -101,7 +101,7 @@ func TestHistory_AnswersFromTheStore(t *testing.T) {
 func TestHistory_FetchesWhatTheStoreLacksAndKeepsIt(t *testing.T) {
 	server := &serverHistory{msgs: messagesUpTo(50)}
 	o := newHistoryOwner(t, server)
-	o.state.Store().MergeMessages(oneChat, messagesUpTo(50)[45:])
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(50)[45:])
 
 	got, err := o.History(context.Background(), oneChat, 0, 30)
 
@@ -128,7 +128,7 @@ func TestHistory_AShortHistoryIsAllOfIt(t *testing.T) {
 func TestHistory_BeforeAnswersWithTheOlderMessages(t *testing.T) {
 	server := &serverHistory{}
 	o := newHistoryOwner(t, server)
-	o.state.Store().MergeMessages(oneChat, messagesUpTo(10))
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(10))
 
 	got, err := o.History(context.Background(), oneChat, 6, 3)
 
@@ -142,7 +142,7 @@ func TestHistory_BeforeAnswersWithTheOlderMessages(t *testing.T) {
 func TestHistory_FarBackIsFetchedAndNotKept(t *testing.T) {
 	server := &serverHistory{msgs: messagesUpTo(100)}
 	o := newHistoryOwner(t, server)
-	o.state.Store().MergeMessages(oneChat, messagesUpTo(100)[90:])
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(100)[90:])
 
 	got, err := o.History(context.Background(), oneChat, 30, 5)
 

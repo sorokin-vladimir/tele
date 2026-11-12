@@ -111,12 +111,19 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	}
 	pages := s.byHistoryLocked(msgs)
 	for _, h := range s.chatHistoriesLocked(chatID) {
+		delete(s.runs, h)
 		if _, kept := pages[h]; !kept {
 			s.setMessagesLocked(h, nil, 0, keep)
 		}
 	}
 	for h, page := range pages {
 		s.setMessagesLocked(h, page, len(page), keep)
+		// The page is the newest Telegram has: whatever else the history held
+		// is gone, and this is its one run.
+		if sp, ok := pageSpan(page); ok {
+			sp.atTail = true
+			s.runs[h] = []span{sp}
+		}
 	}
 }
 
@@ -139,42 +146,7 @@ func (s *SQLiteStore) detachMovedLocked(h domain.HistoryKey, msgs []domain.Messa
 	}
 }
 
-// MergeMessages merges a fetched page into one history and reports how many
-// messages it added. Reading the held history, merging and storing the result
-// happen under one hold of the lock, which is what keeps a message arriving
-// mid-fetch from being written back out of existence: read and write as two
-// calls leave a window where the arrival lands between them and is lost when
-// the merged page replaces the slice.
-//
-// A page that adds nothing still lands, because a message can come back edited
-// without changing the count. The caller decides what to do about a zero, and
-// what it is told is what the count changed by, not whether anything did.
-//
-// Only the history asked for is filled deeper. A message in the page that
-// belongs elsewhere joins its own history the way a repair would, without
-// raising what that history costs to hold.
-func (s *SQLiteStore) MergeMessages(h domain.HistoryKey, msgs []domain.Message) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	held := s.heldReactionsLocked(h.ChatID)
-	defer s.traceHeldReactionsLocked(h.ChatID, "MergeMessages", held)
-
-	added := 0
-	for key, page := range s.byHistoryLocked(msgs) {
-		s.detachMovedLocked(key, page)
-		before := s.messages[key]
-		merged := domain.MergeMessages(before, page)
-		floor := s.msgFloor[key]
-		if key == h {
-			floor = len(merged)
-		}
-		s.setMessagesLocked(key, merged, floor, nil)
-		added += len(merged) - len(before)
-	}
-	return added
-}
-
-// RepairMessages merges a page in the way MergeMessages does, laying it out
+// RepairMessages merges a page in the way MergeOlder does, laying it out
 // among the chat's histories, and leaves each of them no deeper than it found
 // it: the cap applies as if the page had never come, trimming the oldest to
 // make room.
@@ -192,9 +164,11 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 	added := 0
 	for h, page := range s.byHistoryLocked(msgs) {
 		s.detachMovedLocked(h, page)
+		s.ensureTailSpanLocked(h)
 		before := s.messages[h]
 		merged := domain.MergeMessages(before, page)
 		s.setMessagesLocked(h, merged, s.msgFloor[h], nil)
+		s.landOnTailLocked(h, page)
 		// What the page brought, counted before the cap trims the other end: a
 		// repair that adds fifty and pushes fifty older ones out still changed
 		// every window looking at it.
@@ -397,6 +371,7 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 		}
 		delete(s.messages, h)
 		delete(s.msgFloor, h)
+		delete(s.runs, h)
 	}
 	delete(s.histories, chatID)
 	for h := range s.loaded {
@@ -577,12 +552,18 @@ func (s *SQLiteStore) capMessagesLocked(h domain.HistoryKey) {
 	if len(msgs) <= limit {
 		return
 	}
+	msgs = s.dropFarRunsLocked(h, len(msgs)-limit)
+	if len(msgs) <= limit {
+		s.messages[h] = msgs
+		return
+	}
 	drop := len(msgs) - limit
 	for _, m := range msgs[:drop] {
 		delete(s.msgChat, m.ID)
 		s.markMsgDeletedLocked(h.ChatID, m.ID)
 	}
 	s.messages[h] = msgs[drop:]
+	s.trimTailSpanLocked(h)
 }
 
 // BumpChatLastMessage updates a chat's last-message preview and moves it up in
@@ -621,8 +602,14 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 				s.messages[h][i] = msg
 			} else {
 				// Moved to another topic: it takes its place in the history it
-				// joined, which need not be the end, since it may be old.
+				// joined, which need not be the end, since it may be old. Outside
+				// every run of that history it is history nobody fetched there.
 				s.detachMovedLocked(h, []domain.Message{msg})
+				if !s.runHoldsLocked(h, msg.ID) {
+					delete(s.msgChat, msg.ID)
+					s.markMsgDeletedLocked(msg.ChatID, msg.ID)
+					return false
+				}
 				s.messages[h] = domain.MergeMessages(s.messages[h], []domain.Message{msg})
 				s.noteHistoryLocked(h)
 			}
@@ -632,6 +619,7 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 	}
 	s.messages[h] = append(s.messages[h], msg)
 	s.noteHistoryLocked(h)
+	s.landOnTailLocked(h, []domain.Message{msg})
 	// A history holding more than the cap is holding a scrollback someone loaded
 	// on purpose. An arriving message adds to it rather than pushing the oldest
 	// out.

@@ -63,7 +63,7 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 		if err != nil {
 			return nil, err
 		}
-		if _, added := o.state.MergeHistory(h, page); !added {
+		if _, added := o.state.MergeOlder(h, offset, page); !added {
 			// Nothing new: the history has no more to give.
 			return got, nil
 		}

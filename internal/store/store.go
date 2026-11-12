@@ -19,12 +19,28 @@ type Store interface {
 	// SetMessages replaces everything a chat holds with a page, laid out among
 	// its histories: in a forum, every topic at once.
 	SetMessages(chatID int64, msgs []domain.Message)
-	// MergeMessages merges a fetched page into one history under a single hold
-	// of the store's lock and reports how many messages it added. It is how a
-	// page fetched from Telegram is applied: SetMessages after a read outside
-	// the lock would drop anything that arrived in between.
-	MergeMessages(h domain.HistoryKey, msgs []domain.Message) int
-	// RepairMessages merges a page the way MergeMessages does, laid out among
+	// Runs returns a history's runs, oldest first: the unbroken stretches it
+	// is stored as, each with the messages it holds.
+	Runs(h domain.HistoryKey) []domain.Run
+	// MergeAround, MergeOlder and MergeNewer each merge a page fetched from
+	// Telegram under a single hold of the store's lock: SetMessages after a
+	// read outside the lock would drop anything that arrived in between. They
+	// differ in where the page lies against what is held.
+	//
+	// MergeAround stores a page fetched around one message as a run of its
+	// own, joined to whichever runs it meets, and reports how many messages it
+	// added.
+	MergeAround(h domain.HistoryKey, msgs []domain.Message) int
+	// MergeOlder stores a page fetched older than message below, growing the
+	// run that holds below; zero for below means the newest page, which ends
+	// at the tail. A page with nothing older than below marks the run as
+	// reaching the beginning. It reports how many messages it added.
+	MergeOlder(h domain.HistoryKey, below int, msgs []domain.Message) int
+	// MergeNewer stores a page fetched newer than message above, growing the
+	// run that holds above. A page with nothing newer than above marks the
+	// run as ending at the tail. It reports how many messages it added.
+	MergeNewer(h domain.HistoryKey, above int, msgs []domain.Message) int
+	// RepairMessages merges a page the way MergeOlder does, laid out among
 	// the chat's histories, but leaves each no deeper than it found it: a page
 	// nobody asked for must not raise what the chat costs to hold. It takes a
 	// chat rather than a history because a gap is the chat's.

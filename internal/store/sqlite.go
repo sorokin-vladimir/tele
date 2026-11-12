@@ -146,6 +146,9 @@ type SQLiteStore struct {
 	// msgFloor is how many messages a history was last filled with outright, so
 	// the per-history cap does not trim a scrollback the user deliberately loaded.
 	msgFloor map[domain.HistoryKey]int
+	// runs records where each history's runs lie, oldest first. A history
+	// with messages and no span recorded is one run ending at the tail.
+	runs map[domain.HistoryKey][]span
 
 	// dirtyPersist holds chat IDs whose row changed via a high-frequency
 	// write-behind mutation (read state, last message) and awaits a coalesced
@@ -241,6 +244,7 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		messages:           make(map[domain.HistoryKey][]domain.Message),
 		histories:          make(map[int64]map[int]struct{}),
 		msgFloor:           make(map[domain.HistoryKey]int),
+		runs:               make(map[domain.HistoryKey][]span),
 		unreadReactionMsgs: make(map[int64]map[int]struct{}),
 		unreadMentionMsgs:  make(map[int64]map[int]struct{}),
 		baselineUnread:     make(map[int64]int),

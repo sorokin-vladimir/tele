@@ -56,14 +56,14 @@ func TestSQLite_ReactionTrace_WholeMessageWrites(t *testing.T) {
 
 	s.AppendMessage(domain.Message{ID: 1, ChatID: 5})
 	s.ReplaceMessage(5, domain.Message{ID: 1, ChatID: 5, Reactions: liked})
-	s.MergeMessages(domain.HistoryKey{ChatID: 5}, []domain.Message{{ID: 1, ChatID: 5}, {ID: 2, ChatID: 5}})
+	s.MergeOlder(domain.HistoryKey{ChatID: 5}, 0, []domain.Message{{ID: 1, ChatID: 5}, {ID: 2, ChatID: 5}})
 	s.SetMessages(5, []domain.Message{{ID: 1, ChatID: 5, Reactions: liked}})
 
 	var vias []string
 	for _, e := range reactionTrace(logs) {
 		vias = append(vias, e.ContextMap()["via"].(string))
 	}
-	assert.Equal(t, []string{"AppendMessage", "ReplaceMessage", "MergeMessages", "SetMessages"}, vias,
+	assert.Equal(t, []string{"AppendMessage", "ReplaceMessage", "MergeOlder", "SetMessages"}, vias,
 		"only the message whose reactions moved is reported, once per write")
 }
 

@@ -68,7 +68,7 @@ func TestForum_ScrollingBackOneTopicRaisesOnlyItsFloor(t *testing.T) {
 	for id := 1; id <= store.MaxMessagesPerChat+50; id++ {
 		page = append(page, topicMsg(id, 12))
 	}
-	s.MergeMessages(topic(12), page)
+	s.MergeOlder(topic(12), 0, page)
 	first := 100000
 	for id := first; id < first+store.MaxMessagesPerChat+5; id++ {
 		s.AppendMessage(topicMsg(id, 30))
@@ -223,7 +223,9 @@ func TestForum_AMessageIsFoundByChatAndID(t *testing.T) {
 }
 
 // An admin can move a message to another topic; the copy that says so wins and
-// the message leaves the history it was in.
+// the message leaves the history it was in. It joins the new one only where a
+// run of it lies: anywhere else it is history nobody fetched there, and a
+// backfill reaching it brings it with its neighbours.
 func TestForum_AMessageMovedToAnotherTopicLeavesTheOld(t *testing.T) {
 	s := forumStore(t)
 	s.AppendMessage(topicMsg(1, 12))
@@ -233,7 +235,31 @@ func TestForum_AMessageMovedToAnotherTopicLeavesTheOld(t *testing.T) {
 
 	assert.False(t, moved, "it is the same message, not a new one")
 	assert.Equal(t, []int{1}, ids(s.Messages(topic(12))))
-	assert.Equal(t, []int{2}, ids(s.Messages(topic(30))))
+	assert.Empty(t, s.Messages(topic(30)), "topic 30 holds no run for it to join")
+}
+
+// A page fetched for one topic can carry a message another topic holds or
+// should hold. It joins that topic only where a run of it lies, as a moved
+// message does: a page asked for one history grows no other.
+func TestForum_APageJoinsAnotherTopicOnlyWhereItsRunLies(t *testing.T) {
+	s := forumStore(t)
+	s.MergeAround(topic(12), []domain.Message{topicMsg(10, 12), topicMsg(20, 12)})
+
+	s.MergeOlder(topic(30), 100, []domain.Message{topicMsg(5, 12), topicMsg(15, 12), topicMsg(90, 30)})
+
+	assert.Equal(t, []int{10, 15, 20}, ids(s.Messages(topic(12))))
+	assert.Equal(t, []int{90}, ids(s.Messages(topic(30))))
+}
+
+func TestForum_AMessageMovedIntoARunJoinsIt(t *testing.T) {
+	s := forumStore(t)
+	s.MergeAround(topic(30), []domain.Message{topicMsg(1, 30), topicMsg(9, 30)})
+	s.AppendMessage(topicMsg(5, 12))
+
+	s.AppendMessage(topicMsg(5, 30))
+
+	assert.Empty(t, s.Messages(topic(12)))
+	assert.Equal(t, []int{1, 5, 9}, ids(s.Messages(topic(30))))
 }
 
 // A reload that finds a message in another topic moves it; the move is not a

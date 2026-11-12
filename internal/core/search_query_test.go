@@ -239,7 +239,7 @@ func TestHistoryAround_FarBackLeavesTheStoreAlone(t *testing.T) {
 	server := &serverSearch{around: []domain.Message{{ID: 4, ChatID: 1}, {ID: 5, ChatID: 1}, {ID: 6, ChatID: 1}}}
 	o := newSearchOwner(t, server, adaChat)
 	stored := messagesUpTo(100)[90:]
-	o.state.Store().MergeMessages(oneChat, stored)
+	o.state.Store().MergeOlder(oneChat, 0, stored)
 
 	got, err := o.HistoryAround(context.Background(), oneChat, 5, 3)
 

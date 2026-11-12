@@ -22,21 +22,21 @@ func storeWithChat(t *testing.T) store.Store {
 	return s
 }
 
-func TestMergeMessages_ReportsWhatThePageAdded(t *testing.T) {
+func TestMergeOlder_ReportsWhatThePageAdded(t *testing.T) {
 	s := storeWithChat(t)
 	s.SetMessages(7, []domain.Message{mergeMsg(3, 3), mergeMsg(4, 4)})
 
-	added := s.MergeMessages(domain.HistoryKey{ChatID: 7}, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2), mergeMsg(3, 3)})
+	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 3, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2), mergeMsg(3, 3)})
 
 	assert.Equal(t, 2, added, "the page overlapped the store by one message")
 	assert.Equal(t, []int{1, 2, 3, 4}, storedIDs(s, 7))
 }
 
-func TestMergeMessages_APageOfWhatIsHeldAddsNothing(t *testing.T) {
+func TestMergeOlder_APageOfWhatIsHeldAddsNothing(t *testing.T) {
 	s := storeWithChat(t)
 	s.SetMessages(7, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2)})
 
-	added := s.MergeMessages(domain.HistoryKey{ChatID: 7}, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2)})
+	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 1, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2)})
 
 	assert.Zero(t, added)
 	assert.Equal(t, []int{1, 2}, storedIDs(s, 7))
@@ -46,7 +46,7 @@ func TestMergeMessages_APageOfWhatIsHeldAddsNothing(t *testing.T) {
 // history, spends a round trip on the network and comes back with a page: a
 // message that arrived in the meantime is in the store but not in what the
 // caller read, and a plain SetMessages would write it back out of existence.
-func TestMergeMessages_KeepsAMessageThatArrivedDuringTheFetch(t *testing.T) {
+func TestMergeOlder_KeepsAMessageThatArrivedDuringTheFetch(t *testing.T) {
 	s := storeWithChat(t)
 	s.SetMessages(7, []domain.Message{mergeMsg(5, 5)})
 
@@ -55,13 +55,13 @@ func TestMergeMessages_KeepsAMessageThatArrivedDuringTheFetch(t *testing.T) {
 	// What arrived while it was there.
 	s.AppendMessage(mergeMsg(6, 6))
 	// What it came back with.
-	added := s.MergeMessages(domain.HistoryKey{ChatID: 7}, []domain.Message{mergeMsg(3, 3), mergeMsg(4, 4)})
+	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 5, []domain.Message{mergeMsg(3, 3), mergeMsg(4, 4)})
 
 	require.Equal(t, 2, added)
 	assert.Equal(t, []int{3, 4, 5, 6}, storedIDs(s, 7), "the arrival must survive the page")
 }
 
-func TestMergeMessages_TakesTheFetchedCopyOfAMessageEditedInTheGap(t *testing.T) {
+func TestMergeOlder_TakesTheFetchedCopyOfAMessageEditedInTheGap(t *testing.T) {
 	s := storeWithChat(t)
 	stale := mergeMsg(1, 1)
 	stale.Text = "before"
@@ -69,7 +69,7 @@ func TestMergeMessages_TakesTheFetchedCopyOfAMessageEditedInTheGap(t *testing.T)
 
 	fresh := mergeMsg(1, 1)
 	fresh.Text = "after"
-	added := s.MergeMessages(domain.HistoryKey{ChatID: 7}, []domain.Message{fresh})
+	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 0, []domain.Message{fresh})
 
 	assert.Zero(t, added, "an edit changes no count")
 	held := s.Messages(domain.HistoryKey{ChatID: 7})
@@ -90,10 +90,15 @@ func fullChat(t *testing.T) store.Store {
 
 // Scrolling back is somebody asking for more history, so the chat is allowed to
 // grow past the cap and hold what they scrolled to.
-func TestMergeMessages_DeepensAChatThatIsAlreadyFull(t *testing.T) {
-	s := fullChat(t)
+func TestMergeOlder_DeepensAChatThatIsAlreadyFull(t *testing.T) {
+	s := storeWithChat(t)
+	held := make([]domain.Message, 0, store.MaxMessagesPerChat)
+	for i := 3; i < 3+store.MaxMessagesPerChat; i++ {
+		held = append(held, mergeMsg(i, int64(i)))
+	}
+	s.SetMessages(7, held)
 
-	added := s.MergeMessages(domain.HistoryKey{ChatID: 7}, []domain.Message{mergeMsg(-1, -1), mergeMsg(0, 0)})
+	added := s.MergeOlder(domain.HistoryKey{ChatID: 7}, 3, []domain.Message{mergeMsg(1, 1), mergeMsg(2, 2)})
 
 	assert.Equal(t, 2, added)
 	assert.Len(t, s.Messages(domain.HistoryKey{ChatID: 7}), store.MaxMessagesPerChat+2)

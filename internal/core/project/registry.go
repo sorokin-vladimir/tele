@@ -70,16 +70,21 @@ func (g *Registry) MoveWindow(id SubID, w Window) {
 // with, and re-pinning it there would re-anchor the window on whatever happens
 // to be unread by then. A client asking for a different history, or naming an
 // anchor itself, gets exactly what it asked for.
+//
+// The tail mark is carried across any move within the same history: the window
+// is still away from the tail, and "N new" still counts from when it left.
 func carryPin(prev, next Window) Window {
 	p, okPrev := prev.(HistoryWindow)
 	n, okNext := next.(HistoryWindow)
-	if !okPrev || !okNext {
+	if !okPrev || !okNext || p.History() != n.History() {
 		return next
 	}
-	if p.History() != n.History() || p.Anchor.Kind != n.Anchor.Kind || n.Anchor.MsgID != 0 {
-		return next
+	if n.TailMark == 0 {
+		n.TailMark = p.TailMark
 	}
-	n.Anchor.MsgID = p.Anchor.MsgID
+	if p.Anchor.Kind == n.Anchor.Kind && n.Anchor.MsgID == 0 {
+		n.Anchor.MsgID = p.Anchor.MsgID
+	}
 	return n
 }
 
@@ -197,6 +202,17 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		// backfill lands.
 		if w.Anchor.Kind == AnchorFirstUnread && w.Anchor.MsgID == 0 && next.AnchorMsgID != 0 {
 			w.Anchor.MsgID = next.AnchorMsgID
+			s.window = w
+		}
+		// Mark where the tail was the first time the window is built away from
+		// it, which is what "N new" counts from, and forget the mark once the
+		// window's run reaches the tail again.
+		switch {
+		case len(next.Messages) > 0 && !next.AtTail && w.TailMark == 0:
+			w.TailMark = tailNewest(g.reader.Runs(w.History()))
+			s.window = w
+		case next.AtTail && w.TailMark != 0:
+			w.TailMark = 0
 			s.window = w
 		}
 		for _, d := range DiffHistory(s.chat, next) {

@@ -65,6 +65,10 @@ type HistoryWindow struct {
 	Anchor  Anchor
 	Before  int
 	After   int
+	// TailMark is the newest message of the tail run at the moment the window
+	// left it, which is what "N new" counts from. The registry sets it; a
+	// client leaves it zero.
+	TailMark int
 }
 
 // History names the history the window is a range of.

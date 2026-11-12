@@ -21,8 +21,11 @@ type fakeReader struct {
 	// topicMsgs holds a forum's histories, one per topic; topics its topics in
 	// the order the store would list them.
 	topicMsgs map[domain.HistoryKey][]domain.Message
-	topics    map[int64][]domain.Topic
-	account   project.AccountContents
+	// runs, when set for a history, is what it is stored as; otherwise its
+	// messages are one run ending at the tail.
+	runs    map[domain.HistoryKey][]domain.Run
+	topics  map[int64][]domain.Topic
+	account project.AccountContents
 }
 
 func (f *fakeReader) Topics(chatID int64) []domain.Topic { return f.topics[chatID] }
@@ -47,11 +50,20 @@ func (f *fakeReader) GetChat(id int64) (domain.Chat, bool) {
 	return domain.Chat{}, false
 }
 
-func (f *fakeReader) Messages(h domain.HistoryKey) []domain.Message {
-	if h.TopicID != 0 {
-		return f.topicMsgs[h]
+// Runs serves the runs a test set, or the messages it set as one run ending at
+// the tail.
+func (f *fakeReader) Runs(h domain.HistoryKey) []domain.Run {
+	if r, ok := f.runs[h]; ok {
+		return r
 	}
-	return f.msgs[h.ChatID]
+	msgs := f.msgs[h.ChatID]
+	if h.TopicID != 0 {
+		msgs = f.topicMsgs[h]
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	return []domain.Run{{Messages: msgs, AtTail: true}}
 }
 
 func (f *fakeReader) FolderFilters() []domain.FolderFilter { return f.filters }

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -44,6 +45,7 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 
 	st.LoadMessages(h)
 	o.forwardFill(ctx, h.ChatID)
+	defer o.holdReading(h, store.Shown{Anchor: before, Before: limit})()
 	for {
 		run, ok := runUpTo(st.Runs(h), before)
 		if !ok {

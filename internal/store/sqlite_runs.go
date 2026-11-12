@@ -431,6 +431,10 @@ func (s *SQLiteStore) shownIDsLocked(h domain.HistoryKey) map[int]struct{} {
 // anchorIn finds a window's anchor among runs: the newest message of the tail
 // run for zero, else the message with that id. It returns the messages of the
 // run holding it and the anchor's index there, -1 when no run holds it.
+//
+// An anchor the store does not hold is still placed when a run reaches up to
+// it: a command reading older than a message nobody kept. Its index is then
+// where it would sit, just past the run's messages older than it.
 func anchorIn(runs []domain.Run, anchor int) ([]domain.Message, int) {
 	for _, r := range runs {
 		if anchor == 0 {
@@ -444,6 +448,18 @@ func anchorIn(runs []domain.Run, anchor int) ([]domain.Message, int) {
 				return r.Messages, i
 			}
 		}
+	}
+	for _, r := range runs {
+		if len(r.Messages) == 0 || r.Messages[0].ID >= anchor || (anchor > r.UpTo && !r.AtTail) {
+			continue
+		}
+		older := 0
+		for _, m := range r.Messages {
+			if m.ID < anchor {
+				older++
+			}
+		}
+		return r.Messages, older
 	}
 	return nil, -1
 }

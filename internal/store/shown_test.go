@@ -23,6 +23,21 @@ func TestShown_TheCapSparesWhatAWindowAsksFor(t *testing.T) {
 	}
 }
 
+// A reader anchored on a message nobody kept, older than which a run reaches,
+// is shown that run: it is reading what lies just under the message.
+func TestShown_AnAnchorNotHeldIsPlacedInTheRunReachingIt(t *testing.T) {
+	s := fullTailRun(t)
+	s.SetShown(map[domain.HistoryKey][]store.Shown{chat7: {{Anchor: 30, Before: 3}}})
+
+	s.MergeOlder(chat7, 30, msgs(27, 28, 29))
+
+	runs := runsOf(s, chat7)
+	if assert.Len(t, runs, 2) {
+		assert.Equal(t, []int{27, 28, 29}, runs[0].IDs, "the run under the anchor is kept")
+		assert.Equal(t, 1004, runs[1].IDs[0], "the tail run made room instead")
+	}
+}
+
 func TestShown_WithNobodyLookingTheCapApplies(t *testing.T) {
 	s := fullTailRun(t)
 

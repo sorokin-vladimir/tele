@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,6 +155,62 @@ func TestHistory_FarBackIsFetchedAndKeptAsARun(t *testing.T) {
 	assert.Equal(t, ids(got), ids(again))
 	assert.Equal(t, []int{30}, server.fetchedFrom, "the second answer came from the store")
 	assert.Len(t, o.state.Store().Runs(oneChat), 2, "a run far back beside the tail run")
+}
+
+// historyWithin runs History with a deadline, so a command that never ends
+// fails the test rather than hanging it.
+func historyWithin(t *testing.T, o *Owner, before, limit int) []domain.Message {
+	t.Helper()
+	type answer struct {
+		msgs []domain.Message
+		err  error
+	}
+	done := make(chan answer, 1)
+	go func() {
+		msgs, err := o.History(context.Background(), oneChat, before, limit)
+		done <- answer{msgs, err}
+	}()
+	select {
+	case a := <-done:
+		require.NoError(t, a.err)
+		return a.msgs
+	case <-time.After(2 * time.Second):
+		t.Fatal("History never answered")
+		return nil
+	}
+}
+
+// fullStore holds the newest store.MaxMessagesPerChat of a 1000-message
+// history, nobody looking at it.
+func fullStore(t *testing.T) (*Owner, *serverHistory) {
+	t.Helper()
+	server := &serverHistory{msgs: messagesUpTo(1000)}
+	o := newHistoryOwner(t, server)
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(1000)[1000-store.MaxMessagesPerChat:])
+	return o, server
+}
+
+// What a command is reading is not trimmed while it reads it, even with the
+// store full and no window open: the cap gives up a run nobody looks at, and
+// a command running is somebody reading.
+func TestHistory_FarBackIsAnsweredWithTheStoreFull(t *testing.T) {
+	o, server := fullStore(t)
+
+	got := historyWithin(t, o, 30, 5)
+
+	assert.Equal(t, []int{25, 26, 27, 28, 29}, ids(got))
+	assert.Equal(t, []int{30}, server.fetchedFrom)
+}
+
+// Reading back past the cap from the tail keeps what the command has read so
+// far until it has all it asked for.
+func TestHistory_ReadingPastTheCapAnswers(t *testing.T) {
+	o, _ := fullStore(t)
+
+	got := historyWithin(t, o, 0, store.MaxMessagesPerChat+30)
+
+	require.Len(t, got, store.MaxMessagesPerChat+30)
+	assert.Equal(t, 1000-store.MaxMessagesPerChat-29, got[0].ID)
 }
 
 // Reading on from a run far back grows that run, not the tail run, and never

@@ -86,6 +86,13 @@ type Owner struct {
 	// by Telegram saying a channel fell behind while nobody was looking at it.
 	repairing map[int64]bool
 
+	// reading is what commands are reading right now, each under a token of
+	// its own: shown to the store like a window, so the cap does not take a
+	// page away from a command that has just fetched it (#347).
+	readingMu   sync.Mutex
+	reading     map[int]readHold
+	readingNext int
+
 	// topics coalesces the forum topic reads owed to Telegram (#275).
 	topicsMu sync.Mutex
 	topics   topicRefresh
@@ -135,6 +142,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		readyCh:       make(chan struct{}),
 		fetching:      make(map[subKey]bool),
 		repairing:     make(map[int64]bool),
+		reading:       make(map[int]readHold),
 		focus:         newFocusRegistry(),
 		outboxWake:    make(chan struct{}, 1),
 		uploadCancels: make(map[string]context.CancelFunc),

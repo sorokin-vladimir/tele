@@ -56,7 +56,38 @@ func (o *Owner) syncShown() {
 			shown[w.History()] = append(shown[w.History()], shownOf(w))
 		}
 	}
+	o.readingMu.Lock()
+	for _, r := range o.reading {
+		shown[r.h] = append(shown[r.h], r.shown)
+	}
+	o.readingMu.Unlock()
 	o.state.Store().SetShown(shown)
+}
+
+// readHold is what one command is reading of a history.
+type readHold struct {
+	h     domain.HistoryKey
+	shown store.Shown
+}
+
+// holdReading shows the store what a command is reading, for as long as it
+// reads: a page it fetched must still be there when it reads it back, which
+// the cap would not otherwise promise with the store full and no window open.
+// The returned func lets go of it; the next write may then trim it, as the cap
+// trims any run nobody looks at.
+func (o *Owner) holdReading(h domain.HistoryKey, shown store.Shown) func() {
+	o.readingMu.Lock()
+	o.readingNext++
+	token := o.readingNext
+	o.reading[token] = readHold{h: h, shown: shown}
+	o.readingMu.Unlock()
+	o.syncShown()
+	return func() {
+		o.readingMu.Lock()
+		delete(o.reading, token)
+		o.readingMu.Unlock()
+		o.syncShown()
+	}
 }
 
 // shownOf is what a window shows, in the store's terms: its anchor, the newest

@@ -127,22 +127,25 @@ func (c *GotdClient) GetHistory(ctx context.Context, peer domain.Peer, offsetID 
 // than afterID, so the page can come back holding messages at or below afterID.
 // The caller sees that as a page whose newest message did not advance, which is
 // how it learns there is nothing newer to fetch.
-func (c *GotdClient) GetHistoryAfter(ctx context.Context, peer domain.Peer, afterID int, limit int) ([]domain.Message, error) {
+//
+// With topicID it is one topic of a forum, whose history is its replies.
+func (c *GotdClient) GetHistoryAfter(ctx context.Context, peer domain.Peer, topicID, afterID, limit int) ([]domain.Message, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return nil, err
 	}
 
-	c.traceLog.Debug("GetHistoryAfter", zap.Int64("peer_id", peer.ID), zap.Int("afterID", afterID), zap.Int("limit", limit))
+	c.traceLog.Debug("GetHistoryAfter", zap.Int64("peer_id", peer.ID), zap.Int("topic", topicID), zap.Int("afterID", afterID), zap.Int("limit", limit))
 	inputPeer := peerToInput(peer)
 	var msgs []domain.Message
 	err = WithRetry(ctx, func() error {
-		result, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer:      inputPeer,
-			Limit:     limit,
-			OffsetID:  afterID,
-			AddOffset: -limit,
-		})
+		var result tg.MessagesMessagesClass
+		var err error
+		if topicID != 0 {
+			result, err = api.MessagesGetReplies(ctx, buildAfterRepliesRequest(inputPeer, topicID, afterID, limit))
+		} else {
+			result, err = api.MessagesGetHistory(ctx, buildAfterRequest(inputPeer, afterID, limit))
+		}
 		if err != nil {
 			c.log.Error("MessagesGetHistory forward failed", zap.Error(err))
 			return err
@@ -157,6 +160,17 @@ func (c *GotdClient) GetHistoryAfter(ctx context.Context, peer domain.Peer, afte
 		return nil
 	})
 	return msgs, err
+}
+
+// buildAfterRequest asks a chat for the history newer than afterID.
+func buildAfterRequest(peer tg.InputPeerClass, afterID, limit int) *tg.MessagesGetHistoryRequest {
+	return &tg.MessagesGetHistoryRequest{Peer: peer, OffsetID: afterID, AddOffset: -limit, Limit: limit}
+}
+
+// buildAfterRepliesRequest asks one topic of a forum for the history newer
+// than afterID.
+func buildAfterRepliesRequest(peer tg.InputPeerClass, topicID, afterID, limit int) *tg.MessagesGetRepliesRequest {
+	return &tg.MessagesGetRepliesRequest{Peer: peer, MsgID: topicID, OffsetID: afterID, AddOffset: -limit, Limit: limit}
 }
 
 func (c *GotdClient) SendMessage(ctx context.Context, peer domain.Peer, text string, replyToMsgID, topicID int, entities []domain.MessageEntity, randomID int64) (domain.Message, error) {

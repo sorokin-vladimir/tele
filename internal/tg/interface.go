@@ -29,8 +29,10 @@ type Client interface {
 	// how a gap is closed: the update stream fills the tail of a chat and
 	// nothing else does, so a range it missed can only come back by asking for
 	// it. A page whose newest message is not past afterID means there is
-	// nothing newer to fetch.
-	GetHistoryAfter(ctx context.Context, peer domain.Peer, afterID int, limit int) ([]domain.Message, error)
+	// nothing newer to fetch. With topicID it is one topic of a forum, which
+	// is how a person scrolling down a topic's run far back reaches newer
+	// history (#347).
+	GetHistoryAfter(ctx context.Context, peer domain.Peer, topicID, afterID, limit int) ([]domain.Message, error)
 	// GetForumTopics fetches a page of a forum's topics, the first for a zero
 	// offset (#275).
 	GetForumTopics(ctx context.Context, peer domain.Peer, after TopicsOffset, limit int) (ForumTopicsPage, error)

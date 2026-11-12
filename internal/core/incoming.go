@@ -22,6 +22,7 @@ func (Progress) isEvent()         {}
 func (DownloadProgress) isEvent() {}
 func (Notification) isEvent()     {}
 func (AccountEnded) isEvent()     {}
+func (MessageGone) isEvent()      {}
 func (HostFailure) isEvent()      {}
 func (HostStopping) isEvent()     {}
 
@@ -49,6 +50,20 @@ type Failure struct {
 	ChatID int64
 	Op     string
 	Err    *telerr.Error
+}
+
+// MessageGone tells the client whose window was anchored on a message that
+// Telegram no longer has it: deleted, or out of reach. Nearest is the message
+// of the history around it nearest to where it was, zero when Telegram
+// returned none, for the client to open its window on instead (#347).
+//
+// It is an event rather than a window change because the window is the
+// client's: the owner cannot move it, only say why it shows nothing.
+type MessageGone struct {
+	ChatID  int64
+	TopicID int
+	MsgID   int
+	Nearest int
 }
 
 // OpSend names a send the queue gave up on. Clients single it out: a refused

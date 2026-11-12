@@ -57,7 +57,7 @@ func (m *mockClient) GetForumTopicsByID(_ context.Context, _ domain.Peer, _ []in
 	return internaltg.ForumTopicsPage{}, nil
 }
 
-func (m *mockClient) GetHistoryAfter(_ context.Context, _ domain.Peer, _ int, _ int) ([]domain.Message, error) {
+func (m *mockClient) GetHistoryAfter(_ context.Context, _ domain.Peer, _, _, _ int) ([]domain.Message, error) {
 	return m.history, nil
 }
 

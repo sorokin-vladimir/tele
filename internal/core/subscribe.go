@@ -86,18 +86,10 @@ func (o *Owner) maybeFetch(a *seat, id project.SubID, w project.Window) {
 		return
 	}
 	_, hasGap := o.state.Store().Gap(cw.ChatID)
-	if !hasGap && !needsBackfill(project.BuildHistory(o.reader(), cw), cw) {
+	if !hasGap && !shortfallOf(project.BuildHistory(o.reader(), cw), cw).any() {
 		return
 	}
 	o.spawn(func() { o.fill(o.ctx, a, id, cw) })
-}
-
-// needsBackfill reports that the store could not fill the window: it returned
-// fewer messages than were asked for and has nothing older left to give. This is
-// deliberately not HasOlder, which reports the opposite — that the store does
-// hold more, so no fetch is needed.
-func needsBackfill(c project.HistoryContents, w project.HistoryWindow) bool {
-	return !c.HasOlder && len(c.Messages) < w.Before+w.After+1
 }
 
 // publishChange turns one applied domain change into whatever the current

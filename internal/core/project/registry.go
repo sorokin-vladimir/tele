@@ -106,15 +106,16 @@ func (g *Registry) Window(id SubID) (Window, bool) {
 	return s.window, true
 }
 
-// HistoryWindows reports every history window the client holds, with the
-// anchor a first-unread window was pinned to once it resolved.
-func (g *Registry) HistoryWindows() []HistoryWindow {
+// HistoryWindows reports every history window the client holds, by the id of
+// its subscription, with the anchor a first-unread window was pinned to once it
+// resolved.
+func (g *Registry) HistoryWindows() map[SubID]HistoryWindow {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	var out []HistoryWindow
-	for _, s := range g.subs {
+	out := make(map[SubID]HistoryWindow)
+	for id, s := range g.subs {
 		if w, ok := s.window.(HistoryWindow); ok {
-			out = append(out, w)
+			out[id] = w
 		}
 	}
 	return out

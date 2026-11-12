@@ -181,6 +181,26 @@ func (s *State) MergeOlder(h domain.HistoryKey, below int, msgs []domain.Message
 	return c, true
 }
 
+// MergeNewer joins a page fetched newer than message above to the run holding
+// it. It publishes even when the page added nothing: a page with nothing newer
+// says the run ends at the tail, and the windows over it must hear that.
+func (s *State) MergeNewer(h domain.HistoryKey, above int, msgs []domain.Message) Change {
+	s.st.MergeNewer(h, above, msgs)
+	c := Change{Kind: ChangeHistory, ChatID: h.ChatID}
+	s.commit(c)
+	return c
+}
+
+// MergeAround stores a page fetched around one message as a run of its own,
+// and publishes one change, even for a page that added nothing: a window
+// anchored on a message that is gone still has to be rebuilt to learn it.
+func (s *State) MergeAround(h domain.HistoryKey, msgs []domain.Message) Change {
+	s.st.MergeAround(h, msgs)
+	c := Change{Kind: ChangeHistory, ChatID: h.ChatID}
+	s.commit(c)
+	return c
+}
+
 // RepairHistory joins a page fetched to close a gap. It differs from
 // MergeOlder in what it promises the store: a repair leaves the chat no
 // deeper than it found it, because nobody asked for the page and its cost

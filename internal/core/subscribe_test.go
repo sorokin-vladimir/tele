@@ -59,7 +59,7 @@ func (s *stubConn) GetHistory(_ context.Context, _ domain.Peer, _ int, _ int) ([
 // GetHistoryAfter answers the way messages.getHistory with a negative
 // add_offset does: the messages newer than afterID, and when there are none,
 // the window slides back over ones the caller already has.
-func (s *stubConn) GetHistoryAfter(_ context.Context, _ domain.Peer, afterID int, limit int) ([]domain.Message, error) {
+func (s *stubConn) GetHistoryAfter(_ context.Context, _ domain.Peer, _, afterID, limit int) ([]domain.Message, error) {
 	s.fwdCalls.Add(1)
 	if s.fwdErr != nil {
 		return nil, s.fwdErr

@@ -1,6 +1,8 @@
 package store
 
 import (
+	"database/sql"
+	"slices"
 	"sort"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
@@ -94,14 +96,7 @@ func (s *SQLiteStore) landOnTailLocked(h domain.HistoryKey, msgs []domain.Messag
 	if !ok || len(s.runs[h]) == 0 {
 		return
 	}
-	for i, sp := range s.runs[h] {
-		if sp.atTail {
-			s.runs[h][i].hi = max(sp.hi, add.hi)
-			return
-		}
-	}
-	add.atTail = true
-	s.addSpanLocked(h, add)
+	s.landOnTailOrStartLocked(h, add)
 }
 
 // spanOf is the index of the span holding id, or -1.
@@ -450,6 +445,146 @@ func anchorIn(runs []domain.Run, anchor int) ([]domain.Message, int) {
 		}
 	}
 	return nil, -1
+}
+
+// runWrite is one history's runs as the next flush writes them: every row of
+// the history is replaced, and no spans means none is left.
+type runWrite struct {
+	h     domain.HistoryKey
+	spans []span
+}
+
+// snapshotRunWritesLocked lists the histories whose runs differ from what the
+// table holds, and records them as written. Only a history loaded this session
+// is written: one that was not is known here by its arrivals alone, and
+// writing that would overwrite the runs on disk. Its rows extend the tail run
+// on disk when it is loaded (see settleRunsLocked). Caller holds the lock.
+func (s *SQLiteStore) snapshotRunWritesLocked() []runWrite {
+	var out []runWrite
+	consider := func(h domain.HistoryKey) {
+		if !s.loaded[h] || s.purgePendingLocked(h.ChatID) && len(s.runs[h]) == 0 {
+			return
+		}
+		if slices.Equal(s.runs[h], s.writtenRuns[h]) {
+			return
+		}
+		spans := slices.Clone(s.runs[h])
+		out = append(out, runWrite{h: h, spans: spans})
+		s.writtenRuns[h] = spans
+	}
+	for h := range s.runs {
+		consider(h)
+	}
+	for h := range s.writtenRuns {
+		if _, ok := s.runs[h]; !ok {
+			consider(h)
+		}
+	}
+	return out
+}
+
+// writeRuns replaces the rows of each history in ws.
+func writeRuns(tx *sql.Tx, ws []runWrite) error {
+	for _, w := range ws {
+		if _, err := tx.Exec(`DELETE FROM runs WHERE chat_id = ? AND topic_id = ?`, w.h.ChatID, w.h.TopicID); err != nil {
+			return err
+		}
+		for _, sp := range w.spans {
+			if _, err := tx.Exec(`INSERT INTO runs(chat_id, topic_id, lo, hi, at_tail, at_beginning) VALUES (?, ?, ?, ?, ?, ?)`,
+				w.h.ChatID, w.h.TopicID, sp.lo, sp.hi, sp.atTail, sp.atBeginning); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// readRunsLocked reads a history's runs from the table, oldest first. A
+// history whose rows are to be purged has none there worth reading. Caller
+// holds the lock.
+func (s *SQLiteStore) readRunsLocked(h domain.HistoryKey) ([]span, error) {
+	if s.purgePendingLocked(h.ChatID) {
+		return nil, nil
+	}
+	rows, err := s.db.Query(`SELECT lo, hi, at_tail, at_beginning FROM runs WHERE chat_id = ? AND topic_id = ? ORDER BY lo`, h.ChatID, h.TopicID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []span
+	for rows.Next() {
+		var sp span
+		if err := rows.Scan(&sp.lo, &sp.hi, &sp.atTail, &sp.atBeginning); err != nil {
+			return nil, err
+		}
+		out = append(out, sp)
+	}
+	return out, rows.Err()
+}
+
+// settleRunsLocked works out a history's runs as it is opened, from the runs
+// on disk, its rows on disk and the runs it held in memory before. Caller
+// holds the lock.
+//
+// Rows with no run on disk at all were written before runs were recorded: they
+// are the one stretch the store kept then, ending at the tail. Rows newer than
+// the runs on disk were written while the history was not loaded, which only
+// the update stream and repair do: they extend the tail run, or start one.
+// Any other row outside every run belongs to no run, and is dropped. What the
+// history held in memory joins last, its tail run onto the tail run.
+func (s *SQLiteStore) settleRunsLocked(h domain.HistoryKey, disk []domain.Message, diskRuns, memRuns []span) {
+	s.writtenRuns[h] = slices.Clone(diskRuns)
+	spans := slices.Clone(diskRuns)
+	if len(spans) == 0 {
+		if sp, ok := pageSpan(disk); ok {
+			sp.atTail = true
+			spans = []span{sp}
+		}
+	}
+	newest := 0
+	for _, sp := range spans {
+		newest = max(newest, sp.hi)
+	}
+	var newer []domain.Message
+	for _, m := range disk {
+		if m.ID > newest {
+			newer = append(newer, m)
+		}
+	}
+	s.runs[h] = spans
+	if sp, ok := pageSpan(newer); ok {
+		s.landOnTailOrStartLocked(h, sp)
+	}
+	for _, sp := range memRuns {
+		if sp.atTail {
+			s.landOnTailOrStartLocked(h, sp)
+			continue
+		}
+		s.addSpanLocked(h, sp)
+	}
+	kept := s.messages[h][:0:0]
+	for _, m := range s.messages[h] {
+		if m.ID > 0 && spanOf(s.runs[h], m.ID) < 0 {
+			delete(s.msgChat, m.ID)
+			s.markMsgDeletedLocked(h.ChatID, m.ID)
+			continue
+		}
+		kept = append(kept, m)
+	}
+	s.messages[h] = kept
+}
+
+// landOnTailOrStartLocked grows the tail run up to add's newest end, or makes
+// add the tail run when the history has none. Caller holds the lock.
+func (s *SQLiteStore) landOnTailOrStartLocked(h domain.HistoryKey, add span) {
+	for i, sp := range s.runs[h] {
+		if sp.atTail {
+			s.runs[h][i].hi = max(sp.hi, add.hi)
+			return
+		}
+	}
+	add.atTail = true
+	s.addSpanLocked(h, add)
 }
 
 // runHoldsLocked reports whether a run of the history lies over id. Caller

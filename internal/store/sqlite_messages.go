@@ -95,12 +95,15 @@ func (s *SQLiteStore) findLocked(chatID int64, msgID int) (domain.HistoryKey, in
 
 // SetMessages replaces everything a chat holds with a page, laid out among the
 // chat's histories. In a forum that is every topic at once: it is how a tail
-// reload discards a forum whose gap lay across all of them.
+// reload discards a forum whose gap lay across all of them. What is on disk
+// goes too, rows of histories this session never opened included, or the old
+// history would come back the next time one is opened.
 func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	held := s.heldReactionsLocked(chatID)
 	defer s.traceHeldReactionsLocked(chatID, "SetMessages", held)
+	s.purgeRowsLocked(chatID)
 
 	// What survives is decided across the chat rather than per history: a
 	// message the page puts in another topic has moved, and its row must not be
@@ -259,15 +262,18 @@ type msgDelete struct {
 	msgID  int
 }
 
-// rowWrites is one flush's worth of message and topic rows. purges run first:
-// they drop rows written under a shape the chat no longer has, and an upsert
-// queued after the purge belongs to the new shape.
+// rowWrites is one flush's worth of message, run and topic rows. purges run
+// first: they drop rows written under a shape the chat no longer has, or a
+// history a tail reload discarded, and an upsert queued after the purge belongs
+// to what the chat holds now. topicPurges drop a reshaped chat's topics.
 type rowWrites struct {
 	purges       []int64
+	topicPurges  []int64
 	upserts      []msgUpsert
 	deletes      []msgDelete
 	topicUpserts []topicUpsert
 	topicDeletes []topicDelete
+	runs         []runWrite
 }
 
 // snapshotMessageWritesLocked drains the purge, dirty and deleted message sets
@@ -280,6 +286,11 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() rowWrites {
 		s.purgingMsgs[chatID] = struct{}{}
 	}
 	s.purgeMsgs = make(map[int64]struct{})
+	var topicPurges []int64
+	for chatID := range s.purgeTopics {
+		topicPurges = append(topicPurges, chatID)
+	}
+	s.purgeTopics = make(map[int64]struct{})
 
 	var upserts []msgUpsert
 	for chatID, ids := range s.dirtyMsgs {
@@ -313,7 +324,11 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() rowWrites {
 	}
 	s.deletedMsgs = make(map[int64]map[int]struct{})
 	topicUpserts, topicDeletes := s.snapshotTopicWritesLocked()
-	return rowWrites{purges: purges, upserts: upserts, deletes: deletes, topicUpserts: topicUpserts, topicDeletes: topicDeletes}
+	return rowWrites{
+		purges: purges, topicPurges: topicPurges, upserts: upserts, deletes: deletes,
+		topicUpserts: topicUpserts, topicDeletes: topicDeletes,
+		runs: s.snapshotRunWritesLocked(),
+	}
 }
 
 // clearDeletesInFlight forgets purges and deletes whose flush transaction has
@@ -355,8 +370,8 @@ func (s *SQLiteStore) purgePendingLocked(chatID int64) bool {
 }
 
 // discardChatLocked drops everything a chat holds, in memory and on disk: every
-// history, its runs and its loaded mark, and the rows of histories this
-// session never opened. Caller holds the lock.
+// history, its runs and its loaded mark, its topics, and the rows of histories
+// this session never opened. Caller holds the lock.
 func (s *SQLiteStore) discardChatLocked(chatID int64) {
 	for _, h := range s.chatHistoriesLocked(chatID) {
 		for _, m := range s.messages[h] {
@@ -371,11 +386,23 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 			delete(s.loaded, h)
 		}
 	}
-	// The purge covers every row, so queued per-message writes for the old
-	// shape have nothing left to do.
+	s.purgeRowsLocked(chatID)
+	s.discardTopicsLocked(chatID)
+	s.purgeTopics[chatID] = struct{}{}
+}
+
+// purgeRowsLocked queues every message and run row of a chat to be dropped
+// from disk, of histories this session never opened too. Writes queued before
+// it have nothing left to do; writes queued after it belong to what the chat
+// holds now. Caller holds the lock.
+func (s *SQLiteStore) purgeRowsLocked(chatID int64) {
+	for h := range s.writtenRuns {
+		if h.ChatID == chatID {
+			delete(s.writtenRuns, h)
+		}
+	}
 	delete(s.dirtyMsgs, chatID)
 	delete(s.deletedMsgs, chatID)
-	s.discardTopicsLocked(chatID)
 	s.purgeMsgs[chatID] = struct{}{}
 }
 
@@ -383,8 +410,8 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 // topics in one transaction. Runs off-lock. Logs errors; the Store interface
 // does not propagate them.
 func (s *SQLiteStore) flushMessageRows(w rowWrites) {
-	if len(w.purges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 &&
-		len(w.topicUpserts) == 0 && len(w.topicDeletes) == 0 {
+	if len(w.purges) == 0 && len(w.topicPurges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 &&
+		len(w.topicUpserts) == 0 && len(w.topicDeletes) == 0 && len(w.runs) == 0 {
 		return
 	}
 	tx, err := s.db.Begin()
@@ -393,12 +420,19 @@ func (s *SQLiteStore) flushMessageRows(w rowWrites) {
 		return
 	}
 	for _, chatID := range w.purges {
-		for _, q := range []string{`DELETE FROM messages WHERE chat_id = ?`, `DELETE FROM topics WHERE chat_id = ?`} {
+		for _, q := range []string{`DELETE FROM messages WHERE chat_id = ?`, `DELETE FROM runs WHERE chat_id = ?`} {
 			if _, err := tx.Exec(q, chatID); err != nil {
 				_ = tx.Rollback()
 				s.log.Error("purge chat rows failed", zap.Int64("chat_id", chatID), zap.Error(err))
 				return
 			}
+		}
+	}
+	for _, chatID := range w.topicPurges {
+		if _, err := tx.Exec(`DELETE FROM topics WHERE chat_id = ?`, chatID); err != nil {
+			_ = tx.Rollback()
+			s.log.Error("purge chat topics failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			return
 		}
 	}
 	for _, u := range w.topicUpserts {
@@ -430,6 +464,11 @@ func (s *SQLiteStore) flushMessageRows(w rowWrites) {
 			s.log.Error("delete message failed", zap.Int64("chat_id", d.chatID), zap.Int("msg_id", d.msgID), zap.Error(err))
 			return
 		}
+	}
+	if err := writeRuns(tx, w.runs); err != nil {
+		_ = tx.Rollback()
+		s.log.Error("write runs failed", zap.Error(err))
+		return
 	}
 	if err := tx.Commit(); err != nil {
 		s.log.Error("commit message flush failed", zap.Error(err))
@@ -513,12 +552,21 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 		return
 	}
 
+	diskRuns, err := s.readRunsLocked(h)
+	if err != nil {
+		s.log.Error("load runs failed", zap.Int64("chat_id", h.ChatID), zap.Int("topic_id", h.TopicID), zap.Error(err))
+		return
+	}
+	// What the history held before it was opened: arrivals, on its tail run.
+	s.ensureTailSpanLocked(h)
+	memRuns := s.runs[h]
 	if mem := s.messages[h]; len(mem) == 0 {
 		s.messages[h] = disk
 	} else {
 		s.messages[h] = mergeMessagesByID(disk, mem)
 	}
 	s.noteHistoryLocked(h)
+	s.settleRunsLocked(h, disk, diskRuns, memRuns)
 	s.capMessagesLocked(h)
 	if chat, ok := s.chats[h.ChatID]; ok && sharedPtsBox(chat.Peer) {
 		for _, m := range s.messages[h] {

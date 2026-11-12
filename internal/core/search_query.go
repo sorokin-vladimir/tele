@@ -126,22 +126,18 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 func aroundIn(runs []domain.Run, id, limit int) ([]domain.Message, bool) {
 	newer := (limit - 1) / 2
 	older := limit - 1 - newer
-	for _, r := range runs {
-		for i, m := range r.Messages {
-			if m.ID != id {
-				continue
-			}
-			shortBelow := i < older && !r.AtBeginning
-			shortAbove := len(r.Messages)-1-i < newer && !r.AtTail
-			if shortBelow || shortAbove {
-				return nil, false
-			}
-			start := max(0, i-older)
-			end := min(len(r.Messages), i+newer+1)
-			return append([]domain.Message(nil), r.Messages[start:end]...), true
-		}
+	r, i, ok := domain.FindMessage(runs, id)
+	if !ok {
+		return nil, false
 	}
-	return nil, false
+	shortBelow := i < older && !r.AtBeginning
+	shortAbove := len(r.Messages)-1-i < newer && !r.AtTail
+	if shortBelow || shortAbove {
+		return nil, false
+	}
+	start := max(0, i-older)
+	end := min(len(r.Messages), i+newer+1)
+	return append([]domain.Message(nil), r.Messages[start:end]...), true
 }
 
 // chatOf is the chat id names: the one the owner holds, or else the one its

@@ -43,31 +43,32 @@ func (o *Owner) fill(ctx context.Context, a *seat, id project.SubID, w project.H
 	case sf.newest:
 		o.backfill(ctx, a, chat, w, 0)
 	default:
-		if sf.older {
+		if sf.olderThan != 0 {
 			o.backfill(ctx, a, chat, w, sf.olderThan)
 		}
-		if sf.newer {
+		if sf.newerThan != 0 {
 			o.backfillNewer(ctx, a, chat, w, sf.newerThan)
 		}
 	}
 }
 
-// shortfall is what a window's contents say the store lacks to fill it.
+// shortfall is what a window's contents say the store lacks to fill it. Each
+// id is zero when nothing is lacking there: a message id is never zero.
 type shortfall struct {
 	// around names the message the window is anchored on and the store does
 	// not hold: the page around it is fetched.
 	around int
 	// newest says the window is at the tail of a history holding no tail run.
 	newest bool
-	// older asks for history older than olderThan, the oldest message of the
-	// window's run; newer asks for history newer than newerThan, its newest.
-	older     bool
+	// olderThan asks for history older than the oldest message of the
+	// window's run, newerThan for history newer than its newest.
 	olderThan int
-	newer     bool
 	newerThan int
 }
 
-func (s shortfall) any() bool { return s.around != 0 || s.newest || s.older || s.newer }
+func (s shortfall) any() bool {
+	return s.around != 0 || s.newest || s.olderThan != 0 || s.newerThan != 0
+}
 
 // shortfallOf reads what a window lacks off what the store built it with. A
 // window short above its anchor at the start of its run lacks older history
@@ -88,10 +89,10 @@ func shortfallOf(c project.HistoryContents, w project.HistoryWindow) shortfall {
 	}
 	var sf shortfall
 	if !c.HasOlder && !c.AtBeginning && idx < w.Before {
-		sf.older, sf.olderThan = true, c.Messages[0].ID
+		sf.olderThan = c.Messages[0].ID
 	}
 	if !c.HasNewer && !c.AtTail && len(c.Messages)-1-idx < w.After {
-		sf.newer, sf.newerThan = true, c.Messages[len(c.Messages)-1].ID
+		sf.newerThan = c.Messages[len(c.Messages)-1].ID
 	}
 	return sf
 }

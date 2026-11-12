@@ -85,14 +85,11 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 // the tail. A run that ends below before is not it, since what lies between
 // was never fetched.
 func runUpTo(runs []domain.Run, before int) (domain.Run, bool) {
+	if before == 0 {
+		return domain.TailRun(runs)
+	}
 	for _, r := range runs {
 		if len(r.Messages) == 0 {
-			continue
-		}
-		if before == 0 {
-			if r.AtTail {
-				return r, true
-			}
 			continue
 		}
 		if r.Messages[0].ID < before && (before <= r.UpTo || r.AtTail) {

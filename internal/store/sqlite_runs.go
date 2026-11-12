@@ -156,10 +156,11 @@ func (s *SQLiteStore) MergeAround(h domain.HistoryKey, msgs []domain.Message) in
 	if !ok {
 		return 0
 	}
+	// Capped once the runs say where the page lies, still under the lock.
+	defer s.capMessagesLocked(h)
 	s.ensureTailSpanLocked(h)
 	added := s.mergePageLocked(h, "MergeAround", msgs)
 	s.addSpanLocked(h, sp)
-	s.capMessagesLocked(h)
 	return added
 }
 
@@ -218,10 +219,8 @@ func (s *SQLiteStore) MergeNewer(h domain.HistoryKey, above int, msgs []domain.M
 		sp.atTail = true
 		// A tail run held apart from this one has nothing between them:
 		// Telegram has nothing newer than above.
-		for _, t := range s.runs[h] {
-			if t.atTail {
-				sp.hi = max(sp.hi, t.hi)
-			}
+		if t := s.tailSpanLocked(h); t >= 0 {
+			sp.hi = max(sp.hi, s.runs[h][t].hi)
 		}
 		s.addSpanLocked(h, sp)
 	}
@@ -281,16 +280,23 @@ func (s *SQLiteStore) mergePageLocked(h domain.HistoryKey, via string, msgs []do
 // lies outside every run is history nobody fetched here. Caller holds the
 // lock.
 func (s *SQLiteStore) withinRunsLocked(h domain.HistoryKey, msgs []domain.Message) []domain.Message {
+	s.ensureTailSpanLocked(h)
 	var kept []domain.Message
 	for _, m := range msgs {
-		if s.runHoldsLocked(h, m.ID) {
+		if spanOf(s.runs[h], m.ID) >= 0 {
 			kept = append(kept, m)
 			continue
 		}
-		delete(s.msgChat, m.ID)
-		s.markMsgDeletedLocked(m.ChatID, m.ID)
+		s.forgetMessageLocked(m.ChatID, m.ID)
 	}
 	return kept
+}
+
+// forgetMessageLocked drops a message the store no longer holds from the
+// index, and queues its row's delete. Caller holds the lock.
+func (s *SQLiteStore) forgetMessageLocked(chatID int64, id int) {
+	delete(s.msgChat, id)
+	s.markMsgDeletedLocked(chatID, id)
 }
 
 // dropFarRunsLocked gives up runs that do not end at the tail, oldest first and
@@ -318,8 +324,7 @@ func (s *SQLiteStore) dropFarRunsLocked(h domain.HistoryKey, excess int, shown m
 		kept := msgs[:0:0]
 		for _, m := range msgs {
 			if m.ID > 0 && sp.holds(m.ID) {
-				delete(s.msgChat, m.ID)
-				s.markMsgDeletedLocked(h.ChatID, m.ID)
+				s.forgetMessageLocked(h.ChatID, m.ID)
 				continue
 			}
 			kept = append(kept, m)
@@ -361,12 +366,7 @@ func (s *SQLiteStore) trimTailRunLocked(h domain.HistoryKey, msgs []domain.Messa
 	if excess <= 0 {
 		return msgs
 	}
-	tail := -1
-	for i, sp := range s.runs[h] {
-		if sp.atTail {
-			tail = i
-		}
-	}
+	tail := s.tailSpanLocked(h)
 	// With no runs recorded every message is the tail run's.
 	onTail := func(m domain.Message) bool {
 		return len(s.runs[h]) == 0 || (tail >= 0 && s.runs[h][tail].holds(m.ID))
@@ -383,8 +383,7 @@ func (s *SQLiteStore) trimTailRunLocked(h domain.HistoryKey, msgs []domain.Messa
 		}
 		if trimming && excess > 0 {
 			excess--
-			delete(s.msgChat, m.ID)
-			s.markMsgDeletedLocked(h.ChatID, m.ID)
+			s.forgetMessageLocked(h.ChatID, m.ID)
 			continue
 		}
 		if oldest == 0 {
@@ -436,18 +435,14 @@ func (s *SQLiteStore) shownIDsLocked(h domain.HistoryKey) map[int]struct{} {
 // it: a command reading older than a message nobody kept. Its index is then
 // where it would sit, just past the run's messages older than it.
 func anchorIn(runs []domain.Run, anchor int) ([]domain.Message, int) {
-	for _, r := range runs {
-		if anchor == 0 {
-			if r.AtTail {
-				return r.Messages, len(r.Messages) - 1
-			}
-			continue
+	if anchor == 0 {
+		if tail, ok := domain.TailRun(runs); ok {
+			return tail.Messages, len(tail.Messages) - 1
 		}
-		for i, m := range r.Messages {
-			if m.ID == anchor {
-				return r.Messages, i
-			}
-		}
+		return nil, -1
+	}
+	if r, i, ok := domain.FindMessage(runs, anchor); ok {
+		return r.Messages, i
 	}
 	for _, r := range runs {
 		if len(r.Messages) == 0 || r.Messages[0].ID >= anchor || (anchor > r.UpTo && !r.AtTail) {
@@ -553,10 +548,7 @@ func (s *SQLiteStore) settleRunsLocked(h domain.HistoryKey, disk []domain.Messag
 	s.writtenRuns[h] = slices.Clone(diskRuns)
 	spans := slices.Clone(diskRuns)
 	if len(spans) == 0 {
-		if sp, ok := pageSpan(disk); ok {
-			sp.atTail = true
-			spans = []span{sp}
-		}
+		spans = tailRunOf(disk)
 	}
 	newest := 0
 	for _, sp := range spans {
@@ -582,8 +574,7 @@ func (s *SQLiteStore) settleRunsLocked(h domain.HistoryKey, disk []domain.Messag
 	kept := s.messages[h][:0:0]
 	for _, m := range s.messages[h] {
 		if m.ID > 0 && spanOf(s.runs[h], m.ID) < 0 {
-			delete(s.msgChat, m.ID)
-			s.markMsgDeletedLocked(h.ChatID, m.ID)
+			s.forgetMessageLocked(h.ChatID, m.ID)
 			continue
 		}
 		kept = append(kept, m)
@@ -594,21 +585,34 @@ func (s *SQLiteStore) settleRunsLocked(h domain.HistoryKey, disk []domain.Messag
 // landOnTailOrStartLocked grows the tail run up to add's newest end, or makes
 // add the tail run when the history has none. Caller holds the lock.
 func (s *SQLiteStore) landOnTailOrStartLocked(h domain.HistoryKey, add span) {
-	for i, sp := range s.runs[h] {
-		if sp.atTail {
-			s.runs[h][i].hi = max(sp.hi, add.hi)
-			return
-		}
+	if t := s.tailSpanLocked(h); t >= 0 {
+		s.runs[h][t].hi = max(s.runs[h][t].hi, add.hi)
+		return
 	}
 	add.atTail = true
 	s.addSpanLocked(h, add)
 }
 
-// runHoldsLocked reports whether a run of the history lies over id. Caller
-// holds the lock.
-func (s *SQLiteStore) runHoldsLocked(h domain.HistoryKey, id int) bool {
-	s.ensureTailSpanLocked(h)
-	return spanOf(s.runs[h], id) >= 0
+// tailSpanLocked is the index of the history's tail run among its spans, -1
+// when it has none. Caller holds the lock.
+func (s *SQLiteStore) tailSpanLocked(h domain.HistoryKey) int {
+	for i, sp := range s.runs[h] {
+		if sp.atTail {
+			return i
+		}
+	}
+	return -1
+}
+
+// tailRunOf is the one run a page makes when it is all a history holds, ending
+// at the tail; none for a page with no stored ids.
+func tailRunOf(msgs []domain.Message) []span {
+	sp, ok := pageSpan(msgs)
+	if !ok {
+		return nil
+	}
+	sp.atTail = true
+	return []span{sp}
 }
 
 // ensureTailSpanLocked records the run a history held before anything told the
@@ -618,8 +622,7 @@ func (s *SQLiteStore) ensureTailSpanLocked(h domain.HistoryKey) {
 	if len(s.runs[h]) > 0 {
 		return
 	}
-	if sp, ok := pageSpan(s.messages[h]); ok {
-		sp.atTail = true
-		s.runs[h] = []span{sp}
+	if spans := tailRunOf(s.messages[h]); spans != nil {
+		s.runs[h] = spans
 	}
 }

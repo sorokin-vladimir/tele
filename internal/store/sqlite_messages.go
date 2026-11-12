@@ -123,9 +123,8 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 		s.setMessagesLocked(h, page, keep)
 		// The page is the newest Telegram has: whatever else the history held
 		// is gone, and this is its one run.
-		if sp, ok := pageSpan(page); ok {
-			sp.atTail = true
-			s.runs[h] = []span{sp}
+		if spans := tailRunOf(page); spans != nil {
+			s.runs[h] = spans
 		}
 		s.capMessagesLocked(h)
 	}
@@ -632,9 +631,9 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 				// joined, which need not be the end, since it may be old. Outside
 				// every run of that history it is history nobody fetched there.
 				s.detachMovedLocked(h, []domain.Message{msg})
-				if !s.runHoldsLocked(h, msg.ID) {
-					delete(s.msgChat, msg.ID)
-					s.markMsgDeletedLocked(msg.ChatID, msg.ID)
+				s.ensureTailSpanLocked(h)
+				if spanOf(s.runs[h], msg.ID) < 0 {
+					s.forgetMessageLocked(msg.ChatID, msg.ID)
 					return false
 				}
 				s.messages[h] = domain.MergeMessages(s.messages[h], []domain.Message{msg})

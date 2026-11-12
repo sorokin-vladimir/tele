@@ -78,3 +78,26 @@ type Run struct {
 	// whether that message is kept or not.
 	UpTo int
 }
+
+// FindMessage finds a message among a history's runs: the run holding it and
+// its index in that run's messages.
+func FindMessage(runs []Run, id int) (Run, int, bool) {
+	for _, r := range runs {
+		for i, m := range r.Messages {
+			if m.ID == id {
+				return r, i, true
+			}
+		}
+	}
+	return Run{}, -1, false
+}
+
+// TailRun is the run of a history live messages land on, when it holds one.
+func TailRun(runs []Run) (Run, bool) {
+	for _, r := range runs {
+		if r.AtTail && len(r.Messages) > 0 {
+			return r, true
+		}
+	}
+	return Run{}, false
+}

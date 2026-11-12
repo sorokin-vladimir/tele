@@ -38,54 +38,57 @@ func (m *RootModel) subscribeChat(h domain.HistoryKey) {
 // the whole window rather than describing an increment, so repeating it is
 // harmless and equivalent to resubscribing.
 func (m *RootModel) widenChatWindow() {
-	if m.owner == nil || m.chatSub == 0 {
-		return
-	}
-	m.chatWindow.Before += m.historyLimit
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	w := m.chatWindow
+	w.Before += m.historyLimit
+	m.moveChatWindow(w)
 }
 
 // widenChatWindowDown asks for another page below the current window, for a
 // window whose run does not end at the tail.
 func (m *RootModel) widenChatWindowDown() {
+	w := m.chatWindow
+	w.After += m.historyLimit
+	m.moveChatWindow(w)
+}
+
+// moveChatWindow makes w the open chat's window and asks the owner for it,
+// reporting whether there was a subscription to move.
+func (m *RootModel) moveChatWindow(w project.HistoryWindow) bool {
 	if m.owner == nil || m.chatSub == 0 {
-		return
+		return false
 	}
-	m.chatWindow.After += m.historyLimit
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	m.chatWindow = w
+	m.owner.MoveWindow(m.chatSub, w)
+	return true
+}
+
+// chatWindowAt is a window on the open history at anchor, reaching before
+// messages older than it and after newer.
+func (m *RootModel) chatWindowAt(anchor project.Anchor, before, after int) project.HistoryWindow {
+	return project.HistoryWindow{
+		ChatID: m.chatWindow.ChatID, TopicID: m.chatWindow.TopicID,
+		Anchor: anchor, Before: before, After: after,
+	}
 }
 
 // returnToTail takes a window away from the tail back to the newest messages:
 // the window the chat opens with.
 func (m *RootModel) returnToTail() {
-	if m.owner == nil || m.chatSub == 0 {
-		return
+	if m.moveChatWindow(m.chatWindowAt(project.Anchor{Kind: project.AnchorFirstUnread}, m.historyLimit, 0)) {
+		m.jumpTo = 0
 	}
-	m.jumpTo = 0
-	m.chatWindow = project.HistoryWindow{
-		ChatID: m.chatWindow.ChatID, TopicID: m.chatWindow.TopicID,
-		Anchor: project.Anchor{Kind: project.AnchorFirstUnread},
-		Before: m.historyLimit,
-	}
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
 }
 
 // jumpToMessage moves the window onto a message, half a page either side of
 // it, for a message the window does not hold: a reply's original far back.
 // The message is highlighted once the window holds it (#347).
 func (m *RootModel) jumpToMessage(id int) {
-	if m.owner == nil || m.chatSub == 0 {
-		return
-	}
-	m.beforeJump = m.chatWindow
-	m.jumpTo = id
+	was := m.chatWindow
 	half := m.historyLimit / 2
-	m.chatWindow = project.HistoryWindow{
-		ChatID: m.chatWindow.ChatID, TopicID: m.chatWindow.TopicID,
-		Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: id},
-		Before: half, After: half,
+	if m.moveChatWindow(m.chatWindowAt(project.Anchor{Kind: project.AnchorMessage, MsgID: id}, half, half)) {
+		m.beforeJump = was
+		m.jumpTo = id
 	}
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
 }
 
 // followRun takes in where the window's run lies. A window moved onto a
@@ -95,17 +98,11 @@ func (m *RootModel) jumpToMessage(id int) {
 func (m RootModel) followRun(c project.HistoryContents) RootModel {
 	m.chatAtTail = c.AtTail
 	m.chat.SetNewCount(c.NewCount)
-	w := m.chatWindow
-	if !c.AtTail || w.Anchor.Kind != project.AnchorMessage || c.AnchorMsgID == 0 ||
-		m.owner == nil || m.chatSub == 0 {
+	if !c.AtTail || m.chatWindow.Anchor.Kind != project.AnchorMessage || c.AnchorMsgID == 0 {
 		return m
 	}
-	m.chatWindow = project.HistoryWindow{
-		ChatID: w.ChatID, TopicID: w.TopicID,
-		Anchor: project.Anchor{Kind: project.AnchorFirstUnread, MsgID: c.AnchorMsgID},
-		Before: w.Before,
-	}
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	pinned := project.Anchor{Kind: project.AnchorFirstUnread, MsgID: c.AnchorMsgID}
+	m.moveChatWindow(m.chatWindowAt(pinned, m.chatWindow.Before, 0))
 	return m
 }
 
@@ -113,18 +110,17 @@ func (m RootModel) followRun(c project.HistoryContents) RootModel {
 // longer there: the window opens on the nearest one Telegram returned, with
 // nothing highlighted, or goes back where it was when there was none.
 func (m RootModel) handleMessageGone(msg core.MessageGone) RootModel {
-	if msg.ChatID != m.currentChatID || msg.TopicID != m.currentTopicID ||
-		msg.MsgID != m.jumpTo || m.owner == nil || m.chatSub == 0 {
+	if msg.ChatID != m.currentChatID || msg.TopicID != m.currentTopicID || msg.MsgID != m.jumpTo {
 		return m
 	}
 	m.jumpTo = 0
 	m.statusBar.SetStatus("This message is gone")
-	if msg.Nearest == 0 {
-		m.chatWindow = m.beforeJump
-	} else {
-		m.chatWindow.Anchor.MsgID = msg.Nearest
+	w := m.beforeJump
+	if msg.Nearest != 0 {
+		w = m.chatWindow
+		w.Anchor.MsgID = msg.Nearest
 	}
-	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	m.moveChatWindow(w)
 	return m
 }
 

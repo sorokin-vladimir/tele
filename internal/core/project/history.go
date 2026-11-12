@@ -151,7 +151,7 @@ type readState struct {
 func resolveAnchor(runs []domain.Run, read readState, a Anchor) (domain.Run, int, int) {
 	switch a.Kind {
 	case AnchorMessage:
-		if run, i, ok := findMessage(runs, a.MsgID); ok {
+		if run, i, ok := domain.FindMessage(runs, a.MsgID); ok {
 			return run, i, a.MsgID
 		}
 		return domain.Run{}, -1, a.MsgID
@@ -161,13 +161,13 @@ func resolveAnchor(runs []domain.Run, read readState, a Anchor) (domain.Run, int
 		// pointer. A pin that no longer names a stored message (deleted, or
 		// trimmed by the store cap) resolves afresh rather than emptying.
 		if a.MsgID != 0 {
-			if run, i, ok := findMessage(runs, a.MsgID); ok {
+			if run, i, ok := domain.FindMessage(runs, a.MsgID); ok {
 				return run, i, a.MsgID
 			}
 		}
 		// Unread messages are the newest ones, so the first of them is looked
 		// for on the tail run.
-		if tail, ok := tailRun(runs); ok && read.unread > 0 {
+		if tail, ok := domain.TailRun(runs); ok && read.unread > 0 {
 			for i, m := range tail.Messages {
 				if m.ID > read.readInbox {
 					return tail, i, m.ID
@@ -179,35 +179,13 @@ func resolveAnchor(runs []domain.Run, read readState, a Anchor) (domain.Run, int
 		fallthrough
 
 	default: // AnchorNewest
-		tail, ok := tailRun(runs)
+		tail, ok := domain.TailRun(runs)
 		if !ok {
 			return domain.Run{}, -1, 0
 		}
 		last := len(tail.Messages) - 1
 		return tail, last, tail.Messages[last].ID
 	}
-}
-
-// findMessage finds a message among runs.
-func findMessage(runs []domain.Run, id int) (domain.Run, int, bool) {
-	for _, r := range runs {
-		for i, m := range r.Messages {
-			if m.ID == id {
-				return r, i, true
-			}
-		}
-	}
-	return domain.Run{}, -1, false
-}
-
-// tailRun is the run live messages land on, when the history holds one.
-func tailRun(runs []domain.Run) (domain.Run, bool) {
-	for _, r := range runs {
-		if r.AtTail && len(r.Messages) > 0 {
-			return r, true
-		}
-	}
-	return domain.Run{}, false
 }
 
 // newestHeld is the newest id any run of the history reaches: the tail run's
@@ -228,7 +206,7 @@ func newestHeld(runs []domain.Run) int {
 // newSince counts the messages of the tail run newer than mark: what landed at
 // the tail since a window left it. A window with no mark yet counts nothing.
 func newSince(runs []domain.Run, mark int) int {
-	tail, ok := tailRun(runs)
+	tail, ok := domain.TailRun(runs)
 	if !ok || mark == 0 {
 		return 0
 	}

@@ -46,7 +46,8 @@ type Store interface {
 	RepairMessages(chatID int64, msgs []domain.Message) int
 	// SetShown records what windows show of each history, replacing what was
 	// recorded before. The cap never drops what is shown, so a scrollback
-	// somebody loaded is held while somebody looks at it (ADR 0037).
+	// somebody loaded is held while somebody looks at it, and given up at the
+	// next write once nobody does.
 	SetShown(shown map[domain.HistoryKey][]Shown)
 	// Gap reports the message a chat's missing range opens after, if it has
 	// one. A gap is recorded when it opens rather than noticed later: once

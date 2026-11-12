@@ -210,7 +210,7 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		// window's run reaches the tail again.
 		switch {
 		case len(next.Messages) > 0 && !next.AtTail && w.TailMark == 0:
-			w.TailMark = tailNewest(g.reader.Runs(w.History()))
+			w.TailMark = newestHeld(g.reader.Runs(w.History()))
 			s.window = w
 		case next.AtTail && w.TailMark != 0:
 			w.TailMark = 0

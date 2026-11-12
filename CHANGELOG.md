@@ -33,7 +33,6 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - A long scrollback is held while you look at it and trimmed back to the
   newest 500 messages once you leave the chat, instead of staying as deep as
   you once scrolled (#347).
-
 - Commands may only read by default: `cli.account_commands` is now `read`,
   so a script or an AI agent allowed to run `tele` cannot send or mark chats
   read until you set it to `all`. If you use `tele send` or

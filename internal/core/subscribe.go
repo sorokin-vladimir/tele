@@ -46,9 +46,11 @@ func (o *Owner) Refresh() {
 	o.syncShown()
 }
 
-// syncShown tells the store what every attached client's windows show, so the
-// cap never drops it (ADR 0037). It runs whenever a window opens, moves,
-// closes or is pinned, and before any fetch made for that window.
+// syncShown tells the store what every attached client's windows show, and
+// what commands are reading, so the cap never drops it: a scrollback somebody
+// loaded is held while somebody looks at it and given up once nobody does. It
+// runs whenever a window opens, moves, closes or is pinned, and before any
+// fetch made for that window.
 func (o *Owner) syncShown() {
 	shown := make(map[domain.HistoryKey][]store.Shown)
 	for _, a := range o.attached() {

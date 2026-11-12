@@ -343,6 +343,21 @@ func TestRuns_TrimmingTheTailRunLosesTheBeginning(t *testing.T) {
 	}
 }
 
+// A page fetched older than a message reaches up to it, held or not: nothing
+// lies between them.
+func TestRuns_AnOlderPageReachesUpToTheMessageItWasFetchedUnder(t *testing.T) {
+	s := storeWithChat(t)
+	s.SetMessages(7, msgs(100, 101))
+
+	s.MergeOlder(chat7, 30, msgs(25, 26, 29))
+
+	runs := s.Runs(chat7)
+	if assert.Len(t, runs, 2) {
+		assert.Equal(t, 30, runs[0].UpTo)
+		assert.Equal(t, 101, runs[1].UpTo)
+	}
+}
+
 func TestRuns_APageAroundThatMeetsARunJoinsIt(t *testing.T) {
 	s := storeWithChat(t)
 	s.SetMessages(7, msgs(100, 101, 102))

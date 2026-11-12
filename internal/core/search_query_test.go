@@ -141,9 +141,10 @@ func TestSearchMessages_AChatNobodyHoldsIsNotFound(t *testing.T) {
 	assert.False(t, server.searched)
 }
 
-// The history around a message is Telegram's answer, and nothing of it is
-// kept: the store would hold it with the history between missing (#348).
-func TestHistoryAround_AsksTelegramAndKeepsNothing(t *testing.T) {
+// The history around a message the store does not hold is Telegram's answer,
+// kept as a run of its own: the history between it and the rest stays
+// unclaimed (#347).
+func TestHistoryAround_AsksTelegramAndKeepsTheRun(t *testing.T) {
 	server := &serverSearch{around: []domain.Message{{ID: 48, ChatID: 1}, {ID: 50, ChatID: 1}, {ID: 52, ChatID: 1}}}
 	o := newSearchOwner(t, server, adaChat)
 
@@ -154,7 +155,35 @@ func TestHistoryAround_AsksTelegramAndKeepsNothing(t *testing.T) {
 	assert.Equal(t, adaChat.Peer, server.aroundIn)
 	assert.Equal(t, 50, server.aroundID)
 	assert.Equal(t, 5, server.aroundLimit)
-	assert.Empty(t, o.state.Store().Messages(oneChat))
+	assert.Equal(t, []int{48, 50, 52}, ids(o.state.Store().Messages(oneChat)))
+}
+
+// What the store holds around a message, enough of it either side, answers
+// without asking Telegram, in the shape Telegram answers: half the rest newer,
+// the others older.
+func TestHistoryAround_AnswersFromTheStore(t *testing.T) {
+	server := &serverSearch{}
+	o := newSearchOwner(t, server, adaChat)
+	o.state.Store().MergeAround(oneChat, messagesUpTo(100)[39:60])
+
+	got, err := o.HistoryAround(context.Background(), oneChat, 50, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []int{48, 49, 50, 51, 52}, ids(got))
+	assert.False(t, server.aroundAsked)
+}
+
+// A run that ends close to the message answers only when it ends at the tail,
+// where Telegram has nothing more to give either.
+func TestHistoryAround_ARunTooShortAroundAsksTelegram(t *testing.T) {
+	server := &serverSearch{around: messagesUpTo(100)[47:52]}
+	o := newSearchOwner(t, server, adaChat)
+	o.state.Store().MergeAround(oneChat, messagesUpTo(100)[39:50])
+
+	_, err := o.HistoryAround(context.Background(), oneChat, 50, 5)
+
+	require.NoError(t, err)
+	assert.True(t, server.aroundAsked, "the run ends at 50 and is not the tail run")
 }
 
 // In a forum it is one topic's history.
@@ -233,9 +262,10 @@ func TestHistoryAround_AtTheNewestMessage(t *testing.T) {
 	assert.Equal(t, []int{8, 9, 10}, ids(got))
 }
 
-// A message far older than anything stored is asked of Telegram, and what is
-// stored stays as it was, the stretch between still unclaimed.
-func TestHistoryAround_FarBackLeavesTheStoreAlone(t *testing.T) {
+// A message far older than anything stored is asked of Telegram, and the page
+// is a run of its own beside the tail run, the stretch between still
+// unclaimed.
+func TestHistoryAround_FarBackIsARunOfItsOwn(t *testing.T) {
 	server := &serverSearch{around: []domain.Message{{ID: 4, ChatID: 1}, {ID: 5, ChatID: 1}, {ID: 6, ChatID: 1}}}
 	o := newSearchOwner(t, server, adaChat)
 	stored := messagesUpTo(100)[90:]
@@ -245,7 +275,10 @@ func TestHistoryAround_FarBackLeavesTheStoreAlone(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []int{4, 5, 6}, ids(got))
-	assert.Equal(t, ids(stored), ids(o.state.Store().Messages(oneChat)))
+	runs := o.state.Store().Runs(oneChat)
+	require.Len(t, runs, 2)
+	assert.Equal(t, []int{4, 5, 6}, ids(runs[0].Messages))
+	assert.Equal(t, ids(stored), ids(runs[1].Messages))
 }
 
 // A message found in a forum's General carries no topic, as Telegram names

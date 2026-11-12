@@ -50,7 +50,7 @@ The chat list keys move through them.
 | `Ctrl+J` / `↓` | Scroll down               |
 | `Ctrl+K` / `↑` | Scroll up                 |
 | `gg`      | Scroll to top                  |
-| `G`       | Scroll to bottom               |
+| `G`       | Scroll to bottom; far back after a jump, back to the newest messages |
 | `i` / `a` | Compose message (insert mode)  |
 | `r`       | Reply to message               |
 | `t`       | React to message               |
@@ -60,7 +60,7 @@ The chat list keys move through them.
 | `u`       | Attach a file to send          |
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
-| `g`       | Jump to original (for replies) |
+| `g`       | Jump to original (for replies), however old |
 | `o`       | Open / view media: photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
 | `p`       | Play voice message (in-app)    |
@@ -71,6 +71,11 @@ The chat list keys move through them.
 A message that could not be sent stays in the chat, marked `✕` in its bottom border; selecting it names the reason in the status bar.
 `Enter` queues it again, and `Space` opens a short menu offering Retry and Discard.
 `x` is unaffected: it still clears a staged reply, edit or upload, never a queued send.
+
+`g` on a reply opens its original however far back it is, highlighted.
+From there, moving up or down loads more history, until it meets the newest messages.
+While you read far back, messages that arrive are counted at the bottom, as `↓ 3 new · G`, and the chat stays unread; `G` takes you back to them.
+When the original was deleted, the chat opens where it was and the status bar says "This message is gone".
 
 ## Compose (insert mode)
 

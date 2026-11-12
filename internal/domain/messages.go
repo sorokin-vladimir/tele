@@ -73,4 +73,8 @@ type Run struct {
 	// AtBeginning marks a run with no history below it: older history was
 	// asked for there and Telegram had none.
 	AtBeginning bool
+	// UpTo is the newest id the run reaches. It can name a message the store
+	// does not hold: a page fetched older than a message reaches up to it,
+	// whether that message is kept or not.
+	UpTo int
 }

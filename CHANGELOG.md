@@ -19,8 +19,20 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   id, chat and topic, as text or as `--json` (#348).
 - `tele show --around ID` prints a message with the messages around it, so
   one `tele search` found can be read in its conversation (#348).
+- Jump to original (`g`) opens the original of a reply however old it is,
+  instead of saying "Not in buffer". Moving up or down from it loads more
+  history; messages that arrive meanwhile are counted at the bottom, and
+  `G` goes back to them (#347).
 
 ### Changed
+
+- The local history keeps every stretch of a chat it fetched, not only the
+  newest, and remembers where each one ends across restarts. What
+  `tele show --before` and `tele show --around` fetch is kept as well, so
+  asking again needs no network (#347).
+- A long scrollback is held while you look at it and trimmed back to the
+  newest 500 messages once you leave the chat, instead of staying as deep as
+  you once scrolled (#347).
 
 - Commands may only read by default: `cli.account_commands` is now `read`,
   so a script or an AI agent allowed to run `tele` cannot send or mark chats

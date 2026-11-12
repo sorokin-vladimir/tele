@@ -137,19 +137,54 @@ func TestHistory_BeforeAnswersWithTheOlderMessages(t *testing.T) {
 }
 
 // Messages older than anything held are asked of Telegram from before itself
-// and not kept: kept, they would sit in the store with the stretch between
-// them and what it holds missing, and a window would draw them as adjacent.
-func TestHistory_FarBackIsFetchedAndNotKept(t *testing.T) {
+// and kept as a run of their own: the stretch between them and what the store
+// holds stays unclaimed, and the next command asking for them is answered from
+// the store (#347).
+func TestHistory_FarBackIsFetchedAndKeptAsARun(t *testing.T) {
 	server := &serverHistory{msgs: messagesUpTo(100)}
 	o := newHistoryOwner(t, server)
 	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(100)[90:])
 
 	got, err := o.History(context.Background(), oneChat, 30, 5)
+	again, errAgain := o.History(context.Background(), oneChat, 30, 5)
 
 	require.NoError(t, err)
+	require.NoError(t, errAgain)
 	assert.Equal(t, []int{25, 26, 27, 28, 29}, ids(got))
-	assert.Equal(t, []int{30}, server.fetchedFrom)
-	assert.Len(t, o.state.Store().Messages(oneChat), 10, "the store kept a page it cannot join")
+	assert.Equal(t, ids(got), ids(again))
+	assert.Equal(t, []int{30}, server.fetchedFrom, "the second answer came from the store")
+	assert.Len(t, o.state.Store().Runs(oneChat), 2, "a run far back beside the tail run")
+}
+
+// Reading on from a run far back grows that run, not the tail run, and never
+// answers across the stretch nobody fetched.
+func TestHistory_ReadingOnFromARunFarBackGrowsIt(t *testing.T) {
+	server := &serverHistory{msgs: messagesUpTo(100)}
+	o := newHistoryOwner(t, server)
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(100)[90:])
+	o.state.Store().MergeAround(oneChat, messagesUpTo(100)[24:29])
+
+	got, err := o.History(context.Background(), oneChat, 28, 6)
+
+	require.NoError(t, err)
+	assert.Equal(t, []int{22, 23, 24, 25, 26, 27}, ids(got))
+	assert.Equal(t, []int{25}, server.fetchedFrom, "the page went back from the far run's oldest")
+	assert.Len(t, o.state.Store().Runs(oneChat), 2)
+}
+
+// Asking for what is older than the tail run, with a run far back below it,
+// does not take the far run as adjacent.
+func TestHistory_ARunFarBackIsNotTakenAsAdjacent(t *testing.T) {
+	server := &serverHistory{msgs: messagesUpTo(100)}
+	o := newHistoryOwner(t, server)
+	o.state.Store().MergeOlder(oneChat, 0, messagesUpTo(100)[90:])
+	o.state.Store().MergeAround(oneChat, messagesUpTo(100)[24:29])
+
+	got, err := o.History(context.Background(), oneChat, 0, 12)
+
+	require.NoError(t, err)
+	assert.Equal(t, ids(messagesUpTo(100)[88:]), ids(got))
+	assert.Equal(t, []int{91}, server.fetchedFrom)
 }
 
 // A topic's history is its own thread, fetched as replies to it.

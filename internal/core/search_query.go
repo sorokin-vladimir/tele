@@ -74,12 +74,13 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 }
 
 // HistoryAround answers with up to limit messages of history h around id,
-// oldest first: the message itself, and as many newer and older as Telegram
-// gives either side. It always asks Telegram and keeps nothing: a stretch far
-// from what is stored would sit in the store with the history between missing
-// (#348). A topic that is not there, a forum named with no topic, and a
-// message that is not there are each NotFound, told apart by IsNoTopic and
-// IsNoMessage.
+// oldest first: the message itself, half the rest newer and the others older,
+// as Telegram gives them. A run of the store holding enough of them either side
+// answers; otherwise Telegram does, and its page is kept as a run, joined to
+// whichever runs it meets (#347). A chat known by its address alone is asked
+// every time and not kept, since the account has no dialog with it. A topic
+// that is not there, a forum named with no topic, and a message that is not
+// there are each NotFound, told apart by IsNoTopic and IsNoMessage.
 func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
 	chat, err := o.chatOf(ctx, h.ChatID)
 	if err != nil {
@@ -88,7 +89,19 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 	if chat.IsForum && h.TopicID == 0 {
 		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
+	st := o.state.Store()
+	_, held := st.GetChat(h.ChatID)
+	if held {
+		st.LoadMessages(h)
+		o.forwardFill(ctx, h.ChatID)
+		if got, ok := aroundIn(st.Runs(h), id, limit); ok {
+			return got, nil
+		}
+	}
 	msgs, err := o.client.GetHistoryAround(ctx, chat.Peer, h.TopicID, id, limit)
+	if err == nil && held {
+		o.state.MergeAround(h, msgs)
+	}
 	if telerr.Of(err) == telerr.NotFound {
 		if h.TopicID != 0 {
 			return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: fmt.Sprintf("no topic %d", h.TopicID)}
@@ -104,6 +117,31 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 		}
 	}
 	return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoMessage, Detail: fmt.Sprintf("no message %d", id)}
+}
+
+// aroundIn answers for the history around id from the run holding it, in the
+// shape Telegram answers: (limit-1)/2 newer, the rest older. It answers only
+// when the run holds that many either side, or ends there at the beginning or
+// the tail, where Telegram has no more to give either.
+func aroundIn(runs []domain.Run, id, limit int) ([]domain.Message, bool) {
+	newer := (limit - 1) / 2
+	older := limit - 1 - newer
+	for _, r := range runs {
+		for i, m := range r.Messages {
+			if m.ID != id {
+				continue
+			}
+			shortBelow := i < older && !r.AtBeginning
+			shortAbove := len(r.Messages)-1-i < newer && !r.AtTail
+			if shortBelow || shortAbove {
+				return nil, false
+			}
+			start := max(0, i-older)
+			end := min(len(r.Messages), i+newer+1)
+			return append([]domain.Message(nil), r.Messages[start:end]...), true
+		}
+	}
+	return nil, false
 }
 
 // chatOf is the chat id names: the one the owner holds, or else the one its

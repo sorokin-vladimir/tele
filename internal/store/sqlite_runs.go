@@ -52,12 +52,13 @@ func (s *SQLiteStore) runsLocked(h domain.HistoryKey) []domain.Run {
 		// before it knew of runs: it ends at the tail.
 		cp := make([]domain.Message, len(msgs))
 		copy(cp, msgs)
-		return []domain.Run{{Messages: cp, AtTail: true}}
+		sp, _ := pageSpan(cp)
+		return []domain.Run{{Messages: cp, AtTail: true, UpTo: sp.hi}}
 	}
 	out := make([]domain.Run, len(spans))
 	tail := -1
 	for i, sp := range spans {
-		out[i] = domain.Run{AtTail: sp.atTail, AtBeginning: sp.atBeginning}
+		out[i] = domain.Run{AtTail: sp.atTail, AtBeginning: sp.atBeginning, UpTo: sp.hi}
 		if sp.atTail {
 			tail = i
 		}

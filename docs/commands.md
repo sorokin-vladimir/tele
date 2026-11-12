@@ -103,7 +103,8 @@ A forum's messages are its topics': name one with `--topic`, or `show` exits 5 a
 | `--mark-read`  | Mark the chat (or the topic) read up to the last message printed                 |
 | `--json`       | A JSON object a message, described in [cli.md](cli.md#tele-show---json)          |
 
-With `--around`, the messages always come from Telegram, and none of them is kept in the local history.
+With `--around`, the local history answers when it holds enough messages on both sides of the one asked for; otherwise Telegram does.
+What `show` fetches is kept in the local history, with `--before` and `--around` too, so asking for the same messages again needs no network, and a window opened on them later shows them at once.
 
 ## `tele search`
 

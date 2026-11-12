@@ -142,7 +142,9 @@ func (o *Owner) backfillNewer(ctx context.Context, a *seat, chat domain.Chat, w 
 }
 
 // jump fetches the page around a message the store does not hold and stores
-// it as a run (ADR 0037). A page without the message says it is gone, and the
+// it as a run of its own: fetching everything between it and the tail could
+// take thousands of pages, and storing it as if it joined would hide the
+// history nobody fetched. A page without the message says it is gone, and the
 // client is told which message of the page is nearest, to open there instead.
 // Caller holds the fetch guard.
 func (o *Owner) jump(ctx context.Context, a *seat, chat domain.Chat, w project.HistoryWindow, id int) {
@@ -358,8 +360,8 @@ func (o *Owner) tailReload(ctx context.Context, chat domain.Chat) {
 
 // refillWindows checks again what every window on a chat lacks, for every
 // client: a tail reload discards the runs those windows were on, the one on
-// screen included (ADR 0037), and a window anchored far back fetches the page
-// around its anchor again.
+// screen included, since it admits nothing stored can be trusted, and a window
+// anchored far back fetches the page around its anchor again.
 func (o *Owner) refillWindows(chatID int64) {
 	for _, a := range o.attached() {
 		for id, w := range a.registry.HistoryWindows() {

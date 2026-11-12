@@ -124,6 +124,25 @@ func TestRegistry_AWindowAwayFromTheTailIsToldWhatLandsThere(t *testing.T) {
 	assert.Equal(t, 2, lastNewCount(t, rec.take()), "111 and 112 landed while the window was away")
 }
 
+// A history opened far back holds no tail run. The first message to arrive
+// starts one, and it is new to the window like every one after it.
+func TestRegistry_WithNoTailRunTheFirstArrivalIsCounted(t *testing.T) {
+	r := &fakeReader{
+		chats: []domain.Chat{{ID: 1}},
+		runs:  map[domain.HistoryKey][]domain.Run{chat1: {{Messages: span(1, 5), UpTo: 5}}},
+	}
+	g, rec := newRegistry(r)
+	subscribe(g, project.HistoryWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: 3}, Before: 2, After: 2,
+	})
+	rec.take()
+
+	r.runs[chat1] = append(r.runs[chat1], domain.Run{Messages: span(200, 200), AtTail: true, UpTo: 200})
+	g.Refresh()
+
+	assert.Equal(t, 1, lastNewCount(t, rec.take()))
+}
+
 // Widening a window away from the tail keeps counting from when it left.
 func TestRegistry_MovingAWindowKeepsItsMark(t *testing.T) {
 	r := readerWithRuns(domain.Chat{ID: 1}, domain.Run{Messages: span(1, 5)})

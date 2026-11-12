@@ -210,13 +210,19 @@ func tailRun(runs []domain.Run) (domain.Run, bool) {
 	return domain.Run{}, false
 }
 
-// tailNewest is the id of the tail run's newest message, zero with no tail run.
-func tailNewest(runs []domain.Run) int {
-	tail, ok := tailRun(runs)
-	if !ok {
-		return 0
+// newestHeld is the newest id any run of the history reaches: the tail run's
+// newest message when there is one. Whatever lands at the tail later is newer
+// than it, which is what lets a history holding no tail run count its first
+// arrival as new.
+func newestHeld(runs []domain.Run) int {
+	newest := 0
+	for _, r := range runs {
+		newest = max(newest, r.UpTo)
+		if n := len(r.Messages); n > 0 {
+			newest = max(newest, r.Messages[n-1].ID)
+		}
 	}
-	return tail.Messages[len(tail.Messages)-1].ID
+	return newest
 }
 
 // newSince counts the messages of the tail run newer than mark: what landed at

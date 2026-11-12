@@ -46,6 +46,22 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.widenChatWindow()
 		return m, nil
 
+	case screens.LoadNewerMsg:
+		// Reaching the bottom of a run that does not end at the tail asks for
+		// the page below it. At the tail there is nothing newer to ask for.
+		if msg.ChatID != m.currentChatID || m.chatAtTail {
+			return m, nil
+		}
+		m.widenChatWindowDown()
+		return m, nil
+
+	case screens.GoToLatestMsg:
+		if msg.ChatID != m.currentChatID || m.chatAtTail {
+			return m, nil
+		}
+		m.returnToTail()
+		return m, nil
+
 	case PhotoReadyMsg:
 		// SetImage owns the cache write: it must measure whether the viewport was
 		// at the bottom *before* the image grows the bubble's height. Adding to the

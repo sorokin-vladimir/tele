@@ -68,6 +68,15 @@ type RootModel struct {
 	// slice rather than applying edits itself.
 	chatWindow project.HistoryWindow
 	chatMsgs   []domain.Message
+	// chatAtTail is whether the window's run ends at the newest message, from
+	// the projection: away from it, the bottom of the window asks for newer
+	// history and the window is not following the tail (#347).
+	chatAtTail bool
+	// jumpTo is a message the window was moved onto and that is highlighted
+	// once it arrives; zero when none is awaited. beforeJump is the window as
+	// it was, to go back to if the message turns out to be gone.
+	jumpTo     int
+	beforeJump project.HistoryWindow
 	// chatUnreadReactions is the open chat's unread-reaction count, from the
 	// projection. Kept so focusing the pane can mark them read: a reaction that
 	// arrived while you were elsewhere is only seen when you look.
@@ -575,6 +584,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleNotification(msg)
 	case core.Failure:
 		return m.handleFailure(msg)
+	case core.MessageGone:
+		return m.handleMessageGone(msg), nil
 	case core.Typing:
 		return m.handleTyping(msg)
 	case screens.SendMsgRequest:
@@ -754,6 +765,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		screens.OpenTopicMsg,
 		screens.LeaveForumMsg,
 		screens.LoadMoreMsg,
+		screens.LoadNewerMsg,
+		screens.GoToLatestMsg,
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,
 		kittyEncodedMsg,

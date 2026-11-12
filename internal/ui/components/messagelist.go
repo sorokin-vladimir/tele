@@ -175,6 +175,12 @@ func (ml *MessageList) SetIsGroup(v bool)         { ml.isGroup = v; ml.invalidat
 func (ml *MessageList) SetOutboxReadMaxID(id int) { ml.outboxReadMaxID = id }
 func (ml *MessageList) SetInboxReadMaxID(id int)  { ml.inboxReadMaxID = id }
 
+// AtBottom reports whether the viewport shows the newest loaded line.
+func (ml *MessageList) AtBottom() bool {
+	botIdx, botOff := ml.positionAtBottom()
+	return ml.viewStart > botIdx || (ml.viewStart == botIdx && ml.lineOffset >= botOff)
+}
+
 // InboxReadMaxID reports the read pointer the projection last pushed in.
 func (ml *MessageList) InboxReadMaxID() int { return ml.inboxReadMaxID }
 

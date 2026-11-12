@@ -22,6 +22,8 @@ func (m *RootModel) subscribeChat(h domain.HistoryKey) {
 		m.owner.Unsubscribe(m.chatSub)
 		m.chatSub = 0
 	}
+	// A jump awaited in the history being left lands nowhere.
+	m.jumpTo = 0
 	m.chatWindow = project.HistoryWindow{
 		ChatID:  h.ChatID,
 		TopicID: h.TopicID,
@@ -43,6 +45,97 @@ func (m *RootModel) widenChatWindow() {
 	m.owner.MoveWindow(m.chatSub, m.chatWindow)
 }
 
+// widenChatWindowDown asks for another page below the current window, for a
+// window whose run does not end at the tail.
+func (m *RootModel) widenChatWindowDown() {
+	if m.owner == nil || m.chatSub == 0 {
+		return
+	}
+	m.chatWindow.After += m.historyLimit
+	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+}
+
+// returnToTail takes a window away from the tail back to the newest messages:
+// the window the chat opens with.
+func (m *RootModel) returnToTail() {
+	if m.owner == nil || m.chatSub == 0 {
+		return
+	}
+	m.jumpTo = 0
+	m.chatWindow = project.HistoryWindow{
+		ChatID: m.chatWindow.ChatID, TopicID: m.chatWindow.TopicID,
+		Anchor: project.Anchor{Kind: project.AnchorFirstUnread},
+		Before: m.historyLimit,
+	}
+	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+}
+
+// jumpToMessage moves the window onto a message, half a page either side of
+// it, for a message the window does not hold: a reply's original far back.
+// The message is highlighted once the window holds it (#347).
+func (m *RootModel) jumpToMessage(id int) {
+	if m.owner == nil || m.chatSub == 0 {
+		return
+	}
+	m.beforeJump = m.chatWindow
+	m.jumpTo = id
+	half := m.historyLimit / 2
+	m.chatWindow = project.HistoryWindow{
+		ChatID: m.chatWindow.ChatID, TopicID: m.chatWindow.TopicID,
+		Anchor: project.Anchor{Kind: project.AnchorMessage, MsgID: id},
+		Before: half, After: half,
+	}
+	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+}
+
+// followRun takes in where the window's run lies. A window moved onto a
+// message whose run now ends at the tail becomes the window opening the chat
+// gives, pinned on the message it stands on: it runs to the newest message and
+// grows as messages arrive, and the messages on screen stay where they are.
+func (m RootModel) followRun(c project.HistoryContents) RootModel {
+	m.chatAtTail = c.AtTail
+	m.chat.SetNewCount(c.NewCount)
+	w := m.chatWindow
+	if !c.AtTail || w.Anchor.Kind != project.AnchorMessage || c.AnchorMsgID == 0 ||
+		m.owner == nil || m.chatSub == 0 {
+		return m
+	}
+	m.chatWindow = project.HistoryWindow{
+		ChatID: w.ChatID, TopicID: w.TopicID,
+		Anchor: project.Anchor{Kind: project.AnchorFirstUnread, MsgID: c.AnchorMsgID},
+		Before: w.Before,
+	}
+	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	return m
+}
+
+// handleMessageGone answers the owner saying the message a jump went to is no
+// longer there: the window opens on the nearest one Telegram returned, with
+// nothing highlighted, or goes back where it was when there was none.
+func (m RootModel) handleMessageGone(msg core.MessageGone) RootModel {
+	if msg.ChatID != m.currentChatID || msg.TopicID != m.currentTopicID ||
+		msg.MsgID != m.jumpTo || m.owner == nil || m.chatSub == 0 {
+		return m
+	}
+	m.jumpTo = 0
+	m.statusBar.SetStatus("This message is gone")
+	if msg.Nearest == 0 {
+		m.chatWindow = m.beforeJump
+	} else {
+		m.chatWindow.Anchor.MsgID = msg.Nearest
+	}
+	m.owner.MoveWindow(m.chatSub, m.chatWindow)
+	return m
+}
+
+// highlightJump starts the highlight on a message the window holds and shows.
+func (m RootModel) highlightJump(id int) (RootModel, tea.Cmd) {
+	m.jumpTo = 0
+	m.chat.HighlightMessage(id)
+	m.msgHighlightSerial++
+	return m, msgHighlightFadeCmd(m.msgHighlightSerial)
+}
+
 // handleChatDelta renders one chat:<id> delta into the chat pane.
 func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd) {
 	switch d.Kind {
@@ -59,6 +152,14 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		m.chat.SetOutbox(c.Outbox)
 		m.chat.SetLoading(false)
 		m.chat.SetLoadError("")
+		m = m.followRun(c)
+		// A window moved onto a message lands on it: scrolled to and
+		// highlighted, rather than placed at the first unread.
+		var jumpCmd tea.Cmd
+		landed := m.jumpTo != 0 && m.chat.ScrollToMessage(m.jumpTo)
+		if landed {
+			m, jumpCmd = m.highlightJump(m.jumpTo)
+		}
 		// Opening a chat reads its mentions, once. Reactions need no such
 		// step: readReactionsOnScreen reads them on every Reset while the pane
 		// is focused, and that covers the opening one too (#278).
@@ -70,7 +171,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 			}
 		}
 		if cmd := m.readReactionsOnScreen(c); cmd != nil {
-			return m, tea.Batch(cmd, mentionsCmd)
+			return m, tea.Batch(cmd, mentionsCmd, jumpCmd)
 		}
 		// The window was anchored on the first unread: it already opens on that
 		// message, so scrolling to it again would fight the anchor. Only the
@@ -78,14 +179,14 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		// fetch, the read pointer and the GIF animation, which left every photo
 		// in a chat with unread messages blank until the user scrolled.
 		anchored := c.AnchorMsgID != 0 && c.AnchorMsgID <= c.ReadInboxMaxID
-		if !anchored && c.ReadInboxMaxID > 0 {
+		if !landed && !anchored && c.ReadInboxMaxID > 0 {
 			m.chat.ScrollToFirstUnread(c.ReadInboxMaxID)
 		}
 		// A chat may open with a GIF already selected (newest message) and its
 		// thumbnail already cached from a prior visit; start its animation here
 		// since no key event will.
 		nm, gifCmd := m.ensureGifAnimForSelection()
-		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd, mentionsCmd)
+		return nm, tea.Batch(nm.markReadCmd(), nm.pendingDownloadCmds(c.Messages), gifCmd, mentionsCmd, jumpCmd)
 
 	case project.HistoryHeaderUpdate:
 		// Only the state around the window changed. The message list is left
@@ -93,6 +194,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		// online would scroll the chat you are reading back to the bottom.
 		c := d.Contents
 		m.chat.SetHeader(chatHeader(c))
+		m = m.followRun(c)
 		// Assigned first: the call records the count on the model, and a return
 		// statement gives no guarantee that m is read after it.
 		cmd := m.readReactionsOnScreen(c)

@@ -92,19 +92,22 @@ func (ml *MessageList) CursorUp() bool {
 }
 
 // CursorDown moves the active-message cursor one bubble toward newer messages.
-func (ml *MessageList) CursorDown() {
+// Returns true when the cursor was already on the newest loaded message and
+// could not move, so the caller can ask for newer history when there is some.
+func (ml *MessageList) CursorDown() bool {
 	idx := ml.cursorIndex()
 	if idx < 0 {
 		ml.setCursorNewest()
-		return
+		return false
 	}
 	for i := idx + 1; i < len(ml.items); i++ {
 		if ml.selectable(i) {
 			ml.placeCursor(i)
 			ml.revealCursorDown()
-			return
+			return false
 		}
 	}
+	return true
 }
 
 // cursorTopRow returns the cursor bubble's top row relative to the viewport's

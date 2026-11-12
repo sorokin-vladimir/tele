@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"image"
 	"time"
 
@@ -55,6 +56,20 @@ type LoadMoreMsg struct {
 	OffsetID int
 }
 
+// LoadNewerMsg says the bottom of the window was reached. The root widens the
+// window down when its run does not end at the tail, and ignores it otherwise
+// (#347).
+type LoadNewerMsg struct {
+	ChatID int64
+}
+
+// GoToLatestMsg says go_bottom was pressed. Away from the tail the root takes
+// the window back to the newest messages; on the tail run the scroll is all
+// there is to do (#347).
+type GoToLatestMsg struct {
+	ChatID int64
+}
+
 type ChatModel struct {
 	// header is the open chat's rendered state, from the chat:<id> projection.
 	// A zero ChatID means no chat is open.
@@ -86,6 +101,34 @@ type ChatModel struct {
 	// for the "Reply to <name>…" placeholder.
 	keyMap    keys.KeyMap
 	replyName string
+
+	// newCount is how many messages landed at the tail while the window is far
+	// back. Above zero it takes a line above the composer (#347).
+	newCount int
+}
+
+// SetNewCount sets how many messages landed at the tail while the window is
+// far back; zero takes the line away.
+func (m *ChatModel) SetNewCount(n int) {
+	if n == m.newCount {
+		return
+	}
+	m.newCount = n
+	m.syncMsgListHeight()
+}
+
+// NewCount is how many messages the pane counts below a window far back.
+func (m *ChatModel) NewCount() int { return m.newCount }
+
+// newLine is the line counting what landed at the tail, right-aligned and
+// naming the key that goes there. The padding carries the canvas (#227).
+func (m *ChatModel) newLine() string {
+	label := fmt.Sprintf("↓ %d new", m.newCount)
+	if key := m.keyMap.KeyFor(keys.ContextChat, keys.ActionGoBottom); key != "" {
+		label += " · " + key
+	}
+	label += " "
+	return theme.PadTo(lipgloss.Width(label), m.width) + theme.S().UnreadSeparator.Render(label)
 }
 
 func NewChatModel(width, height int) *ChatModel {
@@ -550,6 +593,9 @@ func (m *ChatModel) SetSize(width, height int) {
 
 func (m *ChatModel) syncMsgListHeight() {
 	listH := m.height - m.composer.VisualHeight()
+	if m.newCount > 0 {
+		listH--
+	}
 	if listH < 1 {
 		listH = 1
 	}
@@ -564,6 +610,16 @@ func (m *ChatModel) Title() string {
 }
 
 func (m *ChatModel) Init() tea.Cmd { return m.composer.Init() }
+
+// loadNewer says the bottom of the window was reached, for a chat with
+// messages; the root decides whether there is anything newer to ask for.
+func (m *ChatModel) loadNewer() tea.Cmd {
+	if m.header.ChatID == 0 || m.msgList.Count() == 0 {
+		return nil
+	}
+	chatID := m.header.ChatID
+	return func() tea.Msg { return LoadNewerMsg{ChatID: chatID} }
+}
 
 func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -589,7 +645,11 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		}
 		switch msg.Action {
 		case keys.ActionDown:
+			atBottom := m.msgList.AtBottom()
 			m.msgList.ScrollDown()
+			if atBottom {
+				return m, m.loadNewer()
+			}
 		case keys.ActionUp:
 			atTop := m.msgList.AtTop()
 			m.msgList.ScrollUp()
@@ -607,12 +667,19 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionGoBottom:
 			m.msgList.ScrollToBottom()
+			if m.header.ChatID != 0 {
+				chatID := m.header.ChatID
+				return m, func() tea.Msg { return GoToLatestMsg{ChatID: chatID} }
+			}
 		case keys.ActionScrollHalfDown:
 			n := m.msgList.ViewHeight() * 2 / 3
 			if n < 1 {
 				n = 1
 			}
 			m.msgList.ScrollDownBy(n)
+			if m.msgList.AtBottom() {
+				return m, m.loadNewer()
+			}
 		case keys.ActionScrollHalfUp:
 			n := m.msgList.ViewHeight() * 2 / 3
 			if n < 1 {
@@ -632,7 +699,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
 			}
 		case keys.ActionCursorDown:
-			m.msgList.CursorDown()
+			if m.msgList.CursorDown() {
+				return m, m.loadNewer()
+			}
 		case keys.ActionInsert:
 			m.composerFocused = true
 			m.refreshPlaceholder()
@@ -765,6 +834,9 @@ func (m *ChatModel) View() string {
 	if m.header.ChatID == 0 && m.msgList.Count() == 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			m.logo.View(), lipgloss.WithWhitespaceStyle(theme.NewStyle()))
+	}
+	if m.newCount > 0 {
+		return m.msgList.View() + "\n" + m.newLine() + "\n" + m.composer.View()
 	}
 	return m.msgList.View() + "\n" + m.composer.View()
 }

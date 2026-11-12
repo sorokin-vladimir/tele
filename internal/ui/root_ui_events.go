@@ -133,13 +133,13 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 
 	case components.JumpToMsgRequest:
 		m.contextMenu = nil
-		if !m.chat.ScrollToMessage(msg.MsgID) {
-			m.statusBar.SetStatus("Not in buffer")
-			return m, nil
+		if m.chat.ScrollToMessage(msg.MsgID) {
+			return m.highlightJump(msg.MsgID)
 		}
-		m.chat.HighlightMessage(msg.MsgID)
-		m.msgHighlightSerial++
-		return m, msgHighlightFadeCmd(m.msgHighlightSerial)
+		// Not in the window: move the window onto it. The owner fetches it
+		// when the store does not hold it, and it is highlighted on arrival.
+		m.jumpToMessage(msg.MsgID)
+		return m, nil
 
 	case msgHighlightFadeMsg:
 		// Ignore ticks from a superseded highlight.

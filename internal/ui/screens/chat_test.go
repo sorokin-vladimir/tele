@@ -211,6 +211,65 @@ func TestChatModel_LoadMoreMsg_OnUpAtTop(t *testing.T) {
 	assert.Equal(t, 1, lm.OffsetID) // oldest message ID
 }
 
+// The bottom of the window, reached by scrolling, by half a page or by the
+// cursor, says so: the root asks for newer history when the window's run does
+// not end at the tail (#347).
+func TestChatModel_LoadNewerMsg_AtTheBottom(t *testing.T) {
+	for _, action := range []keys.Action{keys.ActionDown, keys.ActionScrollHalfDown, keys.ActionCursorDown} {
+		t.Run(string(action), func(t *testing.T) {
+			m := screens.NewChatModel(80, 24)
+			openChat(m, &domain.Chat{ID: 42, Title: "Test"})
+			m.SetMessages([]domain.Message{
+				{ID: 1, ChatID: 42, Text: "msg", Date: time.Now()},
+				{ID: 2, ChatID: 42, Text: "msg", Date: time.Now()},
+			})
+
+			// Three messages fit: the window is at its bottom, and the cursor
+			// steps onto the newest first.
+			var cmd tea.Cmd
+			for range 3 {
+				_, cmd = m.Update(keys.ActionMsg{Action: action})
+			}
+
+			require.NotNil(t, cmd)
+			got, ok := cmd().(screens.LoadNewerMsg)
+			require.True(t, ok)
+			assert.Equal(t, int64(42), got.ChatID)
+		})
+	}
+}
+
+// go_bottom scrolls to the bottom and says so: away from the tail, the root
+// takes the window back to the newest messages.
+func TestChatModel_GoToLatestMsg_OnGoBottom(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	openChat(m, &domain.Chat{ID: 42, Title: "Test"})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 42, Text: "msg", Date: time.Now()}})
+
+	_, cmd := m.Update(keys.ActionMsg{Action: keys.ActionGoBottom})
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, screens.GoToLatestMsg{ChatID: 42}, cmd())
+}
+
+// Messages that landed at the tail while the window is far back are counted
+// on a line of their own above the composer, naming the key that goes there.
+// The pane keeps its height: the list gives the line up.
+func TestChatModel_NewBelowIsCountedAboveTheComposer(t *testing.T) {
+	m := screens.NewChatModel(80, 24)
+	m.SetKeyMap(keys.DefaultKeyMap())
+	openChat(m, &domain.Chat{ID: 42, Title: "Test"})
+	m.SetMessages([]domain.Message{{ID: 1, ChatID: 42, Text: "msg", Date: time.Now()}})
+	plain := m.View()
+
+	m.SetNewCount(3)
+	counted := m.View()
+
+	assert.NotContains(t, plain, "new")
+	assert.Contains(t, counted, "↓ 3 new · G")
+	assert.Equal(t, strings.Count(plain, "\n"), strings.Count(counted, "\n"), "the pane keeps its height")
+}
+
 func TestChatModel_LoadMoreMsg_OnGoTop(t *testing.T) {
 	m := screens.NewChatModel(80, 24)
 	chat := &domain.Chat{ID: 10, Title: "X"}

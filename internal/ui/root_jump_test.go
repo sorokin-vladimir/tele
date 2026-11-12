@@ -166,6 +166,60 @@ func TestRoot_WhatLandsAtTheTailIsCountedWhileFarBack(t *testing.T) {
 	assert.Zero(t, m.Chat().NewCount())
 }
 
+// scrolledUpOnTail is rootOnTail in a real-sized terminal, scrolled away from
+// the newest message while the window stays on the tail run.
+func scrolledUpOnTail(t *testing.T) (RootModel, *ownerStub) {
+	t.Helper()
+	m, o := rootOnTail(t)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = next.(RootModel)
+	for range 15 {
+		m = runDrained(t, m, o, tea.KeyPressMsg{Code: 'k', Text: "k"})
+	}
+	require.True(t, m.chatAtTail)
+	require.False(t, m.chat.AtBottom(), "the newest message is off screen")
+	return m, o
+}
+
+func arrive(t *testing.T, m RootModel, o *ownerStub, msg domain.Message) RootModel {
+	t.Helper()
+	next, _ := applyEventInternal(t, m, o.state.Store(), store.Event{Kind: store.EventNewMessage, Message: msg})
+	return next.(RootModel)
+}
+
+// Scrolled up in the loaded history, a message arriving below the screen is
+// counted, as the official clients count it, and going down to it clears the
+// count.
+func TestRoot_AnArrivalBelowTheScreenIsCountedOnTheTailRun(t *testing.T) {
+	m, o := scrolledUpOnTail(t)
+
+	m = arrive(t, m, o, domain.Message{ID: 1021, ChatID: 1, Text: "new", Date: time.Unix(1021, 0)})
+	assert.Equal(t, 1, m.Chat().NewCount())
+
+	m = runDrained(t, m, o, tea.KeyPressMsg{Code: 'G', Text: "G"})
+	assert.Zero(t, m.Chat().NewCount())
+}
+
+// Your own message from another device is not news to you.
+func TestRoot_YourOwnArrivalIsNotCounted(t *testing.T) {
+	m, o := scrolledUpOnTail(t)
+
+	m = arrive(t, m, o, domain.Message{ID: 1021, ChatID: 1, Text: "mine", IsOut: true, Date: time.Unix(1021, 0)})
+
+	assert.Zero(t, m.Chat().NewCount())
+}
+
+// At the bottom the message is on screen as it arrives: nothing to count.
+func TestRoot_AnArrivalOnScreenIsNotCounted(t *testing.T) {
+	m, o := rootOnTail(t)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = next.(RootModel)
+
+	m = arrive(t, m, o, domain.Message{ID: 1021, ChatID: 1, Text: "new", Date: time.Unix(1021, 0)})
+
+	assert.Zero(t, m.Chat().NewCount())
+}
+
 // A reply's original far back is not in the window: the window moves onto it,
 // half the history limit either side, and the message is highlighted the
 // moment the owner has fetched it.

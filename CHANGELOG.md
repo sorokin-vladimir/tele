@@ -21,8 +21,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   one `tele search` found can be read in its conversation (#348).
 - Jump to original (`g`) opens the original of a reply however old it is,
   instead of saying "Not in buffer". Moving up or down from it loads more
-  history; messages that arrive meanwhile are counted at the bottom, and
-  `G` goes back to them (#347).
+  history (#347).
+- Scrolled up in a chat, messages from others that arrive below the screen
+  are counted at the bottom, as `↓ 3 new · G`, and `G` goes down to them
+  (#347).
 
 ### Changed
 

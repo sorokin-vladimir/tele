@@ -22,8 +22,10 @@ func (m *RootModel) subscribeChat(h domain.HistoryKey) {
 		m.owner.Unsubscribe(m.chatSub)
 		m.chatSub = 0
 	}
-	// A jump awaited in the history being left lands nowhere.
+	// A jump awaited in the history being left lands nowhere, and nothing
+	// counted below its screen is below this one.
 	m.jumpTo = 0
+	m.farNew, m.belowNew = 0, 0
 	m.chatWindow = project.HistoryWindow{
 		ChatID:  h.ChatID,
 		TopicID: h.TopicID,
@@ -97,13 +99,43 @@ func (m *RootModel) jumpToMessage(id int) {
 // grows as messages arrive, and the messages on screen stay where they are.
 func (m RootModel) followRun(c project.HistoryContents) RootModel {
 	m.chatAtTail = c.AtTail
-	m.chat.SetNewCount(c.NewCount)
+	m.farNew = c.NewCount
+	m.showNewCount()
 	if !c.AtTail || m.chatWindow.Anchor.Kind != project.AnchorMessage || c.AnchorMsgID == 0 {
 		return m
 	}
 	pinned := project.Anchor{Kind: project.AnchorFirstUnread, MsgID: c.AnchorMsgID}
 	m.moveChatWindow(m.chatWindowAt(pinned, m.chatWindow.Before, 0))
 	return m
+}
+
+// showNewCount draws how many arrived messages are below the screen: the
+// owner's count for a window far back, this client's own for the tail run,
+// which is cleared once the newest message is on screen.
+func (m *RootModel) showNewCount() {
+	if !m.chatAtTail {
+		m.belowNew = 0
+		m.chat.SetNewCount(m.farNew)
+		return
+	}
+	if m.chat.AtBottom() {
+		m.belowNew = 0
+	}
+	m.chat.SetNewCount(m.belowNew)
+}
+
+// countArrivals counts the messages arriving below a screen scrolled up on
+// the tail run: other people's only, since your own is no news to you. Called
+// before the list takes them in, while the screen is still where it was.
+func (m *RootModel) countArrivals(msgs []domain.Message) {
+	if !m.chatAtTail || m.chat.AtBottom() {
+		return
+	}
+	for _, msg := range msgs {
+		if !msg.IsOut {
+			m.belowNew++
+		}
+	}
 }
 
 // handleMessageGone answers the owner saying the message a jump went to is no
@@ -209,15 +241,19 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 			break
 		}
 		m.chatMsgs = append(m.chatMsgs, d.Messages...)
+		m.countArrivals(d.Messages)
 		m.chat.SetMessagesKeepScroll(m.chatMsgs)
+		m.showNewCount()
 		return m, m.pendingDownloadCmds(d.Messages)
 
 	case project.HistoryAppend:
 		m.chatMsgs = append(m.chatMsgs, d.Message)
+		m.countArrivals([]domain.Message{d.Message})
 		// KeepScroll re-anchors to the bottom only when the viewport was already
 		// there, so a message arriving while you are reading history does not
 		// yank you out of it.
 		m.chat.SetMessagesKeepScroll(m.chatMsgs)
+		m.showNewCount()
 		cmds := []tea.Cmd{m.markReadCmd(), m.pendingDownloadCmds([]domain.Message{d.Message})}
 		if m.focus == FocusChat && d.Message.Mentioned {
 			cmds = append(cmds, m.readMentionsCmd(m.currentHistory()))

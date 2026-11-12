@@ -102,13 +102,14 @@ type ChatModel struct {
 	keyMap    keys.KeyMap
 	replyName string
 
-	// newCount is how many messages landed at the tail while the window is far
-	// back. Above zero it takes a line above the composer (#347).
+	// newCount is how many arrived messages are below the screen: landed at the
+	// tail while the window is far back, or arrived while the screen was
+	// scrolled up. Above zero it takes a line above the composer (#347).
 	newCount int
 }
 
-// SetNewCount sets how many messages landed at the tail while the window is
-// far back; zero takes the line away.
+// SetNewCount sets how many arrived messages are below the screen; zero takes
+// the line away.
 func (m *ChatModel) SetNewCount(n int) {
 	if n == m.newCount {
 		return
@@ -117,8 +118,11 @@ func (m *ChatModel) SetNewCount(n int) {
 	m.syncMsgListHeight()
 }
 
-// NewCount is how many messages the pane counts below a window far back.
+// NewCount is how many arrived messages the pane counts below the screen.
 func (m *ChatModel) NewCount() int { return m.newCount }
+
+// AtBottom reports whether the newest message of the window is on screen.
+func (m *ChatModel) AtBottom() bool { return m.msgList.AtBottom() }
 
 // newLine is the line counting what landed at the tail, right-aligned and
 // naming the key that goes there. The padding carries the canvas (#227).

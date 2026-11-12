@@ -77,6 +77,12 @@ type RootModel struct {
 	// it was, to go back to if the message turns out to be gone.
 	jumpTo     int
 	beforeJump project.HistoryWindow
+	// farNew is what the owner counts as landed at the tail while the window
+	// is on a run far back. belowNew is what this client counts as arrived
+	// below the screen while the window is on the tail run but scrolled up,
+	// as the official clients count it. Either is drawn as "N new".
+	farNew   int
+	belowNew int
 	// chatUnreadReactions is the open chat's unread-reaction count, from the
 	// projection. Kept so focusing the pane can mark them read: a reaction that
 	// arrived while you were elsewhere is only seen when you look.

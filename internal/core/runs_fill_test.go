@@ -326,6 +326,18 @@ func TestNotify_LookingFarBackKeepsTheChatFocusedAndTheArrivalUnread(t *testing.
 	assert.Equal(t, 1, chat.UnreadCount, "the arrival is not on screen, so it is not read")
 }
 
+// A message arriving while a window is far back is counted for it: the
+// client is told one landed at the tail.
+func TestFill_AnArrivalWhileFarBackIsCountedForTheWindow(t *testing.T) {
+	o, _, _ := historyOwner(t, msgRange(1, 1020), msgRange(1001, 1020))
+	cl, _, _ := openAt(t, o, 500, 5, 5)
+
+	o.handleEvent(store.Event{Kind: store.EventNewMessage,
+		Message: domain.Message{ID: 1021, ChatID: 7, Text: "new", Date: time.Unix(1021, 0)}})
+
+	waitContents(t, cl, func(c project.HistoryContents) bool { return c.NewCount == 1 })
+}
+
 func count(calls []string, call string) int {
 	n := 0
 	for _, c := range calls {

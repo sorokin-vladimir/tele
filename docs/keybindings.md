@@ -74,7 +74,7 @@ A message that could not be sent stays in the chat, marked `✕` in its bottom b
 
 `g` on a reply opens its original however far back it is, highlighted.
 From there, moving up or down loads more history, until it meets the newest messages.
-While you read far back, messages that arrive are counted at the bottom, as `↓ 3 new · G`, and the chat stays unread; `G` takes you back to them.
+Whenever you are scrolled up, far back or not, messages from others that arrive below the screen are counted at the bottom, as `↓ 3 new · G`, and stay unread until you reach them; `G` takes you there.
 When the original was deleted, the chat opens where it was and the status bar says "This message is gone".
 
 ## Compose (insert mode)

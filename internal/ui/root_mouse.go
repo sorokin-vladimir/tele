@@ -101,6 +101,7 @@ func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	case regionMessages:
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
 		m.chat = newPane.(*screens.ChatModel)
+		m.showNewCount()
 		return m, tea.Batch(cmd, m.markReadCmd())
 	case regionFolders:
 		if m.folderBar != nil {

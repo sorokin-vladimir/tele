@@ -478,6 +478,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m, gifCmd = m.reconcileGifAnim()
 		}
 		m.showOutboxReason()
+		// Scrolling down to the newest message clears what was counted below.
+		m.showNewCount()
 		return m, tea.Batch(cmd, m.markReadCmd(), gifCmd)
 	}
 

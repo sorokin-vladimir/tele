@@ -51,7 +51,7 @@ func (m RootModel) mouseBlocked() bool {
 	if m.screen == ScreenLogin {
 		return true
 	}
-	return m.searchModel != nil || m.filePicker != nil || m.contextMenu != nil ||
+	return m.searchModel != nil || m.messageSearch != nil || m.filePicker != nil || m.contextMenu != nil ||
 		m.chatMenu != nil || m.reactionPicker != nil || m.photoViewer != nil ||
 		m.videoPlayer != nil || m.openPicker != nil || m.mentionPopup != nil
 }

@@ -77,6 +77,11 @@ type testOwner struct {
 	searchResult    []project.ChatRow
 	participants    []domain.ChatMember
 	lastSearchQuery string
+	// messageSearches records the message searches asked, with the context
+	// each was asked under; foundPage and foundErr are the answer (#349).
+	messageSearches []messageSearchCall
+	foundPage       project.SearchPage
+	foundErr        error
 	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
 	// answers NotFound, standing in for a download failure. fetched records what
 	// the client asked for, invalidated what it asked to drop.
@@ -245,8 +250,21 @@ func (o *testOwner) HistoryAround(context.Context, domain.HistoryKey, int, int) 
 	return nil, nil
 }
 
-func (o *testOwner) SearchMessages(context.Context, project.SearchScope, string, project.SearchPosition, int) (project.SearchPage, error) {
-	return project.SearchPage{}, nil
+// messageSearchCall is one message search a client asked the owner for.
+type messageSearchCall struct {
+	ctx   context.Context
+	scope project.SearchScope
+	text  string
+	after project.SearchPosition
+	limit int
+}
+
+func (o *testOwner) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	o.messageSearches = append(o.messageSearches, messageSearchCall{ctx, scope, text, after, limit})
+	if o.foundErr != nil {
+		return project.SearchPage{}, o.foundErr
+	}
+	return o.foundPage, nil
 }
 
 func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {

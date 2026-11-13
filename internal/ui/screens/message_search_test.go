@@ -411,6 +411,31 @@ func TestMessageSearch_ReopenedTheQueryIsSelected(t *testing.T) {
 	}
 }
 
+// Retargeted on another chat, the window goes back to every chat: what it
+// found every chat stays, what it found in the old chat goes, since it would
+// be titled with the new one (#349).
+func TestMessageSearch_RetargetDropsTheOldChatsResults(t *testing.T) {
+	bob := screens.MessageSearchOpen{Here: project.SearchScope{ChatID: 2}, Title: "Bob"}
+
+	everywhere := screens.NewMessageSearchModel(screens.MessageSearchOpen{Here: aliceHere.Here, Title: "Alice", Everywhere: true}, 100, 40, keys.DefaultKeyMap())
+	everywhere = answered(t, everywhere, "deploy", threeFound()...)
+	everywhere.Retarget(bob)
+	lines := searchLines(everywhere)
+	assert.Contains(t, lines[0], "Messages in all chats")
+	assert.Contains(t, lines[3], "Bob", "results found everywhere stay")
+	assert.Contains(t, lines[len(lines)-1], "this chat")
+
+	inAlice := screens.NewMessageSearchModel(aliceHere, 100, 40, keys.DefaultKeyMap())
+	inAlice = answered(t, inAlice, "deploy", threeFound()...)
+	inAlice.Retarget(bob)
+	lines = searchLines(inAlice)
+	assert.Contains(t, lines[0], "Messages in all chats")
+	assert.Contains(t, lines[3], "Press ⏎ to search all chats", "Alice's results are gone")
+	_, msg := tab(t, inAlice)
+	assert.Nil(t, msg, "nothing found to ask again")
+	assert.Contains(t, searchLines(inAlice)[0], "Messages in Bob")
+}
+
 // Opened, the window names where it looks in its title, and before anything is
 // asked it says how to ask; the bottom border names the keys (#349).
 func TestMessageSearch_OpensAskingForAQuery(t *testing.T) {

@@ -100,6 +100,19 @@ func NewMessageSearchModel(open MessageSearchOpen, width, height int, km keys.Ke
 	}
 }
 
+// Opened is what the window was opened on.
+func (m *MessageSearchModel) Opened() MessageSearchOpen { return m.open }
+
+// Query is what the query field holds.
+func (m *MessageSearchModel) Query() string { return m.query }
+
+// Waiting reports whether a question is in flight, which is what the spinner
+// shows.
+func (m *MessageSearchModel) Waiting() bool { return m.searching || m.paging }
+
+// SetSize fits the window to a screen of width by height.
+func (m *MessageSearchModel) SetSize(width, height int) { m.width, m.height = width, height }
+
 // WithNow sets the clock dates are told against: today's messages show their
 // time, older ones their date.
 func (m *MessageSearchModel) WithNow(now func() time.Time) *MessageSearchModel {
@@ -129,7 +142,7 @@ func (m *MessageSearchModel) Update(msg tea.Msg) (*MessageSearchModel, tea.Cmd) 
 		m.query += msg.Content
 		return m, nil
 	case components.SpinnerTickMsg:
-		if m.searching || m.paging {
+		if m.Waiting() {
 			m.spinner.Tick()
 		}
 		return m, nil
@@ -180,6 +193,24 @@ func (m *MessageSearchModel) press(km tea.KeyPressMsg) (*MessageSearchModel, tea
 		m.query += km.Text
 	}
 	return m, nil
+}
+
+// Retarget makes open's chat the one Tab switches to. When it is another chat
+// than before, the window goes back to every chat, and results found in the
+// old chat are dropped: they would be titled with the new one.
+func (m *MessageSearchModel) Retarget(open MessageSearchOpen) *MessageSearchModel {
+	if open.Here == m.open.Here {
+		m.open.Title = open.Title
+		return m
+	}
+	m.open.Here, m.open.Title = open.Here, open.Title
+	m.everywhere = true
+	if !m.shownEverywhere {
+		m.results, m.next, m.answered, m.shown = nil, nil, false, ""
+		m.list.SetCount(0)
+	}
+	m.shownEverywhere = true
+	return m
 }
 
 // Reopen readies a window opened again on what it held: the query is shown

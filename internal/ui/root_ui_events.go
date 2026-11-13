@@ -51,6 +51,11 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.login.SetRoom(loginRoom(msg.Width, msg.Height))
 		m.statusBar.SetWidth(msg.Width)
 		m.toasts.SetSize(msg.Width, msg.Height)
+		for _, w := range []*screens.MessageSearchModel{m.searchMemory.chat, m.searchMemory.all} {
+			if w != nil {
+				w.SetSize(msg.Width, msg.Height)
+			}
+		}
 		lay := computeLayout(msg.Width, msg.Height, m.chat.ComposerHeight(),
 			m.folderBar != nil && m.folderBar.HasFolders())
 		if lay.hasFolders {
@@ -206,6 +211,9 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		m.updateGifLoadingSpinner()
 		m.updateVideoSpinner()
 		m.updatePhotoSpinner()
+		if m.messageSearch != nil {
+			m.messageSearch.Update(msg)
+		}
 		if m.spinnerShouldTick() {
 			return m, spinnerTickCmd()
 		}
@@ -274,6 +282,10 @@ func (m RootModel) updateUIMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 		if m.searchModel != nil {
 			newSearch, cmd := m.searchModel.Update(msg)
 			m.searchModel = newSearch
+			return m, cmd
+		}
+		if m.messageSearch != nil {
+			_, cmd := m.messageSearch.Update(msg)
 			return m, cmd
 		}
 		if m.focus == FocusChat {

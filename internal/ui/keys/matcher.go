@@ -48,6 +48,9 @@ func NewMatcher(km KeyMap) *Matcher {
 // Reset clears any pending chord prefix.
 func (m *Matcher) Reset() { m.pending = "" }
 
+// Pending reports whether a chord has been started and waits for its next key.
+func (m *Matcher) Pending() bool { return m.pending != "" }
+
 // Resolve feeds key (a bubbletea key token like "j" or "ctrl+d") for context
 // ctx. It returns the resolved Action and a MatchResult. On MatchPending the
 // Action is ActionNone and the caller should take no action and await the next

@@ -130,6 +130,9 @@ func (m RootModel) View() tea.View {
 		if m.searchModel != nil {
 			content = overlayCenter(dimBackground(content), m.searchModel.View(), m.width, m.height)
 		}
+		if m.messageSearch != nil {
+			content = overlayCenter(dimBackground(content), m.messageSearch.View(), m.width, m.height)
+		}
 		if m.contextMenu != nil {
 			content = m.overlayMenuNearBubble(content, m.contextMenu.View(), chatPanelLeft, chatBoxW)
 		}

@@ -209,21 +209,27 @@ type RootModel struct {
 	kittyResetPending bool
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
-	contextMenu       *components.ContextMenu
-	chatMenu          *components.ChatContextMenu
-	reactionPicker    *components.ReactionPicker
-	help              *components.HelpModal
-	settings          *components.SettingsModal
-	confirmQuit       *components.ConfirmModal
-	profile           *components.Profile
-	profileAsk        int // numbers profile requests; only the latest one's answer opens an overlay
-	openPicker        *components.OpenPicker
-	reactionTargetID  int
-	mentionPopup      *components.MentionPopup
-	mentionMembers    map[int64][]domain.ChatMember
-	folderBar         *screens.FoldersModel
-	logo              components.LogoLoader
-	typingSerial      int
+	// messageSearch is the open message search window, one of those
+	// searchMemory keeps (#349).
+	messageSearch *screens.MessageSearchModel
+	searchMemory  messageSearchMemory
+	// cancelSearch cancels the message search call in flight, nil when none.
+	cancelSearch     context.CancelFunc
+	contextMenu      *components.ContextMenu
+	chatMenu         *components.ChatContextMenu
+	reactionPicker   *components.ReactionPicker
+	help             *components.HelpModal
+	settings         *components.SettingsModal
+	confirmQuit      *components.ConfirmModal
+	profile          *components.Profile
+	profileAsk       int // numbers profile requests; only the latest one's answer opens an overlay
+	openPicker       *components.OpenPicker
+	reactionTargetID int
+	mentionPopup     *components.MentionPopup
+	mentionMembers   map[int64][]domain.ChatMember
+	folderBar        *screens.FoldersModel
+	logo             components.LogoLoader
+	typingSerial     int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
 	// newer highlight or a stale tick is ignored.
 	msgHighlightSerial int
@@ -663,6 +669,14 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardToChat(msg)
 	case screens.SearchUsersRequest:
 		return m.handleSearchUsers(msg)
+	case screens.MessageSearchRequest:
+		return m.handleMessageSearchRequest(msg)
+	case messageSearchAnswer:
+		return m.handleMessageSearchAnswer(msg)
+	case screens.MessageSearchClose:
+		return m.closeMessageSearch(), nil
+	case screens.MessageSearchJump:
+		return m.handleMessageSearchJump(msg)
 	case searchChatsMsg:
 		return m.handleSearchChats(msg)
 	case chatMenuFoldersMsg:

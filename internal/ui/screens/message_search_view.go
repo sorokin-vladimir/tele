@@ -186,6 +186,19 @@ func (m *MessageSearchModel) who(f project.FoundMessage, selected bool) string {
 	return where + dim.Render(" · ") + sender.Render(name)
 }
 
+// selectedInputLine is the query line of a reopened window: the query drawn as
+// selected, the next key replacing it, and the rest of the line padded. A query
+// too long for the line shows its tail, as inputLine does.
+func selectedInputLine(text string, inner int) string {
+	const prompt = "> "
+	budget := inner - lipgloss.Width(prompt)
+	if w := runewidth.StringWidth(text); w > budget {
+		text = runewidth.TruncateLeft(text, w-budget+1, "…")
+	}
+	line := theme.S().SearchPrompt.Render(prompt) + theme.S().SearchActiveRow.Render(text)
+	return line + theme.Pad(inner-lipgloss.Width(line))
+}
+
 // searchDate is when a message was sent as a result says it: the time for
 // today, the day for this year, the day and the year before that, in the words
 // the chat's date separators use.

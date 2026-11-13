@@ -48,7 +48,7 @@ func (s *serverSearch) FetchChat(_ context.Context, peer domain.Peer) (domain.Ch
 	return c, nil
 }
 
-func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topicID int, text string, limit int) (internaltg.FoundMessages, error) {
+func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topicID int, text string, _ internaltg.SearchPosition, limit int) (internaltg.FoundMessages, error) {
 	s.searched = true
 	s.searchedIn, s.searchedTopic, s.searchedText, s.searchedLimit = peer, topicID, text, limit
 	return s.found, nil

@@ -44,8 +44,9 @@ type Client interface {
 	GetHistoryAround(ctx context.Context, peer domain.Peer, topicID, id, limit int) ([]domain.Message, error)
 	// SearchMessages asks Telegram which messages hold text: in the chat peer
 	// names (one topic of it when topicID is not zero), or in every chat of
-	// the main list when peer is nil (#348).
-	SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, limit int) (FoundMessages, error)
+	// the main list when peer is nil (#348), from after down; the zero position
+	// is the first page (#349).
+	SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, after SearchPosition, limit int) (FoundMessages, error)
 	// FetchChat asks Telegram for the chat an address names, one the account
 	// has no dialog with; one it does not answer with is PeerNotFound (#348).
 	FetchChat(ctx context.Context, peer domain.Peer) (domain.Chat, error)

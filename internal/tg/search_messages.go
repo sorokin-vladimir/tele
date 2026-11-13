@@ -10,16 +10,28 @@ import (
 )
 
 // FoundMessages is Telegram's answer to a message search: the messages, newest
-// first, and the chats they were found in, with the addresses to reach them.
+// first, the chats they were found in, with the addresses to reach them, and
+// where the next page starts, nil when there is none.
 type FoundMessages struct {
 	Messages []domain.Message
 	Chats    []domain.Chat
+	Next     *SearchPosition
+}
+
+// SearchPosition is where the next page of a message search starts: below the
+// last message found. Telegram pages a search of one chat by that message's id
+// alone, and a search of every chat by its rate, its chat and its id, since
+// ids are counted per chat there. The zero position is the first page.
+type SearchPosition struct {
+	Rate int
+	Peer domain.Peer
+	ID   int
 }
 
 // SearchMessages asks Telegram which messages hold text: in the chat peer
 // names (in one topic of it when topicID is not zero), or in every chat of the
-// main list when peer is nil (#348).
-func (c *GotdClient) SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, limit int) (FoundMessages, error) {
+// main list when peer is nil (#348), from after down (#349).
+func (c *GotdClient) SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, after SearchPosition, limit int) (FoundMessages, error) {
 	api, err := c.acquireAPI()
 	if err != nil {
 		return FoundMessages{}, err
@@ -29,15 +41,15 @@ func (c *GotdClient) SearchMessages(ctx context.Context, peer *domain.Peer, topi
 		var res tg.MessagesMessagesClass
 		var err error
 		if peer == nil {
-			res, err = api.MessagesSearchGlobal(ctx, buildSearchGlobalRequest(text, limit))
+			res, err = api.MessagesSearchGlobal(ctx, buildSearchGlobalRequest(text, after, limit))
 		} else {
-			res, err = api.MessagesSearch(ctx, buildSearchRequest(peerToInput(*peer), topicID, text, limit))
+			res, err = api.MessagesSearch(ctx, buildSearchRequest(peerToInput(*peer), topicID, text, after, limit))
 		}
 		if err != nil {
 			c.log.Error("message search failed", zap.Bool("everywhere", peer == nil), zap.Error(err))
 			return err
 		}
-		found = parseFound(res)
+		found = parseFound(res, peer == nil)
 		for _, m := range found.Messages {
 			c.senderNames.put(m.SenderID, m.SenderName)
 		}
@@ -77,13 +89,15 @@ func (c *GotdClient) GetHistoryAround(ctx context.Context, peer domain.Peer, top
 	return msgs, err
 }
 
-// buildSearchRequest asks one chat, or one topic of it, for text.
-func buildSearchRequest(peer tg.InputPeerClass, topicID int, text string, limit int) *tg.MessagesSearchRequest {
+// buildSearchRequest asks one chat, or one topic of it, for text, from after
+// down.
+func buildSearchRequest(peer tg.InputPeerClass, topicID int, text string, after SearchPosition, limit int) *tg.MessagesSearchRequest {
 	req := &tg.MessagesSearchRequest{
-		Peer:   peer,
-		Q:      text,
-		Filter: &tg.InputMessagesFilterEmpty{},
-		Limit:  limit,
+		Peer:     peer,
+		Q:        text,
+		Filter:   &tg.InputMessagesFilterEmpty{},
+		OffsetID: after.ID,
+		Limit:    limit,
 	}
 	if topicID != 0 {
 		req.SetTopMsgID(topicID)
@@ -91,14 +105,21 @@ func buildSearchRequest(peer tg.InputPeerClass, topicID int, text string, limit 
 	return req
 }
 
-// buildSearchGlobalRequest asks every chat of the main list for text. The
-// folder is named: left out, Telegram searches the archive as well.
-func buildSearchGlobalRequest(text string, limit int) *tg.MessagesSearchGlobalRequest {
+// buildSearchGlobalRequest asks every chat of the main list for text, from
+// after down. The folder is named: left out, Telegram searches the archive as
+// well. The zero position names no chat, and Telegram takes the empty peer for
+// the first page.
+func buildSearchGlobalRequest(text string, after SearchPosition, limit int) *tg.MessagesSearchGlobalRequest {
 	req := &tg.MessagesSearchGlobalRequest{
 		Q:          text,
 		Filter:     &tg.InputMessagesFilterEmpty{},
+		OffsetRate: after.Rate,
 		OffsetPeer: &tg.InputPeerEmpty{},
+		OffsetID:   after.ID,
 		Limit:      limit,
+	}
+	if after.Peer.ID != 0 {
+		req.OffsetPeer = peerToInput(after.Peer)
 	}
 	req.SetFolderID(0)
 	return req
@@ -123,7 +144,7 @@ func buildAroundRepliesRequest(peer tg.InputPeerClass, topicID, id, limit int) *
 
 // parseFound is a search's answer: each message in the chat it was sent in,
 // newest first as Telegram sends them, and the chats those are.
-func parseFound(res tg.MessagesMessagesClass) FoundMessages {
+func parseFound(res tg.MessagesMessagesClass, everywhere bool) FoundMessages {
 	rawMsgs, rawUsers, rawChats, _ := unpackMessages(res)
 	msgs := convertMessages(rawMsgs, rawUsers, rawChats, func(raw tg.MessageClass) int64 {
 		return peerIDFromPeer(messagePeer(raw))
@@ -154,7 +175,35 @@ func parseFound(res tg.MessagesMessagesClass) FoundMessages {
 			chats = append(chats, chat)
 		}
 	}
-	return FoundMessages{Messages: msgs, Chats: chats}
+	return FoundMessages{Messages: msgs, Chats: chats, Next: nextSearchPosition(res, everywhere, msgs, chats)}
+}
+
+// nextSearchPosition is where the page after res starts: below its last
+// message, named by its chat's address and the rate Telegram gave. A search of
+// every chat is given a rate only while there is more.
+func nextSearchPosition(res tg.MessagesMessagesClass, everywhere bool, msgs []domain.Message, chats []domain.Chat) *SearchPosition {
+	if len(msgs) == 0 {
+		return nil
+	}
+	var rate int
+	switch page := res.(type) {
+	case *tg.MessagesMessagesSlice:
+		var more bool
+		if rate, more = page.GetNextRate(); everywhere && !more {
+			return nil
+		}
+	case *tg.MessagesChannelMessages:
+	default:
+		return nil
+	}
+	last := msgs[len(msgs)-1]
+	next := SearchPosition{Rate: rate, ID: last.ID}
+	for _, c := range chats {
+		if c.ID == last.ChatID {
+			next.Peer = c.Peer
+		}
+	}
+	return &next
 }
 
 // messagePeer is the chat a message was sent in.

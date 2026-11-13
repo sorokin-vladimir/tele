@@ -7,6 +7,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	internaltg "github.com/sorokin-vladimir/tele/internal/tg"
 )
 
 // What a NotFound from HistoryAround was about: a topic, or a message. Both
@@ -49,7 +50,7 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 		}
 		in = &peer
 	}
-	found, err := o.client.SearchMessages(ctx, in, scope.TopicID, text, limit)
+	found, err := o.client.SearchMessages(ctx, in, scope.TopicID, text, internaltg.SearchPosition{}, limit)
 	if err != nil {
 		return nil, err
 	}

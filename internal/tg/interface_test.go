@@ -69,7 +69,7 @@ func (m *mockClient) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat
 	return domain.Chat{ID: peer.ID, Peer: peer}, nil
 }
 
-func (m *mockClient) SearchMessages(_ context.Context, _ *domain.Peer, _ int, _ string, _ int) (internaltg.FoundMessages, error) {
+func (m *mockClient) SearchMessages(_ context.Context, _ *domain.Peer, _ int, _ string, _ internaltg.SearchPosition, _ int) (internaltg.FoundMessages, error) {
 	return internaltg.FoundMessages{}, nil
 }
 

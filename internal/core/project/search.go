@@ -28,8 +28,12 @@ type SearchPage struct {
 
 // FoundMessage is one message a search found, with the title of the chat it
 // was found in: a search of every chat finds messages in chats the client may
-// hold nothing of.
+// hold nothing of. Topic is the title of its topic in a forum, empty when the
+// owner holds no title for it; Private says the chat is one with a person,
+// whose own messages carry the chat's name as their sender's (#349).
 type FoundMessage struct {
 	Message domain.Message
 	Chat    string
+	Topic   string
+	Private bool
 }

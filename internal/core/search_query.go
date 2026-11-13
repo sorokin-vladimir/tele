@@ -71,16 +71,37 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 		o.state.RememberAddress(c.Peer)
 		chats[c.ID] = c
 	}
+	titles := map[int64]map[int]string{}
+	topicTitle := func(chatID int64, id int) string {
+		if id == domain.GeneralTopicID {
+			return "General"
+		}
+		held, ok := titles[chatID]
+		if !ok {
+			held = map[int]string{}
+			for _, t := range st.Topics(chatID) {
+				held[t.ID] = t.Title
+			}
+			titles[chatID] = held
+		}
+		return held[id]
+	}
 	out := make([]project.FoundMessage, 0, len(found.Messages))
 	for _, m := range found.Messages {
 		chat, known := chats[m.ChatID]
 		if held, ok := st.GetChat(m.ChatID); ok {
 			chat, known = held, true
 		}
+		f := project.FoundMessage{Chat: chat.Title}
 		if known {
 			m.TopicID = chat.HistoryOf(m).TopicID
+			f.Private = chat.Peer.Type == domain.PeerUser
 		}
-		out = append(out, project.FoundMessage{Message: m, Chat: chat.Title})
+		if m.TopicID != 0 {
+			f.Topic = topicTitle(m.ChatID, m.TopicID)
+		}
+		f.Message = m
+		out = append(out, f)
 	}
 	page := project.SearchPage{Found: out}
 	if n := found.Next; n != nil {

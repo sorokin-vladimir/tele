@@ -133,6 +133,36 @@ func TestSearchMessages_EverywhereKeepsTheAddressesFound(t *testing.T) {
 	assert.Equal(t, club.Peer, peer)
 }
 
+// A message found in a forum names its topic when the owner holds the topic,
+// General always; one in a private chat says so, since its sender alone does
+// not tell a message to Ada from one from her (#349).
+func TestSearchMessages_NamesTheTopicAndAPrivateChat(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverSearch{found: internaltg.FoundMessages{
+		Messages: []domain.Message{
+			{ID: 9, ChatID: 20, TopicID: 12},
+			{ID: 8, ChatID: 20},
+			{ID: 7, ChatID: 20, TopicID: 30},
+			{ID: 4, ChatID: 1},
+		},
+		Chats: []domain.Chat{club, adaChat},
+	}}
+	o, s := newOwnerWithClient(t, server)
+	s.Store().SetChat(club)
+	s.Store().SetTopicsPage(20, []domain.Topic{{ChatID: 20, ID: 12, Title: "Releases"}})
+
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{}, 30)
+
+	require.NoError(t, err)
+	require.Len(t, got.Found, 4)
+	assert.Equal(t, "Releases", got.Found[0].Topic)
+	assert.Equal(t, "General", got.Found[1].Topic, "General is named without being held")
+	assert.Empty(t, got.Found[2].Topic, "a topic the owner does not hold is not named")
+	assert.Empty(t, got.Found[3].Topic, "outside a forum there is no topic")
+	assert.False(t, got.Found[0].Private)
+	assert.True(t, got.Found[3].Private)
+}
+
 // A page names where the next one starts by the chat's id alone: the address
 // Telegram needs for it stays with the owner (#349).
 func TestSearchMessages_NamesTheNextPageWithNoAddress(t *testing.T) {

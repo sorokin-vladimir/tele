@@ -224,6 +224,34 @@ func TestApplyEdit_HiddenEditAppliesReactionsWithoutTheLabel(t *testing.T) {
 	assert.False(t, got.ShowsEdited(), "a hidden edit must not label the message edited")
 }
 
+func TestApplyEdit_ClearsUnreadWhenReadRemotely(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "hi"})
+	when := time.Now()
+
+	chg, ok := s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "hi", EditDate: &when, EditHidden: true,
+		Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
+		HasUnreadReactions: true,
+	})
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// Reactions read on another client: delivered as an edit with HasUnreadReactions false.
+	chg, ok = s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "hi", EditDate: &when, EditHidden: true,
+		Reactions:          []domain.Reaction{{Emoji: "👍", Count: 1}},
+		HasUnreadReactions: false,
+	})
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+}
+
 // An edit whose message has no reactions field says nothing about reactions,
 // so the set stays; one whose field is there but empty says there are none
 // (#248). A nil set is the first, an empty one the second.
@@ -277,6 +305,41 @@ func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
 	assert.False(t, chg.UnreadReactionChanged)
 	c, _ := st.GetChat(1)
 	assert.Equal(t, 1, c.UnreadReactionsCount)
+}
+
+func TestApplyReactions_ClearsUnreadWhenReadRemotely(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
+
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, true, "reactions update")
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	assert.True(t, chg.ReactionsUnread)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// Reactions read on another client: unread is false.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, false, "reactions update")
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	assert.False(t, chg.ReactionsUnread)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+
+	// Idempotent: repeating the read reaction update does not decrement further.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, false, "reactions update")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+
+	// An untracked message receiving a read reaction update changes nothing.
+	chg, ok = s.ApplyReactions(1, 999, []domain.Reaction{{Emoji: "👍", Count: 1}}, false, "reactions update")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
 }
 
 // The reaction trace (#248) names where a set came from: an edit and a

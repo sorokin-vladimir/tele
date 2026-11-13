@@ -68,8 +68,8 @@ func (s *State) ApplyEdit(msg domain.Message) (Change, bool) {
 		s.st.UpdateMessageReactions(msg.ChatID, msg.ID, msg.Reactions, "edit")
 	}
 	unreadChanged := false
-	if msg.HasUnreadReactions {
-		unreadChanged = s.st.ApplyUnreadReaction(msg.ChatID, msg.ID, true)
+	if msg.Reactions != nil {
+		unreadChanged = s.st.ApplyUnreadReaction(msg.ChatID, msg.ID, msg.HasUnreadReactions)
 	}
 	c := Change{
 		Kind:                  ChangeMessageEdited,
@@ -108,10 +108,7 @@ func (s *State) ApplyEditRestore(msg domain.Message) (Change, bool) {
 // from, for the reaction trace (#248).
 func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool, via string) (Change, bool) {
 	s.st.UpdateMessageReactions(chatID, msgID, r, via)
-	changed := false
-	if unread {
-		changed = s.st.ApplyUnreadReaction(chatID, msgID, true)
-	}
+	changed := s.st.ApplyUnreadReaction(chatID, msgID, unread)
 	c := Change{
 		Kind:                  ChangeMessageReactions,
 		ChatID:                chatID,

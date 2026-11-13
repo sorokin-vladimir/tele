@@ -17,12 +17,13 @@ import (
 type searchAsk struct {
 	scope project.SearchScope
 	text  string
+	after project.SearchPosition
 	limit int
 }
 
-func (f *fakeAccount) SearchMessages(_ context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
-	f.searched = append(f.searched, searchAsk{scope, text, limit})
-	return f.found, nil
+func (f *fakeAccount) SearchMessages(_ context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	f.searched = append(f.searched, searchAsk{scope, text, after, limit})
+	return project.SearchPage{Found: f.found}, nil
 }
 
 // With no chat named, a search looks in every chat (#348).

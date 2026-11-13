@@ -245,8 +245,8 @@ func (o *testOwner) HistoryAround(context.Context, domain.HistoryKey, int, int) 
 	return nil, nil
 }
 
-func (o *testOwner) SearchMessages(context.Context, project.SearchScope, string, int) ([]project.FoundMessage, error) {
-	return nil, nil
+func (o *testOwner) SearchMessages(context.Context, project.SearchScope, string, project.SearchPosition, int) (project.SearchPage, error) {
+	return project.SearchPage{}, nil
 }
 
 func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {

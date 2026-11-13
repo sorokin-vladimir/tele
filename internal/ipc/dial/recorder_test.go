@@ -209,9 +209,9 @@ func (r *recorder) HistoryAround(_ context.Context, h domain.HistoryKey, id, lim
 	err := r.took("HistoryAround", h, id, limit)
 	return result[[]domain.Message](r, "HistoryAround", 0), err
 }
-func (r *recorder) SearchMessages(_ context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
-	err := r.took("SearchMessages", scope, text, limit)
-	return result[[]project.FoundMessage](r, "SearchMessages", 0), err
+func (r *recorder) SearchMessages(_ context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	err := r.took("SearchMessages", scope, text, after, limit)
+	return result[project.SearchPage](r, "SearchMessages", 0), err
 }
 func (r *recorder) FolderFilters(_ context.Context) ([]domain.FolderFilter, error) {
 	err := r.took("FolderFilters")

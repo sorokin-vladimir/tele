@@ -172,8 +172,8 @@ func (a *Attachment) HistoryAround(ctx context.Context, h domain.HistoryKey, id,
 	return ask[[]domain.Message](a, ctx, "HistoryAround", h, id, limit)
 }
 
-func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
-	return ask[[]project.FoundMessage](a, ctx, "SearchMessages", scope, text, limit)
+func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	return ask[project.SearchPage](a, ctx, "SearchMessages", scope, text, after, limit)
 }
 
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {

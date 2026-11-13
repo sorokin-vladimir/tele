@@ -25,6 +25,7 @@ type serverSearch struct {
 	searchedTopic int
 	searchedText  string
 	searchedLimit int
+	searchedAfter internaltg.SearchPosition
 	searched      bool
 
 	aroundIn    domain.Peer
@@ -48,9 +49,10 @@ func (s *serverSearch) FetchChat(_ context.Context, peer domain.Peer) (domain.Ch
 	return c, nil
 }
 
-func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topicID int, text string, _ internaltg.SearchPosition, limit int) (internaltg.FoundMessages, error) {
+func (s *serverSearch) SearchMessages(_ context.Context, peer *domain.Peer, topicID int, text string, after internaltg.SearchPosition, limit int) (internaltg.FoundMessages, error) {
 	s.searched = true
 	s.searchedIn, s.searchedTopic, s.searchedText, s.searchedLimit = peer, topicID, text, limit
+	s.searchedAfter = after
 	return s.found, nil
 }
 
@@ -82,7 +84,7 @@ func TestSearchMessages_InAChatAsksThatChat(t *testing.T) {
 	}}
 	o := newSearchOwner(t, server, adaChat)
 
-	got, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 1}, "hello", 30)
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 1}, "hello", project.SearchPosition{}, 30)
 
 	require.NoError(t, err)
 	require.NotNil(t, server.searchedIn)
@@ -90,9 +92,10 @@ func TestSearchMessages_InAChatAsksThatChat(t *testing.T) {
 	assert.Equal(t, 0, server.searchedTopic)
 	assert.Equal(t, "hello", server.searchedText)
 	assert.Equal(t, 30, server.searchedLimit)
-	require.Len(t, got, 1)
-	assert.Equal(t, 7, got[0].Message.ID)
-	assert.Equal(t, "Ada", got[0].Chat)
+	require.Len(t, got.Found, 1)
+	assert.Equal(t, 7, got.Found[0].Message.ID)
+	assert.Equal(t, "Ada", got.Found[0].Chat)
+	assert.Nil(t, got.Next, "Telegram named no next page")
 }
 
 // A search of one topic names it.
@@ -101,7 +104,7 @@ func TestSearchMessages_InATopicNamesIt(t *testing.T) {
 	forum := domain.Chat{ID: 2, Title: "Club", IsForum: true, Peer: domain.Peer{ID: 2, Type: domain.PeerSuperGroup}}
 	o := newSearchOwner(t, server, forum)
 
-	_, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 2, TopicID: 12}, "hello", 30)
+	_, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 2, TopicID: 12}, "hello", project.SearchPosition{}, 30)
 
 	require.NoError(t, err)
 	assert.Equal(t, 12, server.searchedTopic)
@@ -118,16 +121,66 @@ func TestSearchMessages_EverywhereKeepsTheAddressesFound(t *testing.T) {
 	}}
 	o := newSearchOwner(t, server, adaChat)
 
-	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", 30)
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{}, 30)
 
 	require.NoError(t, err)
 	assert.True(t, server.searched)
 	assert.Nil(t, server.searchedIn, "every chat is asked with no chat named")
-	require.Len(t, got, 2)
-	assert.Equal(t, []string{"Club", "Ada"}, []string{got[0].Chat, got[1].Chat}, "newest first, as Telegram answered")
+	require.Len(t, got.Found, 2)
+	assert.Equal(t, []string{"Club", "Ada"}, []string{got.Found[0].Chat, got.Found[1].Chat}, "newest first, as Telegram answered")
 	peer, err := o.peer(20)
 	require.NoError(t, err)
 	assert.Equal(t, club.Peer, peer)
+}
+
+// A page names where the next one starts by the chat's id alone: the address
+// Telegram needs for it stays with the owner (#349).
+func TestSearchMessages_NamesTheNextPageWithNoAddress(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverSearch{found: internaltg.FoundMessages{
+		Messages: []domain.Message{{ID: 9, ChatID: 20}},
+		Chats:    []domain.Chat{club},
+		Next:     &internaltg.SearchPosition{Rate: 1731500000, Peer: club.Peer, ID: 9},
+	}}
+	o := newSearchOwner(t, server)
+
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{}, 30)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.Next)
+	assert.Equal(t, project.SearchPosition{Rate: 1731500000, ChatID: 20, ID: 9}, *got.Next)
+}
+
+// The next page is asked from where the last one ended, with the address of
+// the chat it names put back: the one the page before was found in (#349).
+func TestSearchMessages_TheNextPageIsAskedWithTheChatsAddress(t *testing.T) {
+	club := domain.Chat{ID: 20, Title: "Club", Peer: domain.Peer{ID: 20, Type: domain.PeerSuperGroup, AccessHash: 200}}
+	server := &serverSearch{found: internaltg.FoundMessages{
+		Messages: []domain.Message{{ID: 9, ChatID: 20}},
+		Chats:    []domain.Chat{club},
+		Next:     &internaltg.SearchPosition{Rate: 1731500000, Peer: club.Peer, ID: 9},
+	}}
+	o := newSearchOwner(t, server)
+	first, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{}, 30)
+	require.NoError(t, err)
+	require.NotNil(t, first.Next)
+
+	_, err = o.SearchMessages(context.Background(), project.SearchScope{}, "hello", *first.Next, 30)
+
+	require.NoError(t, err)
+	assert.Equal(t, internaltg.SearchPosition{Rate: 1731500000, Peer: club.Peer, ID: 9}, server.searchedAfter)
+}
+
+// A next page naming a chat the owner cannot address is not asked: asked with
+// no address, Telegram would answer the first page again.
+func TestSearchMessages_ANextPageInAChatNobodyHoldsIsNotFound(t *testing.T) {
+	server := &serverSearch{}
+	o := newSearchOwner(t, server)
+
+	_, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{Rate: 5, ChatID: 99, ID: 9}, 30)
+
+	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
+	assert.False(t, server.searched)
 }
 
 // A chat the owner cannot address is not searched at all.
@@ -135,7 +188,7 @@ func TestSearchMessages_AChatNobodyHoldsIsNotFound(t *testing.T) {
 	server := &serverSearch{}
 	o := newSearchOwner(t, server)
 
-	_, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 99}, "hello", 30)
+	_, err := o.SearchMessages(context.Background(), project.SearchScope{ChatID: 99}, "hello", project.SearchPosition{}, 30)
 
 	assert.Equal(t, telerr.PeerNotFound, telerr.Of(err))
 	assert.False(t, server.searched)
@@ -292,11 +345,11 @@ func TestSearchMessages_AMessageInGeneralIsInGeneral(t *testing.T) {
 	}}
 	o := newSearchOwner(t, server, adaChat)
 
-	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", 30)
+	got, err := o.SearchMessages(context.Background(), project.SearchScope{}, "hello", project.SearchPosition{}, 30)
 
 	require.NoError(t, err)
-	require.Len(t, got, 3)
-	assert.Equal(t, domain.GeneralTopicID, got[0].Message.TopicID)
-	assert.Equal(t, 12, got[1].Message.TopicID)
-	assert.Equal(t, 0, got[2].Message.TopicID, "outside a forum there is no topic")
+	require.Len(t, got.Found, 3)
+	assert.Equal(t, domain.GeneralTopicID, got.Found[0].Message.TopicID)
+	assert.Equal(t, 12, got.Found[1].Message.TopicID)
+	assert.Equal(t, 0, got.Found[2].Message.TopicID, "outside a forum there is no topic")
 }

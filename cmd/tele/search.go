@@ -76,10 +76,11 @@ func searchMessages(ctx context.Context, a heldAccount, out io.Writer, text stri
 		}
 		scope = project.SearchScope{ChatID: row.ID, TopicID: q.topic}
 	}
-	found, err := a.SearchMessages(ctx, scope, text, q.limit)
+	page, err := a.SearchMessages(ctx, scope, text, project.SearchPosition{}, q.limit)
 	if err != nil {
 		return err
 	}
+	found := page.Found
 	if q.asJSON {
 		return searchJSON(out, found, a.me)
 	}

@@ -256,7 +256,7 @@ func TestCommandsRead_ACommandReadsAndWritesNothing(t *testing.T) {
 // (#348).
 func TestCommandAccess_SearchAndAroundAreReads(t *testing.T) {
 	calls := map[string][]any{
-		"SearchMessages": {project.SearchScope{}, "hello", 5},
+		"SearchMessages": {project.SearchScope{}, "hello", project.SearchPosition{}, 5},
 		"HistoryAround":  {domain.HistoryKey{ChatID: 1}, 50, 5},
 	}
 	answer := func(c rawClient, id uint64, method string) wire.Frame {

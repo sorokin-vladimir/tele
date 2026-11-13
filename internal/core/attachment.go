@@ -421,9 +421,9 @@ func (a *Attachment) HistoryAround(ctx context.Context, h domain.HistoryKey, id,
 	})
 }
 
-func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
-	return call(a, ctx, func(ctx context.Context, s *seat) ([]project.FoundMessage, error) {
-		return s.SearchMessages(ctx, scope, text, limit)
+func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (project.SearchPage, error) {
+		return s.SearchMessages(ctx, scope, text, after, limit)
 	})
 }
 

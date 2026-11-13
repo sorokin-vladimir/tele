@@ -41,18 +41,29 @@ func IsNoMessage(err error) bool {
 // A message in a forum's General names no topic, which is how Telegram names
 // General; the answer names General outright, so a client can read it next
 // by its topic.
-func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error) {
+//
+// The page names where the next one starts by the chat's id alone, and the
+// owner puts the address back when it is asked for that page (#349).
+func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
 	var in *domain.Peer
 	if scope.ChatID != 0 {
 		peer, err := o.peer(scope.ChatID)
 		if err != nil {
-			return nil, err
+			return project.SearchPage{}, err
 		}
 		in = &peer
 	}
-	found, err := o.client.SearchMessages(ctx, in, scope.TopicID, text, internaltg.SearchPosition{}, limit)
+	from := internaltg.SearchPosition{Rate: after.Rate, ID: after.ID}
+	if after.ChatID != 0 {
+		peer, err := o.peer(after.ChatID)
+		if err != nil {
+			return project.SearchPage{}, err
+		}
+		from.Peer = peer
+	}
+	found, err := o.client.SearchMessages(ctx, in, scope.TopicID, text, from, limit)
 	if err != nil {
-		return nil, err
+		return project.SearchPage{}, err
 	}
 	st := o.state.Store()
 	chats := make(map[int64]domain.Chat, len(found.Chats))
@@ -71,7 +82,11 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 		}
 		out = append(out, project.FoundMessage{Message: m, Chat: chat.Title})
 	}
-	return out, nil
+	page := project.SearchPage{Found: out}
+	if n := found.Next; n != nil {
+		page.Next = &project.SearchPosition{Rate: n.Rate, ChatID: n.Peer.ID, ID: n.ID}
+	}
+	return page, nil
 }
 
 // HistoryAround answers with up to limit messages of history h around id,

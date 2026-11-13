@@ -99,8 +99,9 @@ type Surface interface {
 	// not there is NotFound (#348).
 	HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error)
 	// SearchMessages asks Telegram which messages hold a text within a scope,
-	// newest first (#348).
-	SearchMessages(ctx context.Context, scope project.SearchScope, text string, limit int) ([]project.FoundMessage, error)
+	// newest first (#348), one page from after down, and where the next page
+	// starts (#349).
+	SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error)
 	FolderFilters(ctx context.Context) ([]domain.FolderFilter, error)
 	GetParticipants(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
 	// KnownUser answers from what the owner already holds, without asking

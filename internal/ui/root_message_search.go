@@ -122,6 +122,7 @@ func (m RootModel) handleMessageSearchJump(j screens.MessageSearchJump) (RootMod
 		return m, nil
 	}
 	var cmd tea.Cmd
+	m.openAtMsg = msg.ID
 	if h.TopicID != 0 {
 		m.chatList.SetActiveByID(h.ChatID)
 		m = m.enterForum(h.ChatID, j.Found.Chat)
@@ -130,7 +131,7 @@ func (m RootModel) handleMessageSearchJump(j screens.MessageSearchJump) (RootMod
 		m = m.leaveForum()
 		m, cmd = m.openHistory(h, j.Found.Chat)
 	}
-	m.jumpToMessage(msg.ID)
+	m.openAtMsg = 0
 	return m, cmd
 }
 

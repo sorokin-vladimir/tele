@@ -77,6 +77,9 @@ type RootModel struct {
 	// it was, to go back to if the message turns out to be gone.
 	jumpTo     int
 	beforeJump project.HistoryWindow
+	// openAtMsg is the message the next history opened is opened on, read
+	// and cleared by subscribeChat; zero opens it at its first unread.
+	openAtMsg int
 	// farNew is what the owner counts as landed at the tail while the window
 	// is on a run far back. belowNew is what this client counts as arrived
 	// below the screen while the window is on the tail run but scrolled up,

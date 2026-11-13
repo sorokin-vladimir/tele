@@ -125,13 +125,13 @@ func TestRoot_MessageSearch_AResultOpensAtTheMessage(t *testing.T) {
 
 	there := jumpTo(t, m, project.FoundMessage{Chat: "Bob", Private: true, Message: domain.Message{ID: 77, ChatID: 2}})
 	assert.Equal(t, int64(2), there.CurrentChatID())
-	w, _ = o.lastChatWindow()
+	w = o.lastSubscribedHistory()
 	assert.Equal(t, domain.HistoryKey{ChatID: 2}, domain.HistoryKey{ChatID: w.ChatID, TopicID: w.TopicID})
 	assert.Equal(t, project.Anchor{Kind: project.AnchorMessage, MsgID: 77}, w.Anchor)
 
 	topic := jumpTo(t, m, project.FoundMessage{Chat: "Go Club", Topic: "Releases", Message: domain.Message{ID: 90, ChatID: 20, TopicID: 12}})
 	assert.Equal(t, int64(20), topic.CurrentChatID())
-	w, _ = o.lastChatWindow()
+	w = o.lastSubscribedHistory()
 	assert.Equal(t, domain.HistoryKey{ChatID: 20, TopicID: 12}, domain.HistoryKey{ChatID: w.ChatID, TopicID: w.TopicID})
 	assert.Equal(t, project.Anchor{Kind: project.AnchorMessage, MsgID: 90}, w.Anchor)
 }
@@ -217,6 +217,31 @@ func TestRoot_MessageSearch_FollowsTheScreenSize(t *testing.T) {
 
 	lines := strings.Split(windowTitle(t, m), "\n")
 	assert.Equal(t, 46, ansi.StringWidth(lines[0]), "four columns narrower than the screen")
+}
+
+// A chat opened by a result opens at the message, even with history stored up
+// to its first unread: the window is the message's from the start, not one at
+// the first unread moved afterwards, whose opening page would pull it back
+// (#349).
+func TestRoot_MessageSearch_AnotherChatOpensAtTheMessageNotItsFirstUnread(t *testing.T) {
+	m, st := newRootWithOpenChat(t)
+	st.SetChat(domain.Chat{ID: 2, Title: "Bob", Peer: domain.Peer{ID: 2, Type: domain.PeerUser}, UnreadCount: 2, ReadInboxMaxID: 98})
+	for id := 1; id <= 100; id++ {
+		st.AppendMessage(domain.Message{ID: id, ChatID: 2, SenderName: "Bob", Text: "hi", Date: time.Now()})
+	}
+	o := ownerOf(t, m)
+	m, _ = key(m, "/")
+
+	m = jumpTo(t, m, project.FoundMessage{Chat: "Bob", Private: true, Message: domain.Message{ID: 40, ChatID: 2}})
+
+	assert.Equal(t, int64(2), m.CurrentChatID())
+	if w, ok := o.lastChatWindow(); ok && w.ChatID == 2 {
+		// A run reaching the tail pins the window on the message it stands on.
+		assert.Equal(t, 40, w.Anchor.MsgID, "the window was not pulled back to the first unread")
+	}
+	sub := o.lastSubscribedHistory()
+	assert.Equal(t, project.Anchor{Kind: project.AnchorMessage, MsgID: 40}, sub.Anchor, "subscribed at the message")
+	assert.Equal(t, 40, m.Chat().HighlightedMsgID(), "the message is highlighted")
 }
 
 // Esc closes the window and cancels a question in flight.

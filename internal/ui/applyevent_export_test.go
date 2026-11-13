@@ -38,6 +38,8 @@ type testOwner struct {
 	// moves records the windows the client asked for, so a test can assert that
 	// scrolling repositions a window rather than fetching anything itself.
 	moves []project.Window
+	// subscribed records the windows the client subscribed to, in order.
+	subscribed []project.Window
 	// lastSub is the last subscription id handed out: ids are the client's to
 	// choose and are never reused (#309).
 	lastSub project.SubID
@@ -141,6 +143,7 @@ func (o *testOwner) enqueue(d project.Delta) bool {
 }
 
 func (o *testOwner) Subscribe(w project.Window) project.SubID {
+	o.subscribed = append(o.subscribed, w)
 	o.lastSub++
 	o.reg.Subscribe(o.lastSub, w)
 	if _, ok := w.(project.AccountWindow); ok {
@@ -172,6 +175,17 @@ func (o *testOwner) lastChatWindow() (project.HistoryWindow, bool) {
 		}
 	}
 	return project.HistoryWindow{}, false
+}
+
+// lastSubscribedHistory returns the most recent history window the client
+// subscribed to.
+func (o *testOwner) lastSubscribedHistory() project.HistoryWindow {
+	for i := len(o.subscribed) - 1; i >= 0; i-- {
+		if w, ok := o.subscribed[i].(project.HistoryWindow); ok {
+			return w
+		}
+	}
+	return project.HistoryWindow{}
 }
 
 // lastChatListWindow returns the most recent chatlist window the client asked for.

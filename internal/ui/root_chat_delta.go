@@ -33,6 +33,16 @@ func (m *RootModel) subscribeChat(h domain.HistoryKey) {
 		Before:  m.historyLimit,
 		After:   0,
 	}
+	if id := m.openAtMsg; id != 0 {
+		// Opened on a message: the window is the message's from the start. A
+		// window at the first unread moved onto it afterwards would be pulled
+		// back by its own opening page, which reaches the tail (#349).
+		m.openAtMsg = 0
+		m.beforeJump = m.chatWindow
+		half := m.historyLimit / 2
+		m.chatWindow = m.chatWindowAt(project.Anchor{Kind: project.AnchorMessage, MsgID: id}, half, half)
+		m.jumpTo = id
+	}
 	m.chatSub = m.owner.Subscribe(m.chatWindow)
 }
 

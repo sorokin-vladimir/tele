@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-11-13
+
 ### Added
 
 - `tele search TEXT` asks Telegram which messages hold a text, over the

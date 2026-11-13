@@ -10,6 +10,8 @@
 | `q` / `Ctrl+Q` / `Ctrl+C` | Quit            |
 | `?`                       | Keyboard shortcuts |
 | `,`                       | Settings        |
+| `/`                       | Search chats (in the chat pane, `/` searches its messages) |
+| `g /`                     | Search the messages of every chat |
 | `g L`                     | Log out         |
 
 `g L` asks first, naming what goes with the account: the session, the local history, cached media and avatars, and any messages still waiting to be sent.
@@ -51,6 +53,7 @@ The chat list keys move through them.
 | `Ctrl+K` / `↑` | Scroll up                 |
 | `gg`      | Scroll to top                  |
 | `G`       | Scroll to bottom; far back after a jump, back to the newest messages |
+| `/`       | Search this chat's messages, or this topic's in a forum |
 | `i` / `a` | Compose message (insert mode)  |
 | `r`       | Reply to message               |
 | `t`       | React to message               |
@@ -76,6 +79,29 @@ A message that could not be sent stays in the chat, marked `✕` in its bottom b
 From there, moving up or down loads more history, until it meets the newest messages.
 Whenever you are scrolled up, far back or not, messages from others that arrive below the screen are counted at the bottom, as `↓ 3 new · G`, and stay unread until you reach them; `G` takes you there.
 When the original was deleted, the chat opens where it was and the status bar says "This message is gone".
+
+## Message search
+
+`/` in the chat pane opens a window that asks Telegram which messages hold a text, in the open chat (in a forum, the open topic).
+`g /` opens it on every chat of the main list.
+The answer covers the whole history, not only what tele has stored.
+
+| Key            | Action                                                        |
+| -------------- | ------------------------------------------------------------- |
+| typing         | Edit the query                                                |
+| `Enter`        | Search for the query; once it is searched, open the selected result |
+| `↓` / `Ctrl+J` | Next result                                                   |
+| `↑` / `Ctrl+K` | Previous result                                               |
+| `Tab`          | Switch between the open chat and every chat                   |
+| `Esc`          | Close                                                         |
+
+The query goes to Telegram on `Enter`, not as you type: each search counts against Telegram's rate limit.
+`Tab` with a query already searched searches it in the other scope at once.
+More results load as you get near the end of the list.
+`Enter` on a result opens its chat (in a forum, its topic) at the message, highlighted.
+
+The window remembers its query, results and selection: for a chat until you open another chat, for every chat until you quit.
+Opened again, the query is selected: typing replaces it, `Backspace` clears it, `→` or `End` keeps it to edit, and `Enter` opens the selected result.
 
 ## Compose (insert mode)
 
@@ -148,6 +174,10 @@ These are the action names usable as YAML keys in the `keybindings:` section (gr
 | `focus_next`    | Focus the next pane        |
 | `quit`          | Quit the app               |
 | `log_out`       | Log out of this account    |
+| `chat_search`   | Find a chat by name        |
+| `message_search_all` | Search the messages of every chat |
+
+> `chat_search` used to be called `search`, and a config that binds `search` keeps working.
 
 > With `ui.confirm_quit` on, every quit binding asks first: `y` or `enter` quits, `n`, `esc` or `q` cancels, and a modifier quit binding (`ctrl+c`, `ctrl+q`) pressed again quits without asking.
 
@@ -171,7 +201,7 @@ These are the action names usable as YAML keys in the `keybindings:` section (gr
 | ------------------- | ---------------------------------------- |
 | `insert`            | Enter insert mode (focus the composer)   |
 | `normal`            | Leave insert mode / close the chat       |
-| `search`            | Open chat search                         |
+| `message_search`    | Search the open chat's messages          |
 | `open_context_menu` | Open the message context menu            |
 | `open_in_viewer`    | Open / view the selected media: photo in the OS viewer, video inline or in the system player |
 | `open_external`     | Open the selected video in the external player |
@@ -198,6 +228,14 @@ These are the action names usable as YAML keys in the `keybindings:` section (gr
 | `delete_me`        | Delete only for me                    |
 | `jump_to_original` | Jump to the original (replied-to) message |
 | `show_profile`     | Show the message author's profile     |
+
+### Search windows - context `search`
+
+| Action         | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `confirm`      | Search, or open the selected result                  |
+| `cancel`       | Close the window                                     |
+| `toggle_scope` | Switch a message search between the open chat and every chat |
 
 ### Composer - context `composer`
 

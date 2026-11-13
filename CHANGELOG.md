@@ -25,6 +25,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - Scrolled up in a chat, messages from others that arrive below the screen
   are counted at the bottom, as `↓ 3 new · G`, and `G` goes down to them
   (#347).
+- Message search in a window: `/` in the chat pane asks Telegram which
+  messages of the open chat (or topic) hold a text, `g /` asks every chat,
+  and `Tab` switches between the two. Results show who wrote each message,
+  when, and where the text is; `Enter` opens the chat at the message. More
+  results load as you scroll, and the window remembers its last search
+  (#349).
 
 ### Changed
 
@@ -44,6 +50,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 - A new message toast stays for 8 seconds instead of 5, so it is still there
   to open the chat after a click on the desktop notification brought the
   terminal forward.
+- `/` in the chat pane searches the chat's messages; elsewhere it still
+  finds a chat. The key action for finding a chat is now `chat_search`, and
+  a config that binds `search` keeps working (#349).
+- In the chat search, the forward picker, the menus and the file picker the
+  cursor walks to the second-to-last row before the list scrolls, instead of
+  staying in the middle.
 
 ### Fixed
 

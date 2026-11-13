@@ -68,6 +68,9 @@ func DefaultKeyMap() KeyMap {
 			"?":      ActionShowHelp,
 			",":      ActionShowSettings,
 			"g L":    ActionLogOut,
+			// The chat pane binds / to its own search, which wins there (#132).
+			"/":   ActionChatSearch,
+			"g /": ActionMessageSearchAll,
 		},
 		ContextFolders: {
 			"j":     ActionDown,
@@ -84,7 +87,6 @@ func DefaultKeyMap() KeyMap {
 			"G":      ActionGoBottom,
 			"g g":    ActionGoTop,
 			"enter":  ActionConfirm,
-			"/":      ActionSearch,
 			"ctrl+d": ActionScrollHalfDown,
 			"ctrl+u": ActionScrollHalfUp,
 			"space":  ActionOpenContextMenu,
@@ -108,7 +110,7 @@ func DefaultKeyMap() KeyMap {
 			"a":      ActionInsert,
 			"esc":    ActionNormal,
 			"enter":  ActionConfirm,
-			"/":      ActionSearch,
+			"/":      ActionMessageSearch,
 			"space":  ActionOpenContextMenu,
 			"r":      ActionReply,
 			"e":      ActionEdit,
@@ -190,6 +192,7 @@ func DefaultKeyMap() KeyMap {
 			"ctrl+j": ActionDown,
 			"up":     ActionUp,
 			"ctrl+k": ActionUp,
+			"tab":    ActionToggleScope,
 		},
 		// ContextProfile is the profile overlay's own context. It borrows the
 		// menus' letters where the action is the same one: m mutes, y copies.

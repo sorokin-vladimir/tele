@@ -594,6 +594,39 @@ func TestRoot_SlashKey_ActivatesSearch(t *testing.T) {
 	assert.True(t, root.SearchActive())
 }
 
+// Finding a chat follows its binding: rebound, the new key opens it and / no
+// longer does (#349).
+func TestRoot_ChatSearch_FollowsItsBinding(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"global": {"chat_search": {"F"}},
+	})
+	require.Empty(t, warns)
+	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain).WithKeyMap(km)
+
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	assert.False(t, newM.(ui.RootModel).SearchActive(), "/ is no longer bound")
+
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'F', Text: "F"})
+	assert.True(t, newM.(ui.RootModel).SearchActive())
+}
+
+// A config that binds search, the name chat_search had before, keeps its key
+// (#349).
+func TestRoot_ChatSearch_TheOldNameStillOpensIt(t *testing.T) {
+	st := store.NewMemory()
+	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"chatlist": {"search": {"s"}},
+	})
+	require.Empty(t, warns)
+	m := newRoot(st, 50, false).WithScreen(ui.ScreenMain).WithKeyMap(km)
+
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	assert.True(t, newM.(ui.RootModel).SearchActive())
+}
+
 func TestRoot_CloseSearchMsg_DeactivatesSearch(t *testing.T) {
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: 1, Title: "Alice"})
@@ -1622,8 +1655,10 @@ func TestRoot_PasteMsg_WhenComposerFocused_InsertsText(t *testing.T) {
 
 func TestRoot_PasteMsg_WhenSearchOpen_UpdatesQuery(t *testing.T) {
 	m, _ := newRootWithOpenChat(t)
-	// open search
-	newM, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	// / finds a chat from the chat list; in the chat pane it searches messages.
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	m = newM.(ui.RootModel)
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	m = newM.(ui.RootModel)
 	require.True(t, m.SearchActive())
 

@@ -276,7 +276,7 @@ func (sb *StatusBar) profile() []footerItem {
 		return []footerItem{
 			{kind: fiNav, ctx: keys.ContextChatList, down: keys.ActionDown, up: keys.ActionUp},
 			{kind: fiSingle, ctx: keys.ContextChatList, action: keys.ActionConfirm},
-			{kind: fiSingle, ctx: keys.ContextChatList, action: keys.ActionSearch},
+			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionChatSearch},
 			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
 		}
 	}

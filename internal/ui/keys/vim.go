@@ -11,21 +11,34 @@ const (
 type Action string
 
 const (
-	ActionNone            Action = ""
-	ActionUp              Action = "up"
-	ActionDown            Action = "down"
-	ActionLeft            Action = "left"
-	ActionRight           Action = "right"
-	ActionGoTop           Action = "go_top"
-	ActionGoBottom        Action = "go_bottom"
-	ActionScrollHalfDown  Action = "scroll_half_down"
-	ActionScrollHalfUp    Action = "scroll_half_up"
-	ActionCursorUp        Action = "cursor_up"
-	ActionCursorDown      Action = "cursor_down"
-	ActionInsert          Action = "insert"
-	ActionNormal          Action = "normal"
-	ActionConfirm         Action = "confirm"
-	ActionSearch          Action = "search"
+	ActionNone           Action = ""
+	ActionUp             Action = "up"
+	ActionDown           Action = "down"
+	ActionLeft           Action = "left"
+	ActionRight          Action = "right"
+	ActionGoTop          Action = "go_top"
+	ActionGoBottom       Action = "go_bottom"
+	ActionScrollHalfDown Action = "scroll_half_down"
+	ActionScrollHalfUp   Action = "scroll_half_up"
+	ActionCursorUp       Action = "cursor_up"
+	ActionCursorDown     Action = "cursor_down"
+	ActionInsert         Action = "insert"
+	ActionNormal         Action = "normal"
+	ActionConfirm        Action = "confirm"
+	// ActionChatSearch finds a chat by its name.
+	ActionChatSearch Action = "chat_search"
+	// ActionSearch is what ActionChatSearch used to be called, before tele
+	// searched messages too. It does the same thing and is kept because
+	// people have it bound in their configs (#349).
+	ActionSearch Action = "search"
+	// ActionMessageSearch searches the open chat's messages, or the open
+	// topic's in a forum (#349).
+	ActionMessageSearch Action = "message_search"
+	// ActionMessageSearchAll searches the messages of every chat (#349).
+	ActionMessageSearchAll Action = "message_search_all"
+	// ActionToggleScope switches a message search between the open chat and
+	// every chat (#349).
+	ActionToggleScope     Action = "toggle_scope"
 	ActionOpenInViewer    Action = "open_in_viewer"
 	ActionOpenExternal    Action = "open_external"
 	ActionOpenContextMenu Action = "open_context_menu"

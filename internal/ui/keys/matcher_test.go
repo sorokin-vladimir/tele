@@ -112,7 +112,7 @@ func TestMatcher_DefaultChatBindings(t *testing.T) {
 		"a":      keys.ActionInsert,
 		"esc":    keys.ActionNormal,
 		"enter":  keys.ActionConfirm,
-		"/":      keys.ActionSearch,
+		"/":      keys.ActionMessageSearch,
 		"space":  keys.ActionOpenContextMenu,
 		"r":      keys.ActionReply,
 		"e":      keys.ActionEdit,

@@ -94,6 +94,23 @@ func TestMergeOverrides_GlobalActionsAreBindable(t *testing.T) {
 	assert.Equal(t, keys.ActionFocusChat, merged.Resolve(keys.ContextGlobal, "3"))
 }
 
+// The searches are bindable, and so is search, the name chat_search had before
+// tele searched messages: a config written then keeps its key (#349).
+func TestMergeOverrides_SearchesAreBindable(t *testing.T) {
+	merged, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"global":   {"chat_search": {"F"}, "message_search_all": {"g s"}},
+		"chat":     {"message_search": {"S"}},
+		"chatlist": {"search": {"s"}},
+		"search":   {"toggle_scope": {"ctrl+t"}},
+	})
+	assert.Empty(t, warns)
+	assert.Equal(t, keys.ActionChatSearch, merged.Resolve(keys.ContextGlobal, "F"))
+	assert.Equal(t, keys.ActionMessageSearchAll, merged.Resolve(keys.ContextGlobal, "g s"))
+	assert.Equal(t, keys.ActionMessageSearch, merged.Resolve(keys.ContextChat, "S"))
+	assert.Equal(t, keys.ActionSearch, merged.Resolve(keys.ContextChatList, "s"))
+	assert.Equal(t, keys.ActionToggleScope, merged.Resolve(keys.ContextSearch, "ctrl+t"))
+}
+
 func TestMergeOverrides_UnhandledLeftRightRejected(t *testing.T) {
 	_, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
 		"chat": {"left": {"H"}},

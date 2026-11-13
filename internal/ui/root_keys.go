@@ -67,6 +67,12 @@ func (m RootModel) globalAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	case keys.ActionReloadConfig, keys.ActionReloadThemes:
 		next, cmd := m.reloadFromDisk()
 		return next, cmd, true
+	case keys.ActionChatSearch, keys.ActionSearch:
+		next, cmd := m.openSearch()
+		return next, cmd, true
+	case keys.ActionMessageSearch, keys.ActionMessageSearchAll:
+		// Taken here so the key goes nowhere else; the window comes with #349.
+		return m, nil, true
 	}
 	return m, nil, false
 }
@@ -236,10 +242,6 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if next, cmd, ok := m.globalAction(m.keyMap.Resolve(keys.ContextGlobal, keyStr)); ok {
 			return next, cmd
 		}
-	}
-
-	if keyStr == "/" {
-		return m.openSearch()
 	}
 
 	if m.focus == FocusFolders {

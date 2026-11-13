@@ -224,8 +224,8 @@ func TestSettings_ListsEveryBindingNotOnlyTheOverridden(t *testing.T) {
 
 	assert.Contains(t, find(t, m, "keybindings.global"), "keybindings.global")
 	assert.Contains(t, find(t, m, "  quit"), "q")
+	assert.Contains(t, find(t, m, "  chat_search"), "/")
 	assert.Contains(t, find(t, m, "keybindings.chatlist"), "keybindings.chatlist")
-	assert.Contains(t, find(t, m, "  search"), "/")
 	assert.Contains(t, find(t, m, "  reply"), "r")
 }
 

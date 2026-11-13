@@ -47,6 +47,19 @@ func TestDefaultKeyMap_ContextSearch(t *testing.T) {
 	assert.Equal(t, keys.ActionUp, km.Resolve(keys.ContextSearch, "ctrl+k"))
 }
 
+// `/` finds a chat by name everywhere but the chat pane, where it searches the
+// open chat's messages; `g /` searches every chat's messages from anywhere, and
+// Tab in a search window switches where it looks (#349).
+func TestDefaultKeyMap_Searches(t *testing.T) {
+	km := keys.DefaultKeyMap()
+	assert.Equal(t, keys.ActionChatSearch, km.Resolve(keys.ContextGlobal, "/"))
+	assert.Equal(t, keys.ActionChatSearch, km.Resolve(keys.ContextChatList, "/"), "the chat list takes / from global")
+	assert.Equal(t, keys.ActionChatSearch, km.Resolve(keys.ContextFolders, "/"), "the folders take / from global")
+	assert.Equal(t, keys.ActionMessageSearch, km.Resolve(keys.ContextChat, "/"))
+	assert.Equal(t, keys.ActionMessageSearchAll, km.Resolve(keys.ContextGlobal, "g /"))
+	assert.Equal(t, keys.ActionToggleScope, km.Resolve(keys.ContextSearch, "tab"))
+}
+
 func TestDefaultKeyMap_ContextComposer(t *testing.T) {
 	km := keys.DefaultKeyMap()
 	assert.Equal(t, keys.ActionConfirm, km.Resolve(keys.ContextComposer, "enter"))

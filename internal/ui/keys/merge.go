@@ -22,7 +22,9 @@ func KnownActions() map[Action]bool {
 		ActionCursorUp: true, ActionCursorDown: true,
 		// Chat / editing.
 		ActionInsert: true, ActionNormal: true, ActionConfirm: true,
-		ActionSearch: true, ActionOpenInViewer: true, ActionOpenExternal: true, ActionOpenContextMenu: true,
+		ActionChatSearch: true, ActionSearch: true,
+		ActionMessageSearch: true, ActionMessageSearchAll: true, ActionToggleScope: true,
+		ActionOpenInViewer: true, ActionOpenExternal: true, ActionOpenContextMenu: true,
 		ActionCancel: true, ActionReply: true, ActionReact: true, ActionEdit: true,
 		ActionForward: true,
 		ActionDelete:  true, ActionDeleteRevoke: true, ActionDeleteMe: true,

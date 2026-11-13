@@ -175,61 +175,11 @@ func body(m domain.Message) string {
 	if m.Media == nil {
 		return m.Text
 	}
-	label := "[" + mediaLabel(*m.Media) + "]"
+	label := "[" + m.Media.Label() + "]"
 	if m.Text == "" {
 		return label
 	}
 	return label + " " + m.Text
-}
-
-// mediaLabel names a piece of media and what it says about itself, without
-// fetching it.
-func mediaLabel(r domain.MediaRef) string {
-	withTime := func(label string) string {
-		return strings.TrimSpace(label + " " + clock(r.Duration))
-	}
-	//exhaustive:enforce
-	switch r.Kind {
-	case domain.MediaPhoto:
-		return "photo"
-	case domain.MediaVideo:
-		return withTime("video")
-	case domain.MediaVideoNote:
-		return withTime("round video")
-	case domain.MediaVoice:
-		return withTime("voice")
-	case domain.MediaAudio:
-		name := r.FileName
-		if r.Title != "" {
-			name = strings.TrimPrefix(r.Performer+" – "+r.Title, " – ")
-		}
-		return withTime(strings.TrimSpace("audio " + name))
-	case domain.MediaSticker:
-		return strings.TrimSpace("sticker " + r.Emoji)
-	case domain.MediaGIF:
-		return "GIF"
-	case domain.MediaFile:
-		return strings.TrimSpace("file " + r.FileName)
-	case domain.MediaLocation:
-		return "location"
-	case domain.MediaOther:
-		fallthrough
-	default:
-		return "media"
-	}
-}
-
-// clock is a duration in seconds as a player shows it, m:ss or h:mm:ss; empty
-// for none.
-func clock(seconds int) string {
-	if seconds <= 0 {
-		return ""
-	}
-	h, m, s := seconds/3600, seconds/60%60, seconds%60
-	if h > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
-	}
-	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 // messageJSON is a message as `tele show --json` prints it, a contract kept

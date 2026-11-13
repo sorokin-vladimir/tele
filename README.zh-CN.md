@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `515b693`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `f8de3a6`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -346,7 +346,8 @@ sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-mi
 | `O`                 | 在外部播放器中打开视频                            |
 | `p`                 | 在应用内播放语音消息                              |
 | `s`                 | 下载选中的文件                                    |
-| `/`                 | 搜索聊天                                          |
+| `/`                 | 搜索聊天；在聊天中则搜索其中的消息                |
+| `g /`               | 搜索所有聊天的消息                                |
 | `space`             | 消息的上下文菜单                                  |
 | `0` / `1` / `2`     | 聚焦面板                                          |
 | `,`                 | 设置                                              |

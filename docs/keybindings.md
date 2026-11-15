@@ -63,6 +63,8 @@ The chat list keys move through them.
 | `u`       | Attach a file to send          |
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
+| `y`       | Copy the selected message's text |
+| `v` / `V` | Visual mode: select several messages (see below) |
 | `g`       | Jump to original (for replies), however old |
 | `o`       | Open / view media: photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
@@ -74,6 +76,11 @@ The chat list keys move through them.
 A message that could not be sent stays in the chat, marked `✕` in its bottom border; selecting it names the reason in the status bar.
 `Enter` queues it again, and `Space` opens a short menu offering Retry and Discard.
 `x` is unaffected: it still clears a staged reply, edit or upload, never a queued send.
+
+`v` or `V` starts a selection at the focused message, and the status bar shows `VISUAL`.
+`j` and `k` extend or shrink it, and `y` copies the text of every selected message to the clipboard, oldest first, with a blank line between messages.
+`Esc`, `v` or `V` leaves Visual mode without copying, and so does any other action key.
+Messages without text, such as a photo with no caption, are skipped.
 
 `g` on a reply opens its original however far back it is, highlighted.
 From there, moving up or down loads more history, until it meets the newest messages.
@@ -213,6 +220,7 @@ These are the action names usable as YAML keys in the `keybindings:` section (gr
 | `attach`            | Stage a file from disk to send           |
 | `cancel_upload`     | Cancel a staged upload / clear an active reply or edit |
 | `download_file`     | Download the selected file to the Downloads folder |
+| `visual_select`     | Start or leave Visual mode: `j` and `k` extend the selection, `y` copies it |
 | `show_profile`      | Show the profile of the message's author, or of the person in a private chat |
 
 ### Context menu - contexts `context_menu`, `delete_submenu`

@@ -11,6 +11,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Visual mode in a chat: `v` or `V` starts a selection at the focused
+  message, `j` and `k` extend it, and `y` copies the text of every selected
+  message to the clipboard, oldest first. `Esc` leaves it (#361).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

@@ -113,9 +113,12 @@ func (sb *StatusBar) TickDownloadSpinner() {
 func (sb *StatusBar) View() string {
 	modeStyle := theme.S().ModeNormal
 	label := "NORMAL"
-	if sb.mode == keys.ModeInsert {
+	switch sb.mode {
+	case keys.ModeInsert:
 		modeStyle = theme.S().ModeInsert
 		label = "INSERT"
+	case keys.ModeVisual:
+		label = "VISUAL"
 	}
 
 	segs := []string{modeStyle.Render(label)}

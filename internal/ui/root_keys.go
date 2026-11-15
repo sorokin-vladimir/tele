@@ -326,6 +326,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.globalAction(action); ok {
 		return next, cmd
 	}
+	if m.chat != nil {
+		if next, cmd, handled := m.visualAction(action); handled {
+			return next, cmd
+		}
+	}
 	// Mode is a consequence of the resolved action.
 	switch action {
 	case keys.ActionInsert:

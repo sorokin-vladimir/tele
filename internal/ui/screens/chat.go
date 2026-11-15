@@ -345,6 +345,10 @@ func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID
 func (m *ChatModel) SelectedMessageText() (string, bool) {
 	return m.msgList.SelectedMessageText()
 }
+func (m *ChatModel) StartVisual() bool  { return m.msgList.StartVisual() }
+func (m *ChatModel) ClearVisual()       { m.msgList.ClearVisual() }
+func (m *ChatModel) InVisual() bool     { return m.msgList.InVisual() }
+func (m *ChatModel) VisualText() string { return m.msgList.VisualText() }
 func (m *ChatModel) SelectedMessageOpenTargets() []components.OpenTarget {
 	return m.msgList.SelectedMessageOpenTargets()
 }

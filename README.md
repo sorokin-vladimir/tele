@@ -366,6 +366,8 @@ The first launch, the service, the app key and upgrading from 1.11: [docs/gettin
 | `O`                 | Open video in the external player                 |
 | `p`                 | Play voice message in-app                         |
 | `s`                 | Download the selected file                        |
+| `y`                 | Copy the selected message                         |
+| `V`                 | Visual mode: `j` / `k` extend, `y` copies         |
 | `/`                 | Search chats; in a chat, search its messages      |
 | `g /`               | Search the messages of every chat                 |
 | `space`             | Message context menu                              |

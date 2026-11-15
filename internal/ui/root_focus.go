@@ -56,6 +56,9 @@ func (m RootModel) focusPane(target Focus) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.matcher.Reset()
+	if m.focus == FocusChat && m.vimState.Mode == keys.ModeVisual {
+		m.endVisual()
+	}
 	// Exit insert mode when leaving chat
 	if m.focus == FocusChat && m.vimState.Mode == keys.ModeInsert {
 		m.vimState.Mode = keys.ModeNormal

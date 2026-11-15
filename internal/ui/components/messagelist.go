@@ -62,6 +62,8 @@ type MessageList struct {
 	// message. placeCursor is the only writer of the pair (#193).
 	cursorOutboxRef string
 
+	visualAnchorID int
+
 	// highlightedMsgID is the message currently flashed by a highlight;
 	// highlightStep counts down HighlightFadeSteps → 0 (0 = none);
 	// highlightKind selects the accent (info jump-to vs error rollback).

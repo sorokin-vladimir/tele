@@ -56,7 +56,7 @@ var actionDisplayOrder = []keys.Action{
 	keys.ActionChatSearch, keys.ActionSearch, keys.ActionMessageSearch, keys.ActionMessageSearchAll,
 	keys.ActionToggleScope, keys.ActionOpenContextMenu,
 	keys.ActionReply, keys.ActionReact, keys.ActionEdit, keys.ActionForward,
-	keys.ActionCopyMessage, keys.ActionOpenInViewer, keys.ActionOpenExternal,
+	keys.ActionCopyMessage, keys.ActionVisualSelect, keys.ActionOpenInViewer, keys.ActionOpenExternal,
 	keys.ActionPlayVoice, keys.ActionDownloadFile, keys.ActionJumpToOriginal,
 	keys.ActionMarkRead, keys.ActionMarkUnread, keys.ActionMute, keys.ActionUnmute,
 	keys.ActionArchive, keys.ActionUnarchive, keys.ActionAddToFolder, keys.ActionAttach,

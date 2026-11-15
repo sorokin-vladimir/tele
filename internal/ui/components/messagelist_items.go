@@ -396,6 +396,7 @@ func (ml *MessageList) SetMessages(msgs []domain.Message) {
 	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	ml.setCursorNewest()
+	ml.visualAnchorID = 0
 }
 
 // SetMessagesKeepScroll replaces the message list without resetting the scroll position.

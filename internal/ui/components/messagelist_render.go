@@ -817,6 +817,8 @@ func (ml *MessageList) View() string {
 	botIdx, botOff := ml.positionAtBottom()
 	atNaturalBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 
+	visualLo, visualHi, inVisual := ml.visualRange()
+
 	var allLines []string
 	reachedEnd := true
 	selTopRaw, selHeight, selLeft, selWidth := 0, 0, 0, 0
@@ -828,7 +830,7 @@ func (ml *MessageList) View() string {
 		case itemOutbox:
 			selected = selectedRef != "" && ml.items[i].entry.Ref == selectedRef
 		}
-		itemLines := ml.renderItem(i, selected)
+		itemLines := ml.renderItem(i, selected || (inVisual && i >= visualLo && i <= visualHi))
 
 		// Measure alignment from the top border line (index 0); it never carries
 		// the selection indicator, and every line of a bubble shares the same

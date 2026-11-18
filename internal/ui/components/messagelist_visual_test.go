@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -373,4 +374,30 @@ func TestVisual_AReloadThatLoadsOlderMessagesKeepsTheMessagesOnTheirRows(t *test
 	assert.Equal(t, screenRowOf(t, before, "msg 14"), screenRowOf(t, after, "msg 14"))
 	assert.Equal(t, screenRowOf(t, before, "msg 12"), screenRowOf(t, after, "msg 12"))
 	assert.Equal(t, []int{14}, selectedIDs(ml))
+}
+
+func TestVisual_DeletingThePartlyHiddenTopMessageKeepsTheOthersOnTheirRows(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	msgs := makeMessages(30)
+	for i := range msgs {
+		msgs[i].Text = fmt.Sprintf("msg %d\nline two\nline three", i+1)
+	}
+	ml.SetMessages(msgs)
+	for ml.SelectedMessageID() != 20 {
+		ml.CursorUp()
+	}
+	require.True(t, ml.StartVisualMark())
+	ml.View()
+	for ml.LineOffset() != 2 {
+		ml.ScrollUp()
+	}
+	top := ml.ViewStart()
+	before := ml.View()
+	nextRow := screenRowOf(t, before, fmt.Sprintf("msg %d", top+1))
+
+	ml.RemoveMessage(top)
+	after := ml.View()
+
+	assert.Equal(t, nextRow, screenRowOf(t, after, fmt.Sprintf("msg %d", top+1)))
+	assert.True(t, ml.InVisual())
 }

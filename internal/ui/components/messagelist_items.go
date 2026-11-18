@@ -450,14 +450,7 @@ func (ml *MessageList) RemoveMessage(id int) {
 		return
 	}
 
-	var anchorID int
-	for i := ml.viewStart; i < len(ml.items); i++ {
-		if ml.items[i].kind == itemMessage {
-			anchorID = ml.items[i].msg.ID
-			break
-		}
-	}
-
+	rowOnScreen := ml.messageRowsOnScreen()
 	before := ml.items
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
@@ -469,13 +462,8 @@ func (ml *MessageList) RemoveMessage(id int) {
 		return
 	}
 
-	if anchorID != 0 && anchorID != id {
-		for i, item := range ml.items {
-			if item.kind == itemMessage && item.msg.ID == anchorID {
-				ml.viewStart = i
-				return
-			}
-		}
+	if ml.putFirstSurvivorOnItsRow(rowOnScreen) {
+		return
 	}
 
 	if ml.viewStart >= len(ml.items) {

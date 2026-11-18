@@ -231,13 +231,18 @@ func (ml *MessageList) reloadKeepingVisual(msgs []domain.Message) bool {
 		return false
 	}
 	ml.viewStart, ml.lineOffset = ml.clampToBounds(ml.viewStart, ml.lineOffset)
+	ml.putFirstSurvivorOnItsRow(rowOnScreen)
+	return true
+}
+
+func (ml *MessageList) putFirstSurvivorOnItsRow(rowOnScreen map[int]int) bool {
 	for i, it := range ml.items {
 		if row, ok := rowOnScreen[it.msg.ID]; ok && it.kind == itemMessage {
 			ml.putItemOnRow(i, row)
-			break
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (ml *MessageList) firstMessageChatID() int64 {

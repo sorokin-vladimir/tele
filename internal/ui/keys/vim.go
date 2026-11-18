@@ -66,6 +66,7 @@ const (
 	ActionDownloadFile    Action = "download_file"
 	ActionCopyMessage     Action = "copy_message"
 	ActionVisualSelect    Action = "visual_select"
+	ActionVisualMark      Action = "visual_mark"
 	ActionPasteImage      Action = "paste_image"
 	// Profile actions (#222). ActionShowProfile opens the overlay from wherever
 	// a user id is in hand; the rest are the overlay's own.

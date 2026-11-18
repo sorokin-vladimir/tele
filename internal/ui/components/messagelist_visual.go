@@ -1,35 +1,146 @@
 package components
 
-import "strings"
+import "github.com/sorokin-vladimir/tele/internal/domain"
 
-func (ml *MessageList) StartVisual() bool {
-	id := ml.computeSelectedMsgID()
+type visualSelection struct {
+	on       bool
+	anchorID int
+	marked   map[int]struct{}
+}
+
+func (ml *MessageList) StartVisualRange() bool {
+	id := ml.cursorMessageID()
 	if id == 0 {
 		return false
 	}
-	ml.setCursor(id, "")
-	ml.visualAnchorID = id
+	ml.visual = visualSelection{on: true, anchorID: id, marked: map[int]struct{}{}}
 	return true
 }
 
-func (ml *MessageList) ClearVisual() { ml.visualAnchorID = 0 }
-
-func (ml *MessageList) InVisual() bool {
-	_, _, ok := ml.visualRange()
-	return ok
+func (ml *MessageList) StartVisualMark() bool {
+	i := ml.cursorMessageIndex()
+	if i < 0 {
+		return false
+	}
+	ml.visual = visualSelection{on: true, marked: map[int]struct{}{}}
+	ml.markItem(i)
+	return true
 }
 
-func (ml *MessageList) visualRange() (lo, hi int, ok bool) {
-	if ml.visualAnchorID == 0 {
-		return 0, 0, false
+func (ml *MessageList) VisualRange() {
+	if !ml.visual.on {
+		return
 	}
-	anchor := -1
-	for i := range ml.items {
-		if ml.items[i].kind == itemMessage && ml.items[i].msg.ID == ml.visualAnchorID {
-			anchor = i
-			break
+	if ml.visual.anchorID != 0 {
+		ml.fixVisualRange()
+		return
+	}
+	ml.visual.anchorID = ml.cursorMessageID()
+}
+
+func (ml *MessageList) VisualMark() {
+	if !ml.visual.on {
+		return
+	}
+	ml.fixVisualRange()
+	i := ml.cursorMessageIndex()
+	if i < 0 {
+		return
+	}
+	if ml.itemMarked(i) {
+		ml.unmarkItem(i)
+		return
+	}
+	ml.markItem(i)
+}
+
+func (ml *MessageList) ClearVisual() { ml.visual = visualSelection{} }
+
+func (ml *MessageList) InVisual() bool { return ml.visual.on }
+
+func (ml *MessageList) VisualSelection() []domain.Message {
+	var out []domain.Message
+	for _, i := range ml.selectedItemIndices() {
+		out = append(out, ml.items[i].parts...)
+	}
+	return out
+}
+
+func (ml *MessageList) VisualHasGaps() bool {
+	selected := ml.selectedItemIndices()
+	if len(selected) == 0 {
+		return false
+	}
+	messagesBetween := 0
+	for i := selected[0]; i <= selected[len(selected)-1]; i++ {
+		if ml.items[i].kind == itemMessage {
+			messagesBetween++
 		}
 	}
+	return messagesBetween != len(selected)
+}
+
+func (ml *MessageList) CursorToOldest() {
+	for i := range ml.items {
+		if ml.selectable(i) {
+			ml.placeCursor(i)
+			return
+		}
+	}
+}
+
+func (ml *MessageList) cursorMessageIndex() int {
+	i := ml.cursorIndex()
+	if i < 0 || ml.items[i].kind != itemMessage {
+		return -1
+	}
+	return i
+}
+
+func (ml *MessageList) cursorMessageID() int {
+	if i := ml.cursorMessageIndex(); i >= 0 {
+		return ml.items[i].msg.ID
+	}
+	return 0
+}
+
+func (ml *MessageList) markItem(i int) {
+	for _, p := range ml.items[i].parts {
+		ml.visual.marked[p.ID] = struct{}{}
+	}
+}
+
+func (ml *MessageList) unmarkItem(i int) {
+	for _, p := range ml.items[i].parts {
+		delete(ml.visual.marked, p.ID)
+	}
+}
+
+func (ml *MessageList) itemMarked(i int) bool {
+	for _, p := range ml.items[i].parts {
+		if _, ok := ml.visual.marked[p.ID]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (ml *MessageList) fixVisualRange() {
+	if lo, hi, ok := ml.visualRangeBounds(); ok {
+		for i := lo; i <= hi; i++ {
+			if ml.items[i].kind == itemMessage {
+				ml.markItem(i)
+			}
+		}
+	}
+	ml.visual.anchorID = 0
+}
+
+func (ml *MessageList) visualRangeBounds() (lo, hi int, ok bool) {
+	if !ml.visual.on || ml.visual.anchorID == 0 {
+		return 0, 0, false
+	}
+	anchor := ml.itemIndexHolding(ml.visual.anchorID)
 	cursor := ml.cursorIndex()
 	if anchor < 0 || cursor < 0 {
 		return 0, 0, false
@@ -37,21 +148,113 @@ func (ml *MessageList) visualRange() (lo, hi int, ok bool) {
 	return min(anchor, cursor), max(anchor, cursor), true
 }
 
-func (ml *MessageList) VisualText() string {
-	lo, hi, ok := ml.visualRange()
-	if !ok {
-		return ""
+func (ml *MessageList) selectedItemIndices() []int {
+	if !ml.visual.on {
+		return nil
 	}
-	var texts []string
-	for i := lo; i <= hi; i++ {
+	lo, hi, ranged := ml.visualRangeBounds()
+	var out []int
+	for i := range ml.items {
 		if ml.items[i].kind != itemMessage {
 			continue
 		}
-		for _, part := range ml.items[i].parts {
-			if part.Text != "" {
-				texts = append(texts, part.Text)
+		if (ranged && i >= lo && i <= hi) || ml.itemMarked(i) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func (ml *MessageList) selectedPartIDs() map[int]struct{} {
+	indices := ml.selectedItemIndices()
+	if len(indices) == 0 {
+		return nil
+	}
+	ids := make(map[int]struct{})
+	for _, i := range indices {
+		for _, p := range ml.items[i].parts {
+			ids[p.ID] = struct{}{}
+		}
+	}
+	return ids
+}
+
+func (ml *MessageList) itemIndexHolding(id int) int {
+	for i := range ml.items {
+		if ml.items[i].kind != itemMessage {
+			continue
+		}
+		for _, p := range ml.items[i].parts {
+			if p.ID == id {
+				return i
 			}
 		}
 	}
-	return strings.Join(texts, "\n\n")
+	return -1
+}
+
+func (ml *MessageList) keepVisualAfterRemoval(before []listItem) {
+	if !ml.visual.on {
+		return
+	}
+	oldCursor := indexOfMessage(before, ml.cursorMsgID)
+	oldAnchor := indexOfMessage(before, ml.visual.anchorID)
+	if oldCursor >= 0 && ml.cursorIndex() < 0 {
+		toward := oldCursor + 1
+		if oldAnchor >= 0 && oldAnchor != oldCursor {
+			toward = oldAnchor
+		}
+		ml.setCursor(ml.survivorNear(before, oldCursor, toward), "")
+	}
+	if ml.visual.anchorID != 0 && ml.itemIndexHolding(ml.visual.anchorID) < 0 {
+		toward := oldCursor
+		if toward < 0 || toward == oldAnchor {
+			toward = oldAnchor + 1
+		}
+		ml.visual.anchorID = ml.survivorNear(before, oldAnchor, toward)
+	}
+}
+
+func (ml *MessageList) survivorNear(before []listItem, from, toward int) int {
+	if from < 0 {
+		return 0
+	}
+	step := 1
+	if toward < from {
+		step = -1
+	}
+	for _, dir := range []int{step, -step} {
+		for i := from; i >= 0 && i < len(before); i += dir {
+			if before[i].kind != itemMessage {
+				continue
+			}
+			for _, p := range before[i].parts {
+				if j := ml.itemIndexHolding(p.ID); j >= 0 {
+					return ml.items[j].msg.ID
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func indexOfMessage(items []listItem, id int) int {
+	if id == 0 {
+		return -1
+	}
+	for i := range items {
+		if items[i].kind == itemMessage && items[i].msg.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func (ml *MessageList) bareMediaSelected(i int) bool {
+	it := ml.items[i]
+	if it.kind != itemMessage || len(it.parts) != 1 || !ml.isBareMedia(it.msg) {
+		return false
+	}
+	_, ok := ml.selectedWhileDrawing[it.msg.ID]
+	return ok
 }

@@ -345,10 +345,14 @@ func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID
 func (m *ChatModel) SelectedMessageText() (string, bool) {
 	return m.msgList.SelectedMessageText()
 }
-func (m *ChatModel) StartVisual() bool  { return m.msgList.StartVisual() }
-func (m *ChatModel) ClearVisual()       { m.msgList.ClearVisual() }
-func (m *ChatModel) InVisual() bool     { return m.msgList.InVisual() }
-func (m *ChatModel) VisualText() string { return m.msgList.VisualText() }
+func (m *ChatModel) StartVisualRange() bool            { return m.msgList.StartVisualRange() }
+func (m *ChatModel) StartVisualMark() bool             { return m.msgList.StartVisualMark() }
+func (m *ChatModel) VisualRange()                      { m.msgList.VisualRange() }
+func (m *ChatModel) VisualMark()                       { m.msgList.VisualMark() }
+func (m *ChatModel) ClearVisual()                      { m.msgList.ClearVisual() }
+func (m *ChatModel) InVisual() bool                    { return m.msgList.InVisual() }
+func (m *ChatModel) VisualSelection() []domain.Message { return m.msgList.VisualSelection() }
+func (m *ChatModel) VisualHasGaps() bool               { return m.msgList.VisualHasGaps() }
 func (m *ChatModel) SelectedMessageOpenTargets() []components.OpenTarget {
 	return m.msgList.SelectedMessageOpenTargets()
 }
@@ -668,6 +672,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionGoTop:
 			m.msgList.ScrollToTop()
+			if m.msgList.InVisual() {
+				m.msgList.CursorToOldest()
+			}
 			if m.header.ChatID != 0 && m.msgList.Count() > 0 {
 				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
@@ -675,6 +682,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionGoBottom:
 			m.msgList.ScrollToBottom()
+			if m.msgList.InVisual() {
+				return m, m.loadNewer()
+			}
 			if m.header.ChatID != 0 {
 				chatID := m.header.ChatID
 				return m, func() tea.Msg { return GoToLatestMsg{ChatID: chatID} }

@@ -817,7 +817,8 @@ func (ml *MessageList) View() string {
 	botIdx, botOff := ml.positionAtBottom()
 	atNaturalBottom := ml.viewStart == botIdx && ml.lineOffset >= botOff
 
-	visualLo, visualHi, inVisual := ml.visualRange()
+	ml.selectedWhileDrawing = ml.selectedPartIDs()
+	defer func() { ml.selectedWhileDrawing = nil }()
 
 	var allLines []string
 	reachedEnd := true
@@ -830,7 +831,7 @@ func (ml *MessageList) View() string {
 		case itemOutbox:
 			selected = selectedRef != "" && ml.items[i].entry.Ref == selectedRef
 		}
-		itemLines := ml.renderItem(i, selected || (inVisual && i >= visualLo && i <= visualHi))
+		itemLines := ml.renderItem(i, selected || ml.bareMediaSelected(i))
 
 		// Measure alignment from the top border line (index 0); it never carries
 		// the selection indicator, and every line of a bubble shares the same

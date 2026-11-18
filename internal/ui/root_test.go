@@ -1042,13 +1042,13 @@ func TestWithKeyMap_RebindOpensContextMenu(t *testing.T) {
 	m = newM.(ui.RootModel)
 
 	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
-		"chat": {"open_context_menu": {"m"}},
+		"chat": {"open_context_menu": {"w"}},
 	})
 	require.Empty(t, warns)
 	m = m.WithKeyMap(km)
 
-	// "m" now opens the context menu (was "space").
-	newM, _ = m.Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	// "w" now opens the context menu (was "space").
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'w', Text: "w"})
 	m = newM.(ui.RootModel)
 	assert.True(t, m.ContextMenuOpen())
 }

@@ -123,8 +123,8 @@ func DefaultKeyMap() KeyMap {
 			"x":      ActionCancelUpload,
 			"s":      ActionDownloadFile,
 			"y":      ActionCopyMessage,
-			"v":      ActionVisualSelect,
 			"V":      ActionVisualSelect,
+			"m":      ActionVisualMark,
 			"P":      ActionShowProfile,
 		},
 		ContextComposer: {

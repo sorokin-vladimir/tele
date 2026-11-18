@@ -396,7 +396,7 @@ func (ml *MessageList) SetMessages(msgs []domain.Message) {
 	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	ml.setCursorNewest()
-	ml.visualAnchorID = 0
+	ml.ClearVisual()
 }
 
 // SetMessagesKeepScroll replaces the message list without resetting the scroll position.
@@ -455,8 +455,10 @@ func (ml *MessageList) RemoveMessage(id int) {
 		}
 	}
 
+	before := ml.items
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
+	ml.keepVisualAfterRemoval(before)
 
 	if len(ml.items) == 0 {
 		ml.viewStart = 0

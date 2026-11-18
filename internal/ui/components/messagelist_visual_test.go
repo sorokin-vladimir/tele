@@ -1,8 +1,8 @@
 package components_test
 
 import (
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -10,79 +10,232 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVisual_TextCoversAnchorToCursorOldestFirst(t *testing.T) {
+func selectedIDs(ml *components.MessageList) []int {
+	var ids []int
+	for _, m := range ml.VisualSelection() {
+		ids = append(ids, m.ID)
+	}
+	return ids
+}
+
+func TestVisual_RangeCoversAnchorToCursorOldestFirst(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(5))
-	require.True(t, ml.StartVisual())
+	require.True(t, ml.StartVisualRange())
 	ml.CursorUp()
 	ml.CursorUp()
 	assert.True(t, ml.InVisual())
-	assert.Equal(t, "msg 3\n\nmsg 4\n\nmsg 5", ml.VisualText())
+	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml))
+	assert.False(t, ml.VisualHasGaps())
 }
 
-func TestVisual_TextIsTheSameWhenTheCursorPassesBelowTheAnchor(t *testing.T) {
+func TestVisual_RangeShrinksWhenTheCursorComesBack(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(5))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.CursorDown()
+	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
+}
+
+func TestVisual_RangeFollowsTheCursorPastTheAnchor(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(5))
 	ml.CursorUp()
 	ml.CursorUp()
-	require.True(t, ml.StartVisual())
+	require.True(t, ml.StartVisualRange())
 	ml.CursorDown()
 	ml.CursorDown()
-	assert.Equal(t, "msg 3\n\nmsg 4\n\nmsg 5", ml.VisualText())
+	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml))
 }
 
-func TestVisual_SingleMessageRangeIsTheFocusedMessage(t *testing.T) {
+func TestVisual_MarkStartsWithTheFocusedMessageOnly(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	ml.SetMessages(makeMessages(3))
-	require.True(t, ml.StartVisual())
-	assert.Equal(t, "msg 3", ml.VisualText())
+	ml.SetMessages(makeMessages(5))
+	require.True(t, ml.StartVisualMark())
+	ml.CursorUp()
+	ml.CursorUp()
+	assert.Equal(t, []int{5}, selectedIDs(ml))
 }
 
-func TestVisual_TextSkipsMessagesWithoutText(t *testing.T) {
+func TestVisual_MarkAddsAndRemovesTheFocusedMessage(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(5))
+	require.True(t, ml.StartVisualMark())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.VisualMark()
+	assert.Equal(t, []int{3, 5}, selectedIDs(ml))
+	assert.True(t, ml.VisualHasGaps())
+
+	ml.VisualMark()
+	assert.Equal(t, []int{5}, selectedIDs(ml))
+	assert.False(t, ml.VisualHasGaps())
+}
+
+func TestVisual_MarkFixesTheRangeThenTogglesTheFocusedMessage(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(5))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.VisualMark()
+	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
+
+	ml.CursorUp()
+	ml.CursorUp()
+	assert.Equal(t, []int{4, 5}, selectedIDs(ml), "after the range is fixed the cursor only moves")
+}
+
+func TestVisual_RangeKeyFixesTheRangeBeingStretched(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(5))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.VisualRange()
+	ml.CursorUp()
+	ml.CursorUp()
+	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
+}
+
+func TestVisual_RangeKeyStartsAnotherRangeThatAddsToTheSet(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(6))
+	require.True(t, ml.StartVisualMark())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.VisualRange()
+	ml.CursorUp()
+	assert.Equal(t, []int{3, 4, 6}, selectedIDs(ml))
+	assert.True(t, ml.VisualHasGaps())
+}
+
+func TestVisual_AnAlbumIsOneItem(t *testing.T) {
+	now := time.Now()
+	ml := components.NewMessageList(40, 60)
 	ml.SetMessages([]domain.Message{
-		{ID: 1, ChatID: 1, Text: "first"},
-		{ID: 2, ChatID: 1, Photo: &domain.PhotoRef{ID: 9}},
-		{ID: 3, ChatID: 1, Text: "third"},
+		{ID: 1, ChatID: 1, Text: "before", Date: now},
+		{ID: 2, ChatID: 1, GroupedID: 9, Photo: &domain.PhotoRef{ID: 21}, Text: "caption", Date: now},
+		{ID: 3, ChatID: 1, GroupedID: 9, Photo: &domain.PhotoRef{ID: 22}, Date: now},
+		{ID: 4, ChatID: 1, Text: "after", Date: now},
 	})
-	require.True(t, ml.StartVisual())
+	require.True(t, ml.StartVisualRange())
 	ml.CursorUp()
-	ml.CursorUp()
-	assert.Equal(t, "first\n\nthird", ml.VisualText())
+	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml))
+
+	ml.VisualMark()
+	ml.VisualMark()
+	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml), "marking the album marks both of its parts")
 }
 
-func TestVisual_ClearEndsTheRange(t *testing.T) {
+func TestVisual_DeletingAMessageInTheSetKeepsTheRest(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(6))
+	require.True(t, ml.StartVisualMark())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.VisualMark()
+	ml.CursorUp()
+	ml.VisualMark()
+	require.Equal(t, []int{3, 4, 6}, selectedIDs(ml))
+
+	ml.RemoveMessage(4)
+	ml.RemoveMessage(1)
+
+	assert.True(t, ml.InVisual())
+	assert.Equal(t, []int{3, 6}, selectedIDs(ml))
+	assert.Equal(t, 3, ml.SelectedMessageID())
+}
+
+func TestVisual_DeletingTheCursorMovesItTowardTheAnchor(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(6))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.RemoveMessage(3)
+	assert.Equal(t, 4, ml.SelectedMessageID())
+	assert.Equal(t, []int{4, 5, 6}, selectedIDs(ml))
+}
+
+func TestVisual_DeletingTheAnchorKeepsTheRangeFromItsNeighbour(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(6))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.RemoveMessage(6)
+	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
+	ml.CursorUp()
+	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml))
+}
+
+func TestVisual_DeletingAMessageDoesNotMoveTheView(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	ml.SetMessages(makeMessages(40))
+	for range 20 {
+		ml.CursorUp()
+	}
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.View()
+	start, offset := ml.ViewStart(), ml.LineOffset()
+	cursor := ml.SelectedMessageID()
+
+	ml.RemoveMessage(40)
+	ml.RemoveMessage(cursor + 1)
+
+	assert.Equal(t, start, ml.ViewStart())
+	assert.Equal(t, offset, ml.LineOffset())
+	assert.Equal(t, cursor, ml.SelectedMessageID())
+	assert.Equal(t, []int{cursor, cursor + 2}, selectedIDs(ml))
+}
+
+func TestVisual_OlderMessagesLoadedAboveKeepTheRange(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	all := makeMessages(6)
+	ml.SetMessages(all[3:])
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+	require.True(t, ml.CursorUp(), "the cursor is at the oldest loaded message")
+	ml.PrependMessages(all[:3])
+	ml.CursorUp()
+	assert.Equal(t, []int{3, 4, 5, 6}, selectedIDs(ml))
+}
+
+func TestVisual_CursorToOldestStretchesTheRangeToTheTop(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	ml.SetMessages(makeMessages(4))
+	require.True(t, ml.StartVisualRange())
+	ml.CursorToOldest()
+	assert.Equal(t, []int{1, 2, 3, 4}, selectedIDs(ml))
+}
+
+func TestVisual_ClearEndsTheSelection(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(3))
-	require.True(t, ml.StartVisual())
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
 	ml.ClearVisual()
 	assert.False(t, ml.InVisual())
-	assert.Equal(t, "", ml.VisualText())
+	assert.Empty(t, ml.VisualSelection())
 }
 
-func TestVisual_SetMessagesEndsTheRange(t *testing.T) {
+func TestVisual_SetMessagesEndsTheSelection(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(3))
-	require.True(t, ml.StartVisual())
+	require.True(t, ml.StartVisualRange())
 	ml.SetMessages(makeMessages(3))
 	assert.False(t, ml.InVisual())
 }
 
 func TestVisual_CannotStartOnAnEmptyList(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
-	assert.False(t, ml.StartVisual())
+	assert.False(t, ml.StartVisualRange())
+	assert.False(t, ml.StartVisualMark())
 	assert.False(t, ml.InVisual())
 }
-
-func TestVisual_ViewDrawsTheIndicatorBesideEverySelectedBubble(t *testing.T) {
-	ml := components.NewMessageList(30, 60)
-	ml.SetShowIndicator(true)
-	ml.SetMessages(makeMessages(3))
-	single := countIndicators(ml.View())
-	require.True(t, ml.StartVisual())
-	ml.CursorUp()
-	ml.CursorUp()
-	assert.Greater(t, countIndicators(ml.View()), single)
-}
-
-func countIndicators(view string) int { return strings.Count(view, "┃") }

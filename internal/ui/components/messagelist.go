@@ -62,7 +62,8 @@ type MessageList struct {
 	// message. placeCursor is the only writer of the pair (#193).
 	cursorOutboxRef string
 
-	visualAnchorID int
+	visual               visualSelection
+	selectedWhileDrawing map[int]struct{}
 
 	// highlightedMsgID is the message currently flashed by a highlight;
 	// highlightStep counts down HighlightFadeSteps → 0 (0 = none);

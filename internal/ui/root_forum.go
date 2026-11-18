@@ -121,6 +121,7 @@ func (m RootModel) openHistory(h domain.HistoryKey, title string) (RootModel, te
 		result, cmd := m.focusPane(FocusChat)
 		return result.(RootModel), cmd
 	}
+	m.endVisual()
 	// A message search of the chat being left is kept until another one is
 	// opened, and this is that moment (#349).
 	if m.searchMemory.chatFor != h {

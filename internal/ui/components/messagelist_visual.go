@@ -27,7 +27,7 @@ func (ml *MessageList) StartVisualMark() bool {
 	return true
 }
 
-func (ml *MessageList) VisualRange() {
+func (ml *MessageList) FixOrStartVisualRange() {
 	if !ml.visual.on {
 		return
 	}
@@ -38,7 +38,7 @@ func (ml *MessageList) VisualRange() {
 	ml.visual.anchorID = ml.cursorMessageID()
 }
 
-func (ml *MessageList) VisualMark() {
+func (ml *MessageList) FixRangeOrToggleMark() {
 	if !ml.visual.on {
 		return
 	}
@@ -207,14 +207,14 @@ func (ml *MessageList) keepVisualAfterRemoval(before []listItem) {
 		if oldAnchor >= 0 && oldAnchor != oldCursor {
 			toward = oldAnchor
 		}
-		ml.setCursor(ml.survivorNear(before, oldCursor, toward), "")
+		ml.setCursor(ml.survivorIDNear(before, oldCursor, toward), "")
 	}
 	if ml.visual.anchorID != 0 && ml.itemIndexHolding(ml.visual.anchorID) < 0 {
 		toward := oldCursor
 		if toward < 0 || toward == oldAnchor {
 			toward = oldAnchor + 1
 		}
-		ml.visual.anchorID = ml.survivorNear(before, oldAnchor, toward)
+		ml.visual.anchorID = ml.survivorIDNear(before, oldAnchor, toward)
 	}
 }
 
@@ -283,7 +283,7 @@ func (ml *MessageList) putItemOnRow(i, row int) {
 	ml.viewStart, ml.lineOffset = ml.clampToBounds(viewStart, lineOffset)
 }
 
-func (ml *MessageList) survivorNear(before []listItem, from, toward int) int {
+func (ml *MessageList) survivorIDNear(before []listItem, from, toward int) int {
 	if from < 0 {
 		return 0
 	}

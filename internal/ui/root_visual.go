@@ -70,9 +70,9 @@ func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 		keys.ActionGoTop, keys.ActionGoBottom, keys.ActionScrollHalfUp, keys.ActionScrollHalfDown:
 		return m, nil, false
 	case keys.ActionVisualSelect:
-		m.chat.VisualRange()
+		m.chat.FixOrStartVisualRange()
 	case keys.ActionVisualMark:
-		m.chat.VisualMark()
+		m.chat.FixRangeOrToggleMark()
 	case keys.ActionCopyMessage:
 		next, cmd := m.copySelection(false)
 		return next, cmd, true
@@ -101,7 +101,7 @@ func (m RootModel) copySelection(withNames bool) (RootModel, tea.Cmd) {
 
 func (m RootModel) selectionText(msgs []domain.Message, withNames bool) string {
 	if !withNames {
-		return selectionTexts(msgs)
+		return joinedTexts(msgs)
 	}
 	if len(msgs) == 0 {
 		return ""
@@ -118,7 +118,7 @@ func (m RootModel) selectionText(msgs []domain.Message, withNames bool) string {
 	return transcript.Text(msgs, f)
 }
 
-func selectionTexts(msgs []domain.Message) string {
+func joinedTexts(msgs []domain.Message) string {
 	var texts []string
 	for _, msg := range msgs {
 		if msg.Text != "" {

@@ -67,11 +67,11 @@ func TestVisual_MarkAddsAndRemovesTheFocusedMessage(t *testing.T) {
 	require.True(t, ml.StartVisualMark())
 	ml.CursorUp()
 	ml.CursorUp()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{3, 5}, selectedIDs(ml))
 	assert.True(t, ml.VisualHasGaps())
 
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{5}, selectedIDs(ml))
 	assert.False(t, ml.VisualHasGaps())
 }
@@ -82,18 +82,18 @@ func TestVisual_MarkFixesTheRangeWithTheFocusedMessageIn(t *testing.T) {
 	require.True(t, ml.StartVisualRange())
 	ml.CursorUp()
 	ml.CursorUp()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml))
 
 	ml.CursorUp()
 	ml.CursorUp()
 	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml), "after the range is fixed the cursor only moves")
 
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{1, 3, 4, 5}, selectedIDs(ml))
 	ml.CursorDown()
 	ml.CursorDown()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{1, 4, 5}, selectedIDs(ml), "the next m removes the focused message")
 }
 
@@ -102,7 +102,7 @@ func TestVisual_RangeKeyFixesTheRangeBeingStretched(t *testing.T) {
 	ml.SetMessages(makeMessages(5))
 	require.True(t, ml.StartVisualRange())
 	ml.CursorUp()
-	ml.VisualRange()
+	ml.FixOrStartVisualRange()
 	ml.CursorUp()
 	ml.CursorUp()
 	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
@@ -114,7 +114,7 @@ func TestVisual_RangeKeyStartsAnotherRangeThatAddsToTheSet(t *testing.T) {
 	require.True(t, ml.StartVisualMark())
 	ml.CursorUp()
 	ml.CursorUp()
-	ml.VisualRange()
+	ml.FixOrStartVisualRange()
 	ml.CursorUp()
 	assert.Equal(t, []int{3, 4, 6}, selectedIDs(ml))
 	assert.True(t, ml.VisualHasGaps())
@@ -133,10 +133,10 @@ func TestVisual_AnAlbumIsOneItem(t *testing.T) {
 	ml.CursorUp()
 	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml))
 
-	ml.VisualMark()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{4}, selectedIDs(ml), "unmarking the album unmarks both of its parts")
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml), "marking the album marks both of its parts")
 }
 
@@ -146,9 +146,9 @@ func TestVisual_DeletingAMessageInTheSetKeepsTheRest(t *testing.T) {
 	require.True(t, ml.StartVisualMark())
 	ml.CursorUp()
 	ml.CursorUp()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	ml.CursorUp()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 	require.Equal(t, []int{3, 4, 6}, selectedIDs(ml))
 
 	ml.RemoveMessage(4)
@@ -262,7 +262,7 @@ func TestVisual_AReloadOfTheSameChatKeepsTheMarkedSet(t *testing.T) {
 	require.True(t, ml.StartVisualMark())
 	ml.CursorUp()
 	ml.CursorUp()
-	ml.VisualMark()
+	ml.FixRangeOrToggleMark()
 
 	ml.SetMessages(all[1:])
 	assert.Equal(t, []int{4, 6}, selectedIDs(ml))

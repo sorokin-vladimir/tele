@@ -347,8 +347,8 @@ func (m *ChatModel) SelectedMessageText() (string, bool) {
 }
 func (m *ChatModel) StartVisualRange() bool            { return m.msgList.StartVisualRange() }
 func (m *ChatModel) StartVisualMark() bool             { return m.msgList.StartVisualMark() }
-func (m *ChatModel) VisualRange()                      { m.msgList.VisualRange() }
-func (m *ChatModel) VisualMark()                       { m.msgList.VisualMark() }
+func (m *ChatModel) FixOrStartVisualRange()            { m.msgList.FixOrStartVisualRange() }
+func (m *ChatModel) FixRangeOrToggleMark()             { m.msgList.FixRangeOrToggleMark() }
 func (m *ChatModel) ClearVisual()                      { m.msgList.ClearVisual() }
 func (m *ChatModel) InVisual() bool                    { return m.msgList.InVisual() }
 func (m *ChatModel) VisualSelection() []domain.Message { return m.msgList.VisualSelection() }

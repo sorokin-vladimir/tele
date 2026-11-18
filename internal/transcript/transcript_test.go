@@ -15,7 +15,7 @@ func at(day, hour, minute int) time.Time {
 // Every message's text starts in the same column, after the widest name
 // shown; a date line comes first and wherever the day changes, and a reply
 // says what it answers under it. Your own messages are yours (#181).
-func TestShowText_AlignsTheTextAfterTheNames(t *testing.T) {
+func TestText_AlignsTheTextAfterTheNames(t *testing.T) {
 	msgs := []domain.Message{
 		{ID: 1, Date: at(24, 21, 58), SenderID: 42, SenderName: "Bob", Text: "see you tomorrow"},
 		{ID: 2, Date: at(25, 9, 12), IsOut: true, Text: "morning!", ReplyToMsgID: 1},
@@ -42,7 +42,7 @@ func TestShowText_AlignsTheTextAfterTheNames(t *testing.T) {
 
 // A name wider than the column is cut short, so one long name does not push
 // everybody's text to the right.
-func TestShowText_CutsANameWiderThanTheColumn(t *testing.T) {
+func TestText_CutsANameWiderThanTheColumn(t *testing.T) {
 	msgs := []domain.Message{
 		{ID: 1, Date: at(25, 9, 0), SenderName: "Alexander Konstantinovich", Text: "hi"},
 		{ID: 2, Date: at(25, 9, 1), SenderName: "Bob", Text: "hello"},
@@ -61,7 +61,7 @@ func TestShowText_CutsANameWiderThanTheColumn(t *testing.T) {
 
 // Media is named, never fetched: a label for its kind and what it says about
 // itself, then the caption (#181).
-func TestShowText_NamesTheMedia(t *testing.T) {
+func TestText_NamesTheMedia(t *testing.T) {
 	cases := []struct {
 		media *domain.MediaRef
 		text  string

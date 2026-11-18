@@ -416,6 +416,9 @@ func (cm *ContextMenu) View() string {
 		}
 		k := cm.keyMap.KeyFor(ctx, item.action)
 		text, spans := hintLayout(k, item.label)
+		if cm.selection {
+			text, spans = keyFirstLayout(k, item.label)
+		}
 		if i == cm.list.Cursor() {
 			rows[i] = "  " + text
 		} else {

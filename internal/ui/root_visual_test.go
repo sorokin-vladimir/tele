@@ -306,7 +306,7 @@ func TestVisual_HintsOfARangeOfferCopyWithNames(t *testing.T) {
 
 	bar := ansi.Strip(m.View().Content)
 	assert.Contains(t, bar, "VISUAL")
-	assert.Contains(t, bar, hintLine("copy", "copY with names", "mark", "V range", "esc exit"))
+	assert.Contains(t, bar, hintLine("y copy", "Y copy with names", "m mark", "V range", "esc exit"))
 }
 
 func TestVisual_HintsOfASetLeaveOutCopyWithNames(t *testing.T) {
@@ -314,7 +314,7 @@ func TestVisual_HintsOfASetLeaveOutCopyWithNames(t *testing.T) {
 	m = pressKeys(m, "m", "k", "k", "m")
 
 	bar := ansi.Strip(m.View().Content)
-	assert.Contains(t, bar, hintLine("copy", "mark", "V range", "esc exit"))
+	assert.Contains(t, bar, hintLine("y copy", "m mark", "V range", "esc exit"))
 	assert.NotContains(t, bar, "with names")
 }
 
@@ -324,7 +324,9 @@ func TestVisual_TheMenuOfARangeOffersBothCopies(t *testing.T) {
 
 	require.True(t, m.ContextMenuOpen())
 	view := ansi.Strip(m.View().Content)
-	assert.Contains(t, view, "CopY with names")
+	assert.Contains(t, view, "y Copy")
+	assert.Contains(t, view, "Y Copy with names")
+	assert.NotContains(t, view, "CopY")
 	assert.NotContains(t, view, "Reply")
 
 	var got string
@@ -346,7 +348,7 @@ func TestVisual_TheMenuOfASetOffersOnlyCopy(t *testing.T) {
 
 	require.True(t, m.ContextMenuOpen())
 	view := ansi.Strip(m.View().Content)
-	assert.Contains(t, view, "Copy")
+	assert.Contains(t, view, "y Copy")
 	assert.NotContains(t, view, "with names")
 }
 

@@ -220,6 +220,7 @@ type footerItem struct {
 	down, up      keys.Action // fiNav
 	keyword, text string      // fiLiteral
 	labelOverride string      // optional wording override (state-specific)
+	keyFirst      bool
 }
 
 // hints selects the profile for the current state and renders it. Wording is
@@ -263,14 +264,14 @@ func (sb *StatusBar) profile() []footerItem {
 			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
 		}
 	case sb.activePane == "chat" && sb.mode == keys.ModeVisual:
-		items := []footerItem{{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyMessage}}
+		items := []footerItem{{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyMessage, keyFirst: true}}
 		if !sb.visualHasGaps {
-			items = append(items, footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyWithNames})
+			items = append(items, footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyWithNames, keyFirst: true})
 		}
 		return append(items,
-			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualMark},
-			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualSelect},
-			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionNormal, labelOverride: "exit"},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualMark, keyFirst: true},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualSelect, keyFirst: true},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionNormal, labelOverride: "exit", keyFirst: true},
 		)
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
 		return []footerItem{
@@ -321,6 +322,9 @@ func (sb *StatusBar) renderFooterItem(it footerItem, accent lipgloss.Style) stri
 			}
 		}
 		key := sb.keyMap.KeyFor(it.ctx, it.action)
+		if it.keyFirst {
+			return hintKeyFirst(key, desc, accent)
+		}
 		return hintKey(key, desc, accent)
 	}
 }
@@ -331,6 +335,18 @@ func hintKey(key, desc string, accent lipgloss.Style) string {
 	}
 	text, spans := hintLayout(key, desc)
 	return applyAccent(text, spans, theme.S().Bar, accent)
+}
+
+func hintKeyFirst(key, desc string, accent lipgloss.Style) string {
+	if key == "" {
+		return ""
+	}
+	text, spans := keyFirstLayout(key, desc)
+	return applyAccent(text, spans, theme.S().Bar, accent)
+}
+
+func keyFirstLayout(key, desc string) (string, []span) {
+	return key + " " + desc, []span{{0, utf8.RuneCountInString(key)}}
 }
 
 func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
@@ -390,7 +406,7 @@ func hintLayout(key, desc string) (string, []span) {
 		}
 	}
 	// Prefix form: accented key, then the plain word.
-	return key + " " + desc, []span{{0, utf8.RuneCountInString(key)}}
+	return keyFirstLayout(key, desc)
 }
 
 // wordRuneIndex returns the rune index of the first case-insensitive match of

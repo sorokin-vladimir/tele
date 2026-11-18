@@ -64,7 +64,8 @@ The chat list keys move through them.
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
 | `y`       | Copy the selected message's text |
-| `v` / `V` | Visual mode: select several messages (see below) |
+| `V`       | Visual mode: select a range of messages (see below) |
+| `m`       | Visual mode: select messages one by one (see below) |
 | `g`       | Jump to original (for replies), however old |
 | `o`       | Open / view media: photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |
@@ -77,10 +78,23 @@ A message that could not be sent stays in the chat, marked `✕` in its bottom b
 `Enter` queues it again, and `Space` opens a short menu offering Retry and Discard.
 `x` is unaffected: it still clears a staged reply, edit or upload, never a queued send.
 
-`v` or `V` starts a selection at the focused message, and the status bar shows `VISUAL`.
-`j` and `k` extend or shrink it, and `y` copies the text of every selected message to the clipboard, oldest first, with a blank line between messages.
-`Esc`, `v` or `V` leaves Visual mode without copying, and so does any other action key.
+`V` starts Visual mode with a range from the focused message, and the status bar shows `VISUAL`.
+`j` and `k`, `G` and `g g`, `ctrl+d` and `ctrl+u` stretch the range, and at the top of what is loaded older messages load and the range keeps going.
+`m` starts Visual mode with only the focused message selected.
+In Visual mode `m` adds or removes the focused message: a range being stretched is fixed into the selection first, and `j` and `k` then only move the cursor.
+`V` in Visual mode fixes the range being stretched, or starts a new one that adds to the selection.
+An album counts as one message.
+
+`y` copies the text of a range to the clipboard as Telegram sent it, oldest first, with a blank line between messages.
 Messages without text, such as a photo with no caption, are skipped.
+`Y` copies the range with the time and name of every message, the way `tele show` prints it, with your own name on your messages.
+A reply line is kept only when the message replied to is loaded in the chat.
+A selection with gaps is copied with names by `y` and `Y` alike, so that the gaps show.
+`Space` opens a menu with the copies the selection offers.
+
+`Esc` leaves Visual mode and clears the selection, and other keys do nothing.
+Switching chats or moving focus out of the chat pane leaves Visual mode too.
+A message deleted while you select, in the selection or outside it, leaves the rest where it was.
 
 `g` on a reply opens its original however far back it is, highlighted.
 From there, moving up or down loads more history, until it meets the newest messages.
@@ -220,7 +234,9 @@ These are the action names usable as YAML keys in the `keybindings:` section (gr
 | `attach`            | Stage a file from disk to send           |
 | `cancel_upload`     | Cancel a staged upload / clear an active reply or edit |
 | `download_file`     | Download the selected file to the Downloads folder |
-| `visual_select`     | Start or leave Visual mode: `j` and `k` extend the selection, `y` copies it |
+| `visual_select`     | Start Visual mode with a range, or in it fix the range or start another |
+| `visual_mark`       | Start Visual mode with the focused message, or in it add or remove the focused message |
+| `copy_with_names`   | In Visual mode, copy the selection with times and names |
 | `show_profile`      | Show the profile of the message's author, or of the person in a private chat |
 
 ### Context menu - contexts `context_menu`, `delete_submenu`

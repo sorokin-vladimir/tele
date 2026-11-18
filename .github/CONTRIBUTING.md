@@ -1,104 +1,130 @@
 # Contributing to tele
 
-Thanks for your interest in improving `tele` — a terminal-native Telegram client.
-This document explains how to set up a development environment, the conventions
-the project follows, and how to get your changes merged.
+Thanks for wanting to make `tele` better.
+This page says how to get a change in without surprises on either side.
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By
-participating, you are expected to uphold it.
+This project follows the [Contributor Covenant](../CODE_OF_CONDUCT.md).
+By taking part, you agree to keep it.
 
-## Ways to contribute
+## Before you start
 
-- **Report a bug** — open an issue using the [Bug report](ISSUE_TEMPLATE/bug_report.md) template.
-- **Request a feature** — open an issue using the [Feature request](ISSUE_TEMPLATE/feature_request.md) template.
-- **Submit a fix or feature** — see the workflow below.
-- **Improve docs** — README, keybindings reference, and inline docs are all fair game.
+Open an issue first for anything bigger than a small fix: a feature, a new key or setting, a change in how something behaves.
+Say there that you would like to build it, and wait for an answer before you write the code.
+`tele` has a design behind it, and a pull request that arrives without a talk first may be asked to change a lot, or to grow into something wider than you planned.
 
-For anything non-trivial, please open an issue first so we can agree on the
-approach before you spend time on a pull request.
+A small fix (a typo, an obvious bug in a few lines) can come straight as a pull request.
 
-## Development setup
+Issues labelled [`good first issue`](https://github.com/sorokin-vladimir/tele/labels/good%20first%20issue) are small, local, and say what "done" means.
+They are a good place to start.
 
-Requires **Go 1.26+** and your own [Telegram API credentials](https://my.telegram.org).
+## Setup
 
-This repo uses [mise](https://mise.jdx.dev/) for tooling and tasks, and
-[lefthook](https://github.com/evilmartians/lefthook) for git hooks.
+You need Go 1.26 or newer.
+A build from source runs without registering anything: it carries the shared app key described in [app-key.md](../docs/app-key.md).
+
+The repo uses [mise](https://mise.jdx.dev/) for tools and tasks and [lefthook](https://github.com/evilmartians/lefthook) for git hooks:
 
 ```sh
 git clone https://github.com/sorokin-vladimir/tele
 cd tele
 
-mise install        # installs the pinned Go toolchain and checking tools
-mise run hooks      # installs git hooks via lefthook
+mise install        # the pinned Go toolchain and checking tools
+mise run hooks      # git hooks via lefthook
 ```
 
-Run the app against a local dev config:
+More on building, Nix and gotd is in [development.md](../docs/development.md).
+
+## Try it live
+
+Tests are not enough.
+Every change you can see in the window or on the command line has to be run by you before review:
 
 ```sh
-mise run dev        # go run ./cmd/tele/ --config .config/tele/config.yml
-mise run dev-e      # same, with debug logging
+mise run dev        # tele with the dev config, .config/tele/config.yml
+mise run dev-e      # the same, with debug logging
 ```
 
-Build a binary (your API credentials are injected at build time):
+Log in with your own account and go through what you changed, including the edge cases.
+In the pull request, write what you checked.
+A pull request that was never run is not reviewed.
 
-```sh
-go build \
-  -ldflags "-X main.buildAPIID=YOUR_API_ID -X main.buildAPIHash=YOUR_API_HASH" \
-  -o tele ./cmd/tele/
+## Using an AI assistant
+
+You may use one.
+You are responsible for the code all the same: every line in the pull request is yours, you should be able to explain any of it in review, and you run it live as above.
+If an assistant wrote most of the code, say so in the pull request.
+
+## Code
+
+- New behaviour comes with tests, and the tests check behaviour, not how the code is built.
+- No test talks to Telegram: the Telegram layer sits behind the `Client` interface, which tests replace.
+- `internal/ui` never imports `internal/tg`. The window talks to the owner of the account through its calls and the updates it sends.
+- A new setting is declared in `internal/config/registry.go`, says whose it is (host or client), and gets a `TestTakesHold_<key>` test where its effect is seen. The registry tests tell you what is missing.
+- Before raising the gotd version, read [gotd-workarounds.md](../docs/gotd-workarounds.md).
+
+## Drawing in the terminal
+
+A theme can paint the whole screen, so every cell `tele` draws has to carry the background.
+A cell that does not shows the terminal's own colour through, as a hole.
+
+- Make styles with `theme.NewStyle`, never `lipgloss.NewStyle`.
+- Pad a row with `theme.Pad` or `theme.PadTo`, never with plain spaces.
+- A text cut short with `ansi.Truncate` gets an unstyled tail: pass a styled `…`.
+- A new theme token needs an issue first.
+
+`internal/ui/canvas_guard_test.go` refuses the first two at build time.
+The rest is on you and on the review.
+
+## Docs
+
+The English docs are written one sentence per line, not wrapped at 80 columns.
+A list item's next sentences go on their own lines, indented two spaces.
+
+A change in behaviour comes with the change in the English docs.
+You may update the Russian and Chinese translations too, but leave the commit in their first line as it is: it names a commit on `main`, which your change does not have until it is merged.
+If you do not translate, that is fine: the maintainer does it after the merge.
+See [translating.md](../docs/translating.md).
+
+## CHANGELOG
+
+A change a person would notice gets a line in [`CHANGELOG.md`](../CHANGELOG.md), under `[Unreleased]`, ending with the issue number: `(#123)`.
+Releases happen while a pull request waits, so merge the latest `main` before it is merged and keep your line under `[Unreleased]`.
+
+## Commits and merging
+
+Commit subjects look like this:
+
 ```
-
-## Before you open a PR
-
-Run the full check locally — this is also what the git hooks enforce on push:
-
-```sh
-mise run check      # go vet ./... + golangci-lint run ./... + go test ./... + govulncheck ./...
-```
-
-Individual tasks are available too:
-
-| Task             | Command                       |
-| ---------------- | ----------------------------- |
-| `mise run test`  | `go test ./...`               |
-| `mise run lint`  | `golangci-lint run ./...`     |
-| `mise run vet`   | `go vet ./...`                |
-| `mise run vuln`  | `govulncheck ./...`           |
-| `mise run tidy`  | `go mod tidy`                 |
-
-Code is formatted with `gofmt` (run automatically on commit via lefthook).
-
-New behavior should come with tests. The project values test-driven changes —
-add or update tests alongside the code they cover.
-
-## Commit messages
-
-Commits follow a [Conventional Commits](https://www.conventionalcommits.org/)
-style, referencing the related issue where one exists:
-
-```
-fix: #123 Avoid flooding notify when run app after long idle
+fix: #123 Keep the cursor on screen after a resize
 feat: #140 Forward messages between chats
-docs: Update changelog
-chore: release v1.3.1
+docs: Describe the proxy settings
 ```
 
+The subject is 50 characters at most, or 70 when it cannot be shorter.
 Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 
-## Pull request process
+Pull requests are squash-merged, so the pull request's title becomes the commit: give it the same shape.
+Keep one change to a pull request.
+Unrelated fixes found on the way go in their own pull requests, however small.
 
-1. Fork the repo and create a branch from `main`.
-2. Make your change, including tests and doc updates where relevant.
-3. Run `mise run check` and make sure it passes.
-4. Update [`CHANGELOG.md`](../CHANGELOG.md) under the unreleased section if the
-   change is user-facing.
-5. Open the PR and fill in the template. Link the issue it resolves.
+## Checks
 
-Maintainers review PRs on a best-effort basis. Keep PRs focused — one logical
-change per PR is much easier to review than a large mixed one.
+Run the full check before you push; the git hooks run it too:
+
+```sh
+mise run check      # go vet, golangci-lint, go test, govulncheck
+```
+
+GitHub does not run the workflows on pull requests from forks, so the maintainer runs the checks on your branch by hand.
+A pull request that fails `mise run check` waits until it passes.
+
+## Review
+
+Reviews are best effort, and big pull requests take longer.
+The maintainer may push a small fix to your branch (a merge of `main`, a CHANGELOG line) instead of asking for it.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[GPL-3.0](../LICENSE) license that covers the project.
+By contributing, you agree that your contributions are licensed under the [GPL-3.0](../LICENSE) that covers the project.

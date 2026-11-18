@@ -275,10 +275,12 @@ func (ml *MessageList) clampToBounds(vs, lo int) (int, int) {
 func (ml *MessageList) CursorUpByLines(n int) bool {
 	for passed := 0; passed < n; {
 		from := ml.cursorIndex()
-		atOldest := ml.CursorUp()
+		if ml.CursorUp() {
+			return true
+		}
 		to := ml.cursorIndex()
-		if atOldest || to < 0 || to >= from {
-			return atOldest
+		if to < 0 || to >= from {
+			return false
 		}
 		for i := to; i < from; i++ {
 			passed += ml.itemHeight(i)

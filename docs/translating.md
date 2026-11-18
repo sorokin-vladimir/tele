@@ -30,6 +30,8 @@ Drop those sentences once one has.
 
 The link and the commit stay on one line.
 When you bring a translation up to date, translate what changed since that commit (`git diff <commit> -- docs/configuration.md`) and move the commit forward.
+In a pull request from a fork, leave the commit as it is: it names a commit on `main`, and the change has none there until it is merged.
+The maintainer moves it after the merge.
 
 **Its sections keep the English anchors.**
 A link such as `configuration.md#running-without-a-window` must work in every language, and GitHub builds an anchor from the heading's own text.

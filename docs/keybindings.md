@@ -81,7 +81,7 @@ A message that could not be sent stays in the chat, marked `✕` in its bottom b
 `V` starts Visual mode with a range from the focused message, and the status bar shows `VISUAL`.
 `j` and `k`, `G` and `g g`, `ctrl+d` and `ctrl+u` stretch the range, and at the top of what is loaded older messages load and the range keeps going.
 `m` starts Visual mode with only the focused message selected.
-In Visual mode `m` adds or removes the focused message: a range being stretched is fixed into the selection first, and `j` and `k` then only move the cursor.
+In Visual mode `m` adds or removes the focused message. On a range being stretched, `m` fixes the range into the selection, the focused message included, and `j` and `k` then only move the cursor.
 `V` in Visual mode fixes the range being stretched, or starts a new one that adds to the selection.
 An album counts as one message.
 

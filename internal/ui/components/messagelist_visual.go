@@ -42,7 +42,10 @@ func (ml *MessageList) VisualMark() {
 	if !ml.visual.on {
 		return
 	}
-	ml.fixVisualRange()
+	if ml.visual.anchorID != 0 {
+		ml.fixVisualRange()
+		return
+	}
 	i := ml.cursorMessageIndex()
 	if i < 0 {
 		return

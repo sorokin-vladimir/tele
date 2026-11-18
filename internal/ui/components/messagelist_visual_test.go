@@ -74,18 +74,25 @@ func TestVisual_MarkAddsAndRemovesTheFocusedMessage(t *testing.T) {
 	assert.False(t, ml.VisualHasGaps())
 }
 
-func TestVisual_MarkFixesTheRangeThenTogglesTheFocusedMessage(t *testing.T) {
+func TestVisual_MarkFixesTheRangeWithTheFocusedMessageIn(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(5))
 	require.True(t, ml.StartVisualRange())
 	ml.CursorUp()
 	ml.CursorUp()
 	ml.VisualMark()
-	assert.Equal(t, []int{4, 5}, selectedIDs(ml))
+	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml))
 
 	ml.CursorUp()
 	ml.CursorUp()
-	assert.Equal(t, []int{4, 5}, selectedIDs(ml), "after the range is fixed the cursor only moves")
+	assert.Equal(t, []int{3, 4, 5}, selectedIDs(ml), "after the range is fixed the cursor only moves")
+
+	ml.VisualMark()
+	assert.Equal(t, []int{1, 3, 4, 5}, selectedIDs(ml))
+	ml.CursorDown()
+	ml.CursorDown()
+	ml.VisualMark()
+	assert.Equal(t, []int{1, 4, 5}, selectedIDs(ml), "the next m removes the focused message")
 }
 
 func TestVisual_RangeKeyFixesTheRangeBeingStretched(t *testing.T) {
@@ -125,6 +132,8 @@ func TestVisual_AnAlbumIsOneItem(t *testing.T) {
 	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml))
 
 	ml.VisualMark()
+	ml.VisualMark()
+	assert.Equal(t, []int{4}, selectedIDs(ml), "unmarking the album unmarks both of its parts")
 	ml.VisualMark()
 	assert.Equal(t, []int{2, 3, 4}, selectedIDs(ml), "marking the album marks both of its parts")
 }

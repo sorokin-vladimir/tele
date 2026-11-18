@@ -39,6 +39,16 @@ func (m RootModel) syncVisual() {
 	m.statusBar.SetVisualHasGaps(m.chat.VisualHasGaps())
 }
 
+func visualIgnores(action keys.Action) bool {
+	switch action {
+	case keys.ActionQuit, keys.ActionDismissToast, keys.ActionShowHelp, keys.ActionShowSettings,
+		keys.ActionLogOut, keys.ActionReloadConfig, keys.ActionReloadThemes, keys.ActionChatSearch,
+		keys.ActionSearch, keys.ActionMessageSearch, keys.ActionMessageSearchAll:
+		return true
+	}
+	return false
+}
+
 func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	if m.vimState.Mode != keys.ModeVisual {
 		switch action {

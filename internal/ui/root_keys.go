@@ -17,6 +17,9 @@ import (
 // a global chord such as g L is completed by the matcher of the pane it was
 // typed in and would otherwise be handed to that pane, which ignores it (#297).
 func (m RootModel) globalAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
+	if m.vimState.Mode == keys.ModeVisual && visualIgnores(action) {
+		return m, nil, true
+	}
 	switch action {
 	case keys.ActionFocusChatList:
 		next, cmd := m.focusPane(FocusChatList)

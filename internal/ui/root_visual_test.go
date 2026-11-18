@@ -207,6 +207,31 @@ func TestVisual_KeysOutsideTheModeDoNothing(t *testing.T) {
 	assert.Len(t, m.Chat().VisualSelection(), 2)
 }
 
+func TestVisual_GlobalKeysOtherThanFocusDoNothing(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m, "V", "k")
+
+	presses := map[string]tea.KeyPressMsg{
+		"/":      {Code: '/', Text: "/"},
+		"?":      {Code: '?', Text: "?"},
+		",":      {Code: ',', Text: ","},
+		"q":      {Code: 'q', Text: "q"},
+		"ctrl+c": {Code: 'c', Mod: tea.ModCtrl},
+	}
+	for name, press := range presses {
+		nm, cmd := m.Update(press)
+		m = nm.(ui.RootModel)
+		assert.Nil(t, cmd, "%s does nothing", name)
+		assert.Equal(t, keys.ModeVisual, m.VimMode(), "%s keeps Visual mode", name)
+	}
+	m = pressKeys(m, "g", "/")
+	assert.Nil(t, m.MessageSearch(), "g / opens no search")
+	assert.False(t, m.SearchActive())
+	assert.False(t, m.SettingsOpen())
+	assert.Equal(t, keys.ModeVisual, m.VimMode())
+	assert.Len(t, m.Chat().VisualSelection(), 2)
+}
+
 func TestVisual_MovingFocusOutOfTheChatLeavesTheMode(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(3)...)
 	m = pressKeys(m, "V", "k", "h")

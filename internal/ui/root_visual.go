@@ -2,10 +2,12 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/transcript"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
@@ -58,7 +60,10 @@ func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	case keys.ActionVisualMark:
 		m.chat.VisualMark()
 	case keys.ActionCopyMessage:
-		next, cmd := m.copySelection()
+		next, cmd := m.copySelection(false)
+		return next, cmd, true
+	case keys.ActionCopyWithNames:
+		next, cmd := m.copySelection(true)
 		return next, cmd, true
 	case keys.ActionNormal:
 		m.endVisual()
@@ -67,14 +72,34 @@ func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	return m, nil, true
 }
 
-func (m RootModel) copySelection() (RootModel, tea.Cmd) {
+func (m RootModel) copySelection(withNames bool) (RootModel, tea.Cmd) {
 	msgs := m.chat.VisualSelection()
+	withNames = withNames || m.chat.VisualHasGaps()
 	m.endVisual()
-	text := selectionTexts(msgs)
+	text := m.selectionText(msgs, withNames)
 	if text == "" {
 		return m, nil
 	}
 	return m, copyToClipboardCmd(text)
+}
+
+func (m RootModel) selectionText(msgs []domain.Message, withNames bool) string {
+	if !withNames {
+		return selectionTexts(msgs)
+	}
+	if len(msgs) == 0 {
+		return ""
+	}
+	f := transcript.Format{
+		Location:     time.Local,
+		Self:         m.account.LoggedInUser.Name,
+		Quotable:     m.chatMsgs,
+		OmitUnquoted: true,
+	}
+	if m.cfg != nil {
+		f.NameWidth = m.cfg.CLI.NameWidth
+	}
+	return transcript.Text(msgs, f)
 }
 
 func selectionTexts(msgs []domain.Message) string {

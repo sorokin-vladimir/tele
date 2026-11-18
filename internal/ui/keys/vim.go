@@ -65,6 +65,7 @@ const (
 	ActionCancelUpload    Action = "cancel_upload"
 	ActionDownloadFile    Action = "download_file"
 	ActionCopyMessage     Action = "copy_message"
+	ActionCopyWithNames   Action = "copy_with_names"
 	ActionVisualSelect    Action = "visual_select"
 	ActionVisualMark      Action = "visual_mark"
 	ActionPasteImage      Action = "paste_image"

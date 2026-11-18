@@ -123,6 +123,7 @@ func DefaultKeyMap() KeyMap {
 			"x":      ActionCancelUpload,
 			"s":      ActionDownloadFile,
 			"y":      ActionCopyMessage,
+			"Y":      ActionCopyWithNames,
 			"V":      ActionVisualSelect,
 			"m":      ActionVisualMark,
 			"P":      ActionShowProfile,

@@ -107,6 +107,25 @@ func TestVisual_YCopiesTheTextAsTelegramSentIt(t *testing.T) {
 	assert.Equal(t, "m1\n\nfirst line\nsecond line", got)
 }
 
+func TestVisual_ShiftYCopiesWithTimesAndNamesAsTeleShowPrints(t *testing.T) {
+	msgs := visualMessages(5)
+	msgs[3] = domain.Message{ID: 4, ChatID: 1, IsOut: true, Text: "on my way\nsoon", ReplyToMsgID: 1, Date: visualDate(3)}
+	msgs[4] = domain.Message{ID: 5, ChatID: 1, SenderID: 42, SenderName: "Bob", Text: "ok", ReplyToMsgID: 511, Date: visualDate(4)}
+	m, _ := visualRoot(t, msgs...)
+
+	m = pressKeys(m, "V", "k", "k")
+	_, got := copiedBy(t, m, "Y")
+
+	want := "" +
+		"2026-11-18\n" +
+		"09:02 Bob:           m3\n" +
+		"09:03 Ada Lovelace:  on my way\n" +
+		"                     soon\n" +
+		"  ↳ Bob: m1\n" +
+		"09:04 Bob:           ok\n"
+	assert.Equal(t, want, got)
+}
+
 func TestVisual_MFromNormalSelectsOnlyTheFocusedMessage(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(3)...)
 
@@ -116,13 +135,31 @@ func TestVisual_MFromNormalSelectsOnlyTheFocusedMessage(t *testing.T) {
 	assert.Equal(t, "m3", got)
 }
 
+func TestVisual_YOnASetWithGapsCopiesWithNames(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(5)...)
+
+	m = pressKeys(m, "m", "k", "k", "m")
+	_, got := copiedBy(t, m, "y")
+
+	want := "" +
+		"2026-11-18\n" +
+		"09:02 Bob:  m3\n" +
+		"09:04 Bob:  m5\n"
+	assert.Equal(t, want, got)
+}
+
 func TestVisual_VInsideASetAddsARange(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(6)...)
 
 	m = pressKeys(m, "m", "k", "k", "V", "k")
-	_, got := copiedBy(t, m, "y")
+	_, got := copiedBy(t, m, "Y")
 
-	assert.Equal(t, "m3\n\nm4\n\nm6", got)
+	want := "" +
+		"2026-11-18\n" +
+		"09:02 Bob:  m3\n" +
+		"09:03 Bob:  m4\n" +
+		"09:05 Bob:  m6\n"
+	assert.Equal(t, want, got)
 }
 
 func TestVisual_EscLeavesAndClearsTheSelectionAndKeepsTheChatOpen(t *testing.T) {
@@ -183,8 +220,12 @@ func TestVisual_DeletedMessagesLeaveTheRestSelected(t *testing.T) {
 
 	assert.Equal(t, keys.ModeVisual, m.VimMode())
 	assert.Equal(t, 4, m.Chat().SelectedMessageID())
-	_, got := copiedBy(t, m, "y")
-	assert.Equal(t, "m4\n\nm6", got)
+	_, got := copiedBy(t, m, "Y")
+	want := "" +
+		"2026-11-18\n" +
+		"09:03 Bob:  m4\n" +
+		"09:05 Bob:  m6\n"
+	assert.Equal(t, want, got)
 }
 
 func TestVisual_GAndGGStretchTheRangeToTheEnds(t *testing.T) {
@@ -206,8 +247,8 @@ func TestVisual_AnAlbumIsCopiedAsOneItem(t *testing.T) {
 	m, _ := visualRoot(t, msgs...)
 
 	m = pressKeys(m, "V")
-	_, got := copiedBy(t, m, "y")
-	assert.Equal(t, "the view", got)
+	_, got := copiedBy(t, m, "Y")
+	assert.Equal(t, "2026-11-18\n09:01 Bob:  [photo] the view\n09:01 Bob:  [photo]\n", got)
 
 	m = pressKeys(m, "V", "k")
 	_, got = copiedBy(t, m, "y")

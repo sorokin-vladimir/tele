@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -341,4 +342,35 @@ func TestVisual_HalfPageDownOnTheNewestMessageReportsTheBottom(t *testing.T) {
 	require.True(t, ml.StartVisualRange())
 	assert.True(t, ml.CursorDownByLines(6))
 	assert.Equal(t, []int{3}, selectedIDs(ml))
+}
+
+func screenRowOf(t *testing.T, view, text string) int {
+	t.Helper()
+	for i, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, " "+text+" ") {
+			return i
+		}
+	}
+	t.Fatalf("%q is not on screen", text)
+	return -1
+}
+
+func TestVisual_AReloadThatLoadsOlderMessagesKeepsTheMessagesOnTheirRows(t *testing.T) {
+	ml := components.NewMessageList(30, 40)
+	all := makeMessages(40)
+	all[9].Text = "msg 10\nline two\nline three"
+	ml.SetMessages(all[10:])
+	for ml.SelectedMessageID() != 14 {
+		ml.CursorUp()
+	}
+	require.True(t, ml.StartVisualMark())
+	before := ml.View()
+
+	reloaded := append(append([]domain.Message{}, all[8:15]...), all[17:]...)
+	ml.SetMessages(reloaded)
+	after := ml.View()
+
+	assert.Equal(t, screenRowOf(t, before, "msg 14"), screenRowOf(t, after, "msg 14"))
+	assert.Equal(t, screenRowOf(t, before, "msg 12"), screenRowOf(t, after, "msg 12"))
+	assert.Equal(t, []int{14}, selectedIDs(ml))
 }

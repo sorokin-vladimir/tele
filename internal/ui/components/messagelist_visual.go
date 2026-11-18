@@ -222,13 +222,7 @@ func (ml *MessageList) reloadKeepingVisual(msgs []domain.Message) bool {
 	if !ml.visual.on || len(msgs) == 0 || msgs[0].ChatID != ml.firstMessageChatID() {
 		return false
 	}
-	viewMsg := -1
-	for i := ml.viewStart; i < len(ml.items); i++ {
-		if ml.items[i].kind == itemMessage {
-			viewMsg = i
-			break
-		}
-	}
+	rowOnScreen := ml.messageRowsOnScreen()
 	before := ml.items
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
@@ -236,13 +230,13 @@ func (ml *MessageList) reloadKeepingVisual(msgs []domain.Message) bool {
 	if ml.cursorIndex() < 0 {
 		return false
 	}
-	if viewMsg >= 0 {
-		if i := ml.firstSurvivorIndex(before, viewMsg); i >= 0 {
-			ml.viewStart, ml.lineOffset = ml.clampToBounds(i-(viewMsg-ml.viewStart), ml.lineOffset)
-			return true
+	ml.viewStart, ml.lineOffset = ml.clampToBounds(ml.viewStart, ml.lineOffset)
+	for i, it := range ml.items {
+		if row, ok := rowOnScreen[it.msg.ID]; ok && it.kind == itemMessage {
+			ml.putItemOnRow(i, row)
+			break
 		}
 	}
-	ml.viewStart, ml.lineOffset = ml.clampToBounds(ml.viewStart, ml.lineOffset)
 	return true
 }
 
@@ -255,16 +249,33 @@ func (ml *MessageList) firstMessageChatID() int64 {
 	return 0
 }
 
-func (ml *MessageList) firstSurvivorIndex(before []listItem, from int) int {
-	for i := from; i < len(before); i++ {
-		if before[i].kind != itemMessage {
-			continue
+func (ml *MessageList) messageRowsOnScreen() map[int]int {
+	rows := map[int]int{}
+	row := -ml.lineOffset
+	for i := ml.viewStart; i < len(ml.items) && row < ml.viewHeight; i++ {
+		if ml.items[i].kind == itemMessage {
+			rows[ml.items[i].msg.ID] = row
 		}
-		if j := indexOfMessage(ml.items, before[i].msg.ID); j >= 0 {
-			return j
-		}
+		row += ml.itemHeight(i)
 	}
-	return -1
+	return rows
+}
+
+func (ml *MessageList) putItemOnRow(i, row int) {
+	viewStart, lineOffset := i, 0
+	if row < 0 {
+		lineOffset = -row
+	}
+	for row > 0 && viewStart > 0 {
+		viewStart--
+		h := ml.itemHeight(viewStart)
+		if h > row {
+			lineOffset = h - row
+			break
+		}
+		row -= h
+	}
+	ml.viewStart, ml.lineOffset = ml.clampToBounds(viewStart, lineOffset)
 }
 
 func (ml *MessageList) survivorNear(before []listItem, from, toward int) int {

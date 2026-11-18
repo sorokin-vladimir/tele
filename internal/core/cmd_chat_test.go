@@ -39,6 +39,8 @@ type stubClient struct {
 	readTo        int
 	editedTo      string
 	deletedIDs    []int
+	deleteCalls   [][]int // the ids of each DeleteMessages call, in order
+	deleteFailsOn int     // 1-based call that answers err; 0 means every call does
 	revoked       bool
 	reactedWith   string
 	reactionSent  bool

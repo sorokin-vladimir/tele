@@ -207,8 +207,14 @@ func optimisticReactions(current []domain.Reaction, emoji string) []domain.React
 	return out
 }
 
+// deleteBatchSize is the most ids Telegram takes in one delete call.
+const deleteBatchSize = 100
+
 // DeleteMessages deletes messages, for everyone when revoke is set. They leave
-// the window at once and come back if Telegram refuses.
+// the window at once and come back if Telegram refuses. The ids go out in
+// batches of at most deleteBatchSize, one after another and in the order
+// given. The first refusal stops the run: the refused batch and the batches
+// not yet sent come back, the ones already deleted stay deleted.
 func (o *Owner) DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error {
 	peer, err := o.peer(chatID)
 	if err != nil {
@@ -223,11 +229,21 @@ func (o *Owner) DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, 
 		removed = append(removed, m)
 	}
 	o.state.ApplyDelete(chatID, msgIDs)
-	if err := o.client.DeleteMessages(ctx, peer, msgIDs, revoke); err != nil {
-		for _, m := range removed {
-			o.state.ApplyRestore(m)
+	// A call with no ids is still made once, as it was before batching.
+	for start := 0; start == 0 || start < len(msgIDs); start += deleteBatchSize {
+		end := min(start+deleteBatchSize, len(msgIDs))
+		if err := o.client.DeleteMessages(ctx, peer, msgIDs[start:end], revoke); err != nil {
+			unsent := make(map[int]bool, len(msgIDs)-start)
+			for _, id := range msgIDs[start:] {
+				unsent[id] = true
+			}
+			for _, m := range removed {
+				if unsent[m.ID] {
+					o.state.ApplyRestore(m)
+				}
+			}
+			return err
 		}
-		return err
 	}
 	return nil
 }

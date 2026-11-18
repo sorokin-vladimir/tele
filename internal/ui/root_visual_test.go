@@ -324,9 +324,7 @@ func TestVisual_TheMenuOfARangeOffersBothCopies(t *testing.T) {
 
 	require.True(t, m.ContextMenuOpen())
 	view := ansi.Strip(m.View().Content)
-	assert.Contains(t, view, "y Copy")
-	assert.Contains(t, view, "Y Copy with names")
-	assert.NotContains(t, view, "CopY")
+	assert.Contains(t, view, "CopY with names")
 	assert.NotContains(t, view, "Reply")
 
 	var got string
@@ -348,7 +346,7 @@ func TestVisual_TheMenuOfASetOffersOnlyCopy(t *testing.T) {
 
 	require.True(t, m.ContextMenuOpen())
 	view := ansi.Strip(m.View().Content)
-	assert.Contains(t, view, "y Copy")
+	assert.Contains(t, view, "Copy")
 	assert.NotContains(t, view, "with names")
 }
 

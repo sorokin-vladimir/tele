@@ -21,6 +21,13 @@ type Format struct {
 	NameWidth int
 	// Location is the time zone the times are in.
 	Location *time.Location
+	// Self names your own messages, and an empty one names them You.
+	Self string
+	// Quotable is what a reply line may quote besides the messages shown.
+	Quotable []domain.Message
+	// OmitUnquoted leaves out the reply line of a reply to a message neither
+	// shown nor quotable, instead of naming that message by its id.
+	OmitUnquoted bool
 }
 
 // Text is the messages as a person reads them: a line per message with its
@@ -29,7 +36,10 @@ type Format struct {
 // than f.NameWidth columns is cut short, so one long name does not push
 // everybody's text to the right.
 func Text(msgs []domain.Message, f Format) string {
-	byID := make(map[int]domain.Message, len(msgs))
+	byID := make(map[int]domain.Message, len(msgs)+len(f.Quotable))
+	for _, m := range f.Quotable {
+		byID[m.ID] = m
+	}
 	nameW := 0
 	for _, m := range msgs {
 		byID[m.ID] = m
@@ -53,7 +63,7 @@ func Text(msgs []domain.Message, f Format) string {
 			}
 			b.WriteString(line + "\n")
 		}
-		if m.ReplyToMsgID != 0 {
+		if _, quotable := byID[m.ReplyToMsgID]; m.ReplyToMsgID != 0 && (quotable || !f.OmitUnquoted) {
 			b.WriteString("  ↳ " + f.quote(m.ReplyToMsgID, byID) + "\n")
 		}
 	}
@@ -64,6 +74,8 @@ func Text(msgs []domain.Message, f Format) string {
 func (f Format) Name(m domain.Message) string {
 	name := m.SenderName
 	switch {
+	case m.IsOut && f.Self != "":
+		name = f.Self
 	case m.IsOut:
 		name = "You"
 	case name == "":

@@ -90,3 +90,47 @@ func TestShowText_NamesTheMedia(t *testing.T) {
 		}
 	}
 }
+
+func TestText_NamesYourOwnMessagesAsSelf(t *testing.T) {
+	msgs := []domain.Message{
+		{ID: 1, Date: at(25, 9, 0), SenderName: "Bob", Text: "hi"},
+		{ID: 2, Date: at(25, 9, 1), IsOut: true, Text: "hello", ReplyToMsgID: 1},
+	}
+
+	got := transcript.Text(msgs, transcript.Format{NameWidth: 20, Location: time.UTC, Self: "Ada Lovelace"})
+
+	want := "" +
+		"2026-10-25\n" +
+		"09:00 Bob:           hi\n" +
+		"09:01 Ada Lovelace:  hello\n" +
+		"  ↳ Bob: hi\n"
+	if got != want {
+		t.Errorf("printed\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestText_QuotesAQuotableMessageNotShown(t *testing.T) {
+	quotable := []domain.Message{{ID: 1, Date: at(25, 8, 0), SenderName: "Bob", Text: "first line\nsecond line"}}
+	msgs := []domain.Message{{ID: 2, Date: at(25, 9, 0), SenderName: "Eve", Text: "yes", ReplyToMsgID: 1}}
+
+	got := transcript.Text(msgs, transcript.Format{NameWidth: 20, Location: time.UTC, Quotable: quotable, OmitUnquoted: true})
+
+	want := "" +
+		"2026-10-25\n" +
+		"09:00 Eve:  yes\n" +
+		"  ↳ Bob: first line\n"
+	if got != want {
+		t.Errorf("printed\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestText_OmitUnquotedDropsTheLineOfAReplyToAMessageNotLoaded(t *testing.T) {
+	msgs := []domain.Message{{ID: 2, Date: at(25, 9, 0), SenderName: "Eve", Text: "yes", ReplyToMsgID: 511}}
+
+	got := transcript.Text(msgs, transcript.Format{NameWidth: 20, Location: time.UTC, OmitUnquoted: true})
+
+	want := "2026-10-25\n09:00 Eve:  yes\n"
+	if got != want {
+		t.Errorf("printed %q, want %q", got, want)
+	}
+}

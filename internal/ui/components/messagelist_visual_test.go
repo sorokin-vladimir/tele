@@ -239,3 +239,34 @@ func TestVisual_CannotStartOnAnEmptyList(t *testing.T) {
 	assert.False(t, ml.StartVisualMark())
 	assert.False(t, ml.InVisual())
 }
+
+func TestVisual_HalfPageUpThenDownStretchesAndShrinksTheRange(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	ml.SetMessages(makeMessages(40))
+	ml.View()
+	require.True(t, ml.StartVisualRange())
+
+	ml.CursorUpByLines(6)
+	stretched := selectedIDs(ml)
+	assert.Greater(t, len(stretched), 1)
+	assert.Equal(t, 40, stretched[len(stretched)-1])
+
+	ml.CursorDownByLines(6)
+	assert.Equal(t, []int{40}, selectedIDs(ml))
+}
+
+func TestVisual_HalfPageUpStopsAtTheOldestLoadedMessage(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	ml.SetMessages(makeMessages(3))
+	require.True(t, ml.StartVisualRange())
+	assert.True(t, ml.CursorUpByLines(100))
+	assert.Equal(t, []int{1, 2, 3}, selectedIDs(ml))
+}
+
+func TestVisual_HalfPageDownOnTheNewestMessageReportsTheBottom(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	ml.SetMessages(makeMessages(3))
+	require.True(t, ml.StartVisualRange())
+	assert.True(t, ml.CursorDownByLines(6))
+	assert.Equal(t, []int{3}, selectedIDs(ml))
+}

@@ -694,6 +694,12 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			if n < 1 {
 				n = 1
 			}
+			if m.msgList.InVisual() {
+				if m.msgList.CursorDownByLines(n) {
+					return m, m.loadNewer()
+				}
+				return m, nil
+			}
 			m.msgList.ScrollDownBy(n)
 			if m.msgList.AtBottom() {
 				return m, m.loadNewer()
@@ -702,6 +708,14 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			n := m.msgList.ViewHeight() * 2 / 3
 			if n < 1 {
 				n = 1
+			}
+			if m.msgList.InVisual() {
+				if m.msgList.CursorUpByLines(n) && m.header.ChatID != 0 && m.msgList.Count() > 0 {
+					chatID := m.header.ChatID
+					offsetID := m.msgList.OldestID()
+					return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+				}
+				return m, nil
 			}
 			m.msgList.ScrollUpBy(n)
 			if m.msgList.AtTop() && m.header.ChatID != 0 && m.msgList.Count() > 0 {

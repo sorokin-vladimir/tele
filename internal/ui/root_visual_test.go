@@ -89,6 +89,21 @@ func TestVisual_VThenKThenYCopiesTheRangeOldestFirst(t *testing.T) {
 	assert.False(t, m.Chat().InVisual())
 }
 
+func TestVisual_CtrlUThenCtrlDStretchesAndShrinksTheRange(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(30)...)
+	m = pressKeys(m, "V")
+
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+	stretched := len(m.Chat().VisualSelection())
+	assert.Greater(t, stretched, 1)
+
+	nm, _ = m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+	assert.Len(t, m.Chat().VisualSelection(), 1)
+	assert.Equal(t, keys.ModeVisual, m.VimMode())
+}
+
 func TestVisual_LowercaseVIsLeftFree(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(3)...)
 	m = pressKeys(m, "v")

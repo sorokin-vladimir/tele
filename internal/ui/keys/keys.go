@@ -153,6 +153,7 @@ func DefaultKeyMap() KeyMap {
 			"p":     ActionPlayVoice,
 			"s":     ActionDownloadFile,
 			"y":     ActionCopyMessage,
+			"Y":     ActionCopyWithNames,
 			"P":     ActionShowProfile,
 		},
 		ContextDeleteSubMenu: {

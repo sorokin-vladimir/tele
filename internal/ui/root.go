@@ -751,6 +751,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, copyToClipboardCmd(text)
 		}
 		return m, nil
+	case components.CopySelectionRequest:
+		return m.copySelection(msg.WithNames)
 	case components.OpenTargetChosenMsg:
 		m.openPicker = nil
 		return m.openTarget(msg.Target)

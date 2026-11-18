@@ -8,12 +8,14 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/transcript"
+	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 func (m RootModel) setVisualMode() {
 	m.vimState.Mode = keys.ModeVisual
 	m.statusBar.SetMode(keys.ModeVisual)
+	m.statusBar.SetVisualHasGaps(m.chat.VisualHasGaps())
 }
 
 func (m RootModel) endVisual() {
@@ -32,7 +34,9 @@ func (m RootModel) syncVisual() {
 	}
 	if m.chat == nil || !m.chat.InVisual() {
 		m.endVisual()
+		return
 	}
+	m.statusBar.SetVisualHasGaps(m.chat.VisualHasGaps())
 }
 
 func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
@@ -65,6 +69,8 @@ func (m RootModel) visualAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	case keys.ActionCopyWithNames:
 		next, cmd := m.copySelection(true)
 		return next, cmd, true
+	case keys.ActionOpenContextMenu:
+		m.contextMenu = components.NewSelectionContextMenu(!m.chat.VisualHasGaps(), m.keyMap)
 	case keys.ActionNormal:
 		m.endVisual()
 	}

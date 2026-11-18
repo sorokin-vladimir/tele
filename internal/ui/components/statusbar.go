@@ -39,7 +39,8 @@ type StatusBar struct {
 	throttle string
 	// hostAway says the window's host is away and being waited for (#210),
 	// and lasts until it is back, as clockSkew does.
-	hostAway string
+	hostAway      string
+	visualHasGaps bool
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -57,6 +58,8 @@ func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
 func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
+
+func (sb *StatusBar) SetVisualHasGaps(v bool) { sb.visualHasGaps = v }
 
 // SetClockSkew shows s right after the mode label until it is set to "".
 func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
@@ -259,6 +262,16 @@ func (sb *StatusBar) profile() []footerItem {
 			{kind: fiSingle, ctx: keys.ContextFolders, action: keys.ActionConfirm},
 			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
 		}
+	case sb.activePane == "chat" && sb.mode == keys.ModeVisual:
+		items := []footerItem{{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyMessage}}
+		if !sb.visualHasGaps {
+			items = append(items, footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyWithNames})
+		}
+		return append(items,
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualMark},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualSelect},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionNormal, labelOverride: "exit"},
+		)
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
 		return []footerItem{
 			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionConfirm},

@@ -1,10 +1,12 @@
 package ui_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -228,6 +230,56 @@ func TestVisual_DeletedMessagesLeaveTheRestSelected(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestVisual_HintsOfARangeOfferCopyWithNames(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(4)...)
+	m = pressKeys(m, "V", "k")
+
+	bar := ansi.Strip(m.View().Content)
+	assert.Contains(t, bar, "VISUAL")
+	assert.Contains(t, bar, hintLine("copy", "copY with names", "mark", "V range", "esc exit"))
+}
+
+func TestVisual_HintsOfASetLeaveOutCopyWithNames(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(4)...)
+	m = pressKeys(m, "m", "k", "k", "m")
+
+	bar := ansi.Strip(m.View().Content)
+	assert.Contains(t, bar, hintLine("copy", "mark", "V range", "esc exit"))
+	assert.NotContains(t, bar, "with names")
+}
+
+func TestVisual_TheMenuOfARangeOffersBothCopies(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(4)...)
+	m = pressKeys(m, "V", "k", " ")
+
+	require.True(t, m.ContextMenuOpen())
+	view := ansi.Strip(m.View().Content)
+	assert.Contains(t, view, "CopY with names")
+	assert.NotContains(t, view, "Reply")
+
+	var got string
+	defer ui.SetClipboardWriterForTest(func(s string) error { got = s; return nil })()
+	m, cmd := key(m, "Y")
+	require.NotNil(t, cmd)
+	nm, copyCmd := m.Update(cmd())
+	m = nm.(ui.RootModel)
+	require.NotNil(t, copyCmd)
+	drainMsgs(copyCmd())
+	assert.Equal(t, "2026-11-18\n09:02 Bob:  m3\n09:03 Bob:  m4\n", got)
+	assert.False(t, m.ContextMenuOpen())
+	assert.Equal(t, keys.ModeNormal, m.VimMode())
+}
+
+func TestVisual_TheMenuOfASetOffersOnlyCopy(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(4)...)
+	m = pressKeys(m, "m", "k", "k", "m", " ")
+
+	require.True(t, m.ContextMenuOpen())
+	view := ansi.Strip(m.View().Content)
+	assert.Contains(t, view, "Copy")
+	assert.NotContains(t, view, "with names")
+}
+
 func TestVisual_GAndGGStretchTheRangeToTheEnds(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(5)...)
 	m = pressKeys(m, "k", "k", "V", "G")
@@ -264,4 +316,8 @@ func TestVisual_StatusBarShowsVisualUntilItEnds(t *testing.T) {
 
 	m = leaveWithEsc(m)
 	assert.Contains(t, m.View().Content, "NORMAL")
+}
+
+func hintLine(hints ...string) string {
+	return strings.Join(hints, " \u00b7 ")
 }

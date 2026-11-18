@@ -103,9 +103,6 @@ func (m RootModel) selectionText(msgs []domain.Message, withNames bool) string {
 	if !withNames {
 		return joinedTexts(msgs)
 	}
-	if len(msgs) == 0 {
-		return ""
-	}
 	f := transcript.Format{
 		Location:     time.Local,
 		Self:         m.account.LoggedInUser.Name,

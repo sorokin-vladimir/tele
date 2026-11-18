@@ -392,6 +392,9 @@ func hasNewRef(prev, next []domain.OutboxEntry) bool {
 func (ml *MessageList) Outbox() []domain.OutboxEntry { return ml.outbox }
 
 func (ml *MessageList) SetMessages(msgs []domain.Message) {
+	if ml.reloadKeepingVisual(msgs) {
+		return
+	}
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()

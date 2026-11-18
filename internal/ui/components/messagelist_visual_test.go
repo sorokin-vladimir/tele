@@ -234,11 +234,74 @@ func TestVisual_ClearEndsTheSelection(t *testing.T) {
 	assert.Empty(t, ml.VisualSelection())
 }
 
-func TestVisual_SetMessagesEndsTheSelection(t *testing.T) {
+func TestVisual_AReloadOfTheSameChatKeepsTheSelection(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	all := makeMessages(6)
+	ml.SetMessages(all)
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.CursorUp()
+
+	ml.SetMessages(all)
+	assert.True(t, ml.InVisual())
+	assert.Equal(t, []int{4, 5, 6}, selectedIDs(ml))
+	assert.Equal(t, 4, ml.SelectedMessageID())
+
+	withoutFive := append(append([]domain.Message{}, all[:4]...), all[5])
+	ml.SetMessages(withoutFive)
+	assert.True(t, ml.InVisual())
+	assert.Equal(t, []int{4, 6}, selectedIDs(ml))
+}
+
+func TestVisual_AReloadOfTheSameChatKeepsTheMarkedSet(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
+	all := makeMessages(6)
+	ml.SetMessages(all)
+	require.True(t, ml.StartVisualMark())
+	ml.CursorUp()
+	ml.CursorUp()
+	ml.VisualMark()
+
+	ml.SetMessages(all[1:])
+	assert.Equal(t, []int{4, 6}, selectedIDs(ml))
+	assert.True(t, ml.VisualHasGaps())
+}
+
+func TestVisual_AReloadOfTheSameChatDoesNotMoveTheView(t *testing.T) {
+	ml := components.NewMessageList(10, 40)
+	all := makeMessages(40)
+	ml.SetMessages(all)
+	for range 20 {
+		ml.CursorUp()
+	}
+	require.True(t, ml.StartVisualRange())
+	ml.CursorUp()
+	ml.View()
+	start, offset := ml.ViewStart(), ml.LineOffset()
+
+	ml.SetMessages(all[1:])
+
+	assert.Equal(t, start-1, ml.ViewStart())
+	assert.Equal(t, offset, ml.LineOffset())
+}
+
+func TestVisual_LoadingAnotherChatEndsTheSelection(t *testing.T) {
 	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(3))
 	require.True(t, ml.StartVisualRange())
+	other := makeMessages(3)
+	for i := range other {
+		other[i].ChatID = 2
+	}
+	ml.SetMessages(other)
+	assert.False(t, ml.InVisual())
+}
+
+func TestVisual_ClearingTheMessagesEndsTheSelection(t *testing.T) {
+	ml := components.NewMessageList(20, 40)
 	ml.SetMessages(makeMessages(3))
+	require.True(t, ml.StartVisualRange())
+	ml.SetMessages(nil)
 	assert.False(t, ml.InVisual())
 }
 

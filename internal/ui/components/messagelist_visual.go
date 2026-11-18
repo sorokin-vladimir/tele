@@ -218,6 +218,55 @@ func (ml *MessageList) keepVisualAfterRemoval(before []listItem) {
 	}
 }
 
+func (ml *MessageList) reloadKeepingVisual(msgs []domain.Message) bool {
+	if !ml.visual.on || len(msgs) == 0 || msgs[0].ChatID != ml.firstMessageChatID() {
+		return false
+	}
+	viewMsg := -1
+	for i := ml.viewStart; i < len(ml.items); i++ {
+		if ml.items[i].kind == itemMessage {
+			viewMsg = i
+			break
+		}
+	}
+	before := ml.items
+	ml.items = ml.buildItems(msgs)
+	ml.invalidateHeights()
+	ml.keepVisualAfterRemoval(before)
+	if ml.cursorIndex() < 0 {
+		return false
+	}
+	if viewMsg >= 0 {
+		if i := ml.firstSurvivorIndex(before, viewMsg); i >= 0 {
+			ml.viewStart, ml.lineOffset = ml.clampToBounds(i-(viewMsg-ml.viewStart), ml.lineOffset)
+			return true
+		}
+	}
+	ml.viewStart, ml.lineOffset = ml.clampToBounds(ml.viewStart, ml.lineOffset)
+	return true
+}
+
+func (ml *MessageList) firstMessageChatID() int64 {
+	for _, it := range ml.items {
+		if it.kind == itemMessage {
+			return it.msg.ChatID
+		}
+	}
+	return 0
+}
+
+func (ml *MessageList) firstSurvivorIndex(before []listItem, from int) int {
+	for i := from; i < len(before); i++ {
+		if before[i].kind != itemMessage {
+			continue
+		}
+		if j := indexOfMessage(ml.items, before[i].msg.ID); j >= 0 {
+			return j
+		}
+	}
+	return -1
+}
+
 func (ml *MessageList) survivorNear(before []listItem, from, toward int) int {
 	if from < 0 {
 		return 0

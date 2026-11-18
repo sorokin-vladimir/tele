@@ -5,24 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
+	"github.com/sorokin-vladimir/tele/internal/transcript"
 )
 
 // maxShowLimit bounds --limit: a command reads a screenful or a page, and a
 // script wanting more pages through --before.
 const maxShowLimit = 200
-
-// quoteWidth is how much of a quoted message a reply line shows.
-const quoteWidth = 60
 
 // newShowCmd is `tele show CHAT`: the newest messages of a chat, or of one
 // topic of a forum, oldest first (#181).
@@ -106,80 +102,8 @@ func showMessages(ctx context.Context, a heldAccount, out io.Writer, chat string
 	if q.asJSON {
 		return showJSON(out, msgs, a.me)
 	}
-	_, err = io.WriteString(out, showText(msgs, a.me, a.cfg.CLI.NameWidth, time.Local))
+	_, err = io.WriteString(out, transcript.Text(msgs, transcript.Format{NameWidth: a.cfg.CLI.NameWidth, Location: time.Local}))
 	return err
-}
-
-// showText is the messages as a person reads them: a line per message with
-// its time and sender, the text of every message starting in one column, a
-// date line wherever the day changes, and a reply line under a reply. A name
-// wider than nameWidth columns is cut short, so one long name does not push
-// everybody's text to the right.
-func showText(msgs []domain.Message, me project.LoggedInUser, nameWidth int, loc *time.Location) string {
-	byID := make(map[int]domain.Message, len(msgs))
-	nameW := 0
-	for _, m := range msgs {
-		byID[m.ID] = m
-		nameW = max(nameW, ansi.StringWidth(shownName(m, nameWidth)))
-	}
-	indent := strings.Repeat(" ", len("15:04 ")+nameW+len(":  "))
-
-	var b strings.Builder
-	day := ""
-	for _, m := range msgs {
-		t := m.Date.In(loc)
-		if d := t.Format(time.DateOnly); d != day {
-			day = d
-			b.WriteString(d + "\n")
-		}
-		name := shownName(m, nameWidth) + ":"
-		fmt.Fprintf(&b, "%s %s%s  ", t.Format("15:04"), name, strings.Repeat(" ", nameW+1-ansi.StringWidth(name)))
-		for i, line := range strings.Split(body(m), "\n") {
-			if i > 0 {
-				b.WriteString(indent)
-			}
-			b.WriteString(line + "\n")
-		}
-		if m.ReplyToMsgID != 0 {
-			b.WriteString("  ↳ " + quote(m.ReplyToMsgID, byID, nameWidth) + "\n")
-		}
-	}
-	return b.String()
-}
-
-// shownName is who sent m as a line names them, cut to width columns.
-func shownName(m domain.Message, width int) string {
-	name := m.SenderName
-	switch {
-	case m.IsOut:
-		name = "You"
-	case name == "":
-		name = "?"
-	}
-	return cutName(name, width)
-}
-
-// quote is what a reply line says of the message replied to: who wrote it and
-// how it starts, when it is among those shown.
-func quote(id int, byID map[int]domain.Message, nameWidth int) string {
-	orig, ok := byID[id]
-	if !ok {
-		return fmt.Sprintf("reply to %d", id)
-	}
-	first, _, _ := strings.Cut(body(orig), "\n")
-	return shownName(orig, nameWidth) + ": " + ansi.Truncate(first, quoteWidth, "…")
-}
-
-// body is what a message says: its media named, then its text.
-func body(m domain.Message) string {
-	if m.Media == nil {
-		return m.Text
-	}
-	label := "[" + m.Media.Label() + "]"
-	if m.Text == "" {
-		return label
-	}
-	return label + " " + m.Text
 }
 
 // messageJSON is a message as `tele show --json` prints it, a contract kept

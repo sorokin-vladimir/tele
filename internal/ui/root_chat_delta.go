@@ -217,7 +217,7 @@ func (m RootModel) handleChatDelta(d *project.HistoryDelta) (RootModel, tea.Cmd)
 		// fetch, the read pointer and the GIF animation, which left every photo
 		// in a chat with unread messages blank until the user scrolled.
 		anchored := c.AnchorMsgID != 0 && c.AnchorMsgID <= c.ReadInboxMaxID
-		if !landed && !anchored && c.ReadInboxMaxID > 0 {
+		if !landed && !anchored && c.ReadInboxMaxID > 0 && !m.chat.InVisual() {
 			m.chat.ScrollToFirstUnread(c.ReadInboxMaxID)
 		}
 		// A chat may open with a GIF already selected (newest message) and its

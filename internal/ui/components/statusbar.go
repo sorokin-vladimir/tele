@@ -39,7 +39,8 @@ type StatusBar struct {
 	throttle string
 	// hostAway says the window's host is away and being waited for (#210),
 	// and lasts until it is back, as clockSkew does.
-	hostAway string
+	hostAway      string
+	visualHasGaps bool
 }
 
 func NewStatusBar(width int) *StatusBar {
@@ -57,6 +58,8 @@ func (sb *StatusBar) SetKeyMap(km keys.KeyMap) { sb.keyMap = km }
 func (sb *StatusBar) SetAttachStaged(v bool)   { sb.attachStaged = v }
 func (sb *StatusBar) SetPickerOpen(v bool)     { sb.pickerOpen = v }
 func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
+
+func (sb *StatusBar) SetVisualHasGaps(v bool) { sb.visualHasGaps = v }
 
 // SetClockSkew shows s right after the mode label until it is set to "".
 func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
@@ -113,9 +116,12 @@ func (sb *StatusBar) TickDownloadSpinner() {
 func (sb *StatusBar) View() string {
 	modeStyle := theme.S().ModeNormal
 	label := "NORMAL"
-	if sb.mode == keys.ModeInsert {
+	switch sb.mode {
+	case keys.ModeInsert:
 		modeStyle = theme.S().ModeInsert
 		label = "INSERT"
+	case keys.ModeVisual:
+		label = "VISUAL"
 	}
 
 	segs := []string{modeStyle.Render(label)}
@@ -214,6 +220,7 @@ type footerItem struct {
 	down, up      keys.Action // fiNav
 	keyword, text string      // fiLiteral
 	labelOverride string      // optional wording override (state-specific)
+	keyFirst      bool
 }
 
 // hints selects the profile for the current state and renders it. Wording is
@@ -256,6 +263,16 @@ func (sb *StatusBar) profile() []footerItem {
 			{kind: fiSingle, ctx: keys.ContextFolders, action: keys.ActionConfirm},
 			{kind: fiSingle, ctx: keys.ContextGlobal, action: keys.ActionQuit},
 		}
+	case sb.activePane == "chat" && sb.mode == keys.ModeVisual:
+		items := []footerItem{{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyMessage, keyFirst: true}}
+		if !sb.visualHasGaps {
+			items = append(items, footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionCopyWithNames, keyFirst: true})
+		}
+		return append(items,
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualMark, keyFirst: true},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionVisualSelect, keyFirst: true},
+			footerItem{kind: fiSingle, ctx: keys.ContextChat, action: keys.ActionNormal, labelOverride: "exit", keyFirst: true},
+		)
 	case sb.activePane == "chat" && sb.mode == keys.ModeInsert:
 		return []footerItem{
 			{kind: fiSingle, ctx: keys.ContextComposer, action: keys.ActionConfirm},
@@ -305,6 +322,9 @@ func (sb *StatusBar) renderFooterItem(it footerItem, accent lipgloss.Style) stri
 			}
 		}
 		key := sb.keyMap.KeyFor(it.ctx, it.action)
+		if it.keyFirst {
+			return hintKeyFirst(key, desc, accent)
+		}
 		return hintKey(key, desc, accent)
 	}
 }
@@ -315,6 +335,18 @@ func hintKey(key, desc string, accent lipgloss.Style) string {
 	}
 	text, spans := hintLayout(key, desc)
 	return applyAccent(text, spans, theme.S().Bar, accent)
+}
+
+func hintKeyFirst(key, desc string, accent lipgloss.Style) string {
+	if key == "" {
+		return ""
+	}
+	text, spans := keyFirstLayout(key, desc)
+	return applyAccent(text, spans, theme.S().Bar, accent)
+}
+
+func keyFirstLayout(key, desc string) (string, []span) {
+	return key + " " + desc, []span{{0, utf8.RuneCountInString(key)}}
 }
 
 func hintNav(downKey, upKey, desc string, accent lipgloss.Style) string {
@@ -374,7 +406,7 @@ func hintLayout(key, desc string) (string, []span) {
 		}
 	}
 	// Prefix form: accented key, then the plain word.
-	return key + " " + desc, []span{{0, utf8.RuneCountInString(key)}}
+	return keyFirstLayout(key, desc)
 }
 
 // wordRuneIndex returns the rune index of the first case-insensitive match of

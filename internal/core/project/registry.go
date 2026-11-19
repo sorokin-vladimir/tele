@@ -201,7 +201,7 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		// out from under them. Pinning happens on the first rebuild that resolves
 		// an anchor, so a window opened before its history arrived pins once the
 		// backfill lands.
-		if w.Anchor.Kind == AnchorFirstUnread && w.Anchor.MsgID == 0 && next.AnchorMsgID != 0 {
+		if w.Anchor.Kind == AnchorFirstUnread && next.AnchorMsgID != 0 && next.AnchorMsgID != w.Anchor.MsgID {
 			w.Anchor.MsgID = next.AnchorMsgID
 			s.window = w
 		}

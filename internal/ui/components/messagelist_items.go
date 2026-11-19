@@ -392,10 +392,14 @@ func hasNewRef(prev, next []domain.OutboxEntry) bool {
 func (ml *MessageList) Outbox() []domain.OutboxEntry { return ml.outbox }
 
 func (ml *MessageList) SetMessages(msgs []domain.Message) {
+	if ml.reloadKeepingVisual(msgs) {
+		return
+	}
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
 	ml.viewStart, ml.lineOffset = ml.positionAtBottom()
 	ml.setCursorNewest()
+	ml.ClearVisual()
 }
 
 // SetMessagesKeepScroll replaces the message list without resetting the scroll position.
@@ -446,16 +450,11 @@ func (ml *MessageList) RemoveMessage(id int) {
 		return
 	}
 
-	var anchorID int
-	for i := ml.viewStart; i < len(ml.items); i++ {
-		if ml.items[i].kind == itemMessage {
-			anchorID = ml.items[i].msg.ID
-			break
-		}
-	}
-
+	rowOnScreen := ml.messageRowsOnScreen()
+	before := ml.items
 	ml.items = ml.buildItems(msgs)
 	ml.invalidateHeights()
+	ml.keepVisualAfterRemoval(before)
 
 	if len(ml.items) == 0 {
 		ml.viewStart = 0
@@ -463,13 +462,8 @@ func (ml *MessageList) RemoveMessage(id int) {
 		return
 	}
 
-	if anchorID != 0 && anchorID != id {
-		for i, item := range ml.items {
-			if item.kind == itemMessage && item.msg.ID == anchorID {
-				ml.viewStart = i
-				return
-			}
-		}
+	if ml.putFirstSurvivorOnItsRow(rowOnScreen) {
+		return
 	}
 
 	if ml.viewStart >= len(ml.items) {

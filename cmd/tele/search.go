@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/transcript"
 )
 
 // maxSearchLimit bounds --limit: Telegram answers a search a page at a time,
@@ -120,11 +121,11 @@ func searchText(found []project.FoundMessage, nameWidth int, loc *time.Location)
 	var idW, whereW, whoW int
 	for _, f := range found {
 		m := f.Message
-		where := cutName(f.Chat, nameWidth)
+		where := transcript.CutName(f.Chat, nameWidth)
 		if m.TopicID != 0 {
 			where += fmt.Sprintf(" › topic %d", m.TopicID)
 		}
-		first, rest, more := strings.Cut(body(m), "\n")
+		first, rest, more := strings.Cut(transcript.Body(m), "\n")
 		if more && strings.TrimSpace(rest) != "" {
 			first += " …"
 		}
@@ -132,7 +133,7 @@ func searchText(found []project.FoundMessage, nameWidth int, loc *time.Location)
 			id:    fmt.Sprint(m.ID),
 			when:  m.Date.In(loc).Format("2006-01-02 15:04"),
 			where: where,
-			who:   shownName(m, nameWidth) + ":",
+			who:   transcript.Format{NameWidth: nameWidth}.Name(m) + ":",
 			says:  first,
 		}
 		idW = max(idW, len(l.id))

@@ -6,6 +6,7 @@ const (
 	ModeNormal VimMode = iota
 	ModeInsert
 	ModeSearch
+	ModeVisual
 )
 
 type Action string
@@ -64,6 +65,9 @@ const (
 	ActionCancelUpload    Action = "cancel_upload"
 	ActionDownloadFile    Action = "download_file"
 	ActionCopyMessage     Action = "copy_message"
+	ActionCopyWithNames   Action = "copy_with_names"
+	ActionVisualSelect    Action = "visual_select"
+	ActionVisualMark      Action = "visual_mark"
 	ActionPasteImage      Action = "paste_image"
 	// Profile actions (#222). ActionShowProfile opens the overlay from wherever
 	// a user id is in hand; the rest are the overlay's own.

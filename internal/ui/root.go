@@ -765,8 +765,12 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A notification from a forum topic opens that topic (#275).
 		m.toasts.Dismiss(msg.serial)
 		open := screens.OpenChatMsg{
-			ChatID: msg.chatID, Title: msg.title,
-			IsForum: msg.topicID != 0, TopicID: msg.topicID, TopicTitle: msg.topicTitle,
+			ChatID:     msg.chatID,
+			Title:      msg.title,
+			IsForum:    msg.topicID != 0 || m.chatList.IsForumChat(msg.chatID),
+			IsBot:      m.chatList.IsBotChat(msg.chatID),
+			TopicID:    msg.topicID,
+			TopicTitle: msg.topicTitle,
 		}
 		return m, func() tea.Msg { return open }
 	case chatLoadErrMsg:

@@ -28,13 +28,14 @@ A quit you rebind works there only if it uses `ctrl` or `alt`.
 | `k` / `↑`           | Previous chat              |
 | `G`                 | Last chat                  |
 | `Ctrl+D` / `Ctrl+U` | Scroll half-page down / up |
-| `Enter`             | Open chat, or a forum's topic list |
+| `Enter`             | Open chat, or a group forum's topic list |
 | `/`                 | Search chats               |
 | `P`                 | Profile of the person (private chats only) |
 
 ## Forum topics
 
-A forum's topics fill the chat list pane while it is open.
+A group forum's topics fill the chat list pane while it is open, starting with `* All` for messages across all topics in one feed.
+Forum-enabled bots show their topics directly under the bot entry inside the chat list instead, while opening the bot opens its combined `All` feed (including topicless messages).
 The chat list keys move through them.
 
 | Key       | Action                                   |

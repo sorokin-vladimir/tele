@@ -54,11 +54,11 @@ func TestForum_OpeningAForumShowsItsTopics(t *testing.T) {
 	m = enterForum(t, o, m)
 
 	require.NotNil(t, m.forum)
-	assert.Equal(t, 2, m.forum.Total())
+	assert.Equal(t, 3, m.forum.Total(), "All entry plus the forum's two topics")
 	assert.Zero(t, m.currentChatID, "nothing is open in the chat pane yet")
 	row, ok := m.forum.CursorTopic()
 	require.True(t, ok)
-	assert.Equal(t, 30, row.ID, "the cursor starts on the first topic with unread")
+	assert.Equal(t, 30, row.ID, "the cursor starts on the first real topic with unread")
 }
 
 func TestForum_OpeningATopicOpensItsHistory(t *testing.T) {
@@ -202,7 +202,18 @@ func TestForum_TheMouseWorksTheTopicList(t *testing.T) {
 			opened = &open
 		}
 	}
-	require.NotNil(t, opened, "a click on a topic row opens it")
+	require.NotNil(t, opened, "a click on row 1 opens All")
+	assert.Equal(t, domain.AllTopicsID, opened.TopicID)
+
+	_, cmd = m.Update(tea.MouseClickMsg(tea.Mouse{X: 3, Y: 2, Button: tea.MouseLeft}))
+	require.NotNil(t, cmd)
+	opened = nil
+	for _, msg := range collectMsgs(cmd) {
+		if open, ok := msg.(screens.OpenTopicMsg); ok {
+			opened = &open
+		}
+	}
+	require.NotNil(t, opened, "a click on row 2 opens topic 12")
 	assert.Equal(t, 12, opened.TopicID)
 }
 
@@ -290,4 +301,120 @@ func TestForum_ArchiveFallbackKeepsIt(t *testing.T) {
 
 	require.Zero(t, m.activeFolder, "the fallback ran")
 	assert.NotNil(t, m.forum)
+}
+
+func TestForum_AllTopicsOpensUnifiedFeedAndTargetsRepliedTopic(t *testing.T) {
+	o, m := forumRoot(t)
+	m.historyLimit = 50
+	st := o.state.Store()
+	st.SetMessages(testForum, []domain.Message{
+		{ID: 10, ChatID: testForum, TopicID: 12, Text: "in releases", Date: time.Unix(100, 0)},
+		{ID: 11, ChatID: testForum, TopicID: 0, Text: "in general", Date: time.Unix(200, 0)},
+	})
+
+	m = enterForum(t, o, m)
+	m = step(t, o, m, screens.OpenTopicMsg{ChatID: testForum, TopicID: domain.AllTopicsID, Title: "All"})
+
+	assert.Equal(t, domain.HistoryKey{ChatID: testForum, TopicID: domain.AllTopicsID}, m.currentHistory())
+	assert.Equal(t, "Dev › All", m.chat.HeaderTitle())
+	require.Len(t, m.chatMsgs, 2)
+
+	// Typing in any topic shows while All is open.
+	m = step(t, o, m, core.Typing{ChatID: testForum, TopicID: 12, Label: "Ann is typing"})
+	assert.True(t, m.chat.IsTyping())
+
+	// Fresh send in All carries TopicID 0 (not -1).
+	_, cmd := m.Update(screens.SendMsgRequest{ChatID: testForum, TopicID: 0, Text: "fresh"})
+	runCmdTree(cmd)
+	require.Len(t, o.sent, 1)
+	assert.Equal(t, 0, o.sent[0].TopicID)
+
+	// Replying to a held topic message in All targets that message's TopicID.
+	_ = m.View()
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
+	m = nm.(RootModel)
+	require.Equal(t, 10, m.chat.SelectedMessageID())
+	nm, cmd = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	runCmdTree(cmd)
+	m = nm.(RootModel)
+	for _, r := range "replying" {
+		nm, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = nm.(RootModel)
+	}
+	nm, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_ = nm
+	for _, msg := range collectMsgs(cmd) {
+		if req, ok := msg.(screens.SendMsgRequest); ok {
+			_, scmd := m.Update(req)
+			runCmdTree(scmd)
+		}
+	}
+	require.Len(t, o.sent, 2)
+	assert.Equal(t, 12, o.sent[1].TopicID)
+	assert.Equal(t, 10, o.sent[1].ReplyToMsgID)
+}
+
+func TestBotForum_TopicsListedInChatListAndOpenWithoutReplacingChatList(t *testing.T) {
+	st := store.NewMemory()
+	const botID = int64(42)
+	st.SetChat(domain.Chat{
+		ID: botID, Title: "TopicBot", IsBot: true, IsForum: true,
+		Peer: domain.Peer{ID: botID, Type: domain.PeerUser},
+	})
+	st.SetTopicsPage(botID, []domain.Topic{
+		{ChatID: botID, ID: 12, Title: "Releases", LastMessage: &domain.Message{ID: 40, Date: time.Unix(400, 0)}},
+		{ChatID: botID, ID: 30, Title: "Design", UnreadCount: 2, Closed: true, LastMessage: &domain.Message{ID: 41, Date: time.Unix(300, 0)}},
+	})
+	o := newOwnerStub(st)
+	m := newRootInternal(st, 50).WithOwner(o).WithScreen(ScreenMain)
+	m = step(t, o, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m.subscribeChatList()
+	nm, _ := o.drain(m)
+	m = nm.(RootModel)
+
+	rows := m.chatList.Rows()
+	require.Len(t, rows, 3, "bot row plus two inline topic rows")
+	assert.Equal(t, int64(botID), rows[0].ID)
+	assert.False(t, rows[0].IsBotTopic)
+	assert.Equal(t, 12, rows[1].TopicID)
+	assert.True(t, rows[1].IsBotTopic)
+	assert.Equal(t, 30, rows[2].TopicID)
+	assert.True(t, rows[2].IsBotTopic)
+	assert.True(t, rows[2].TopicClosed)
+
+	// Opening the bot row opens its All feed and keeps [1] Chats visible.
+	m.chatList.SetCursor(0)
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	m = step(t, o, nm.(RootModel), cmd())
+	assert.Nil(t, m.forum, "chat list stays visible for bot forums")
+	assert.Equal(t, domain.HistoryKey{ChatID: botID, TopicID: domain.AllTopicsID}, m.currentHistory())
+	assert.Equal(t, "TopicBot › All", m.chat.HeaderTitle())
+	assert.Equal(t, 0, m.chatList.ActiveIdx())
+
+	// Opening inline topic row #12 opens that topic directly while keeping [1] Chats.
+	m.focus = FocusChatList
+	m.chatList.SetCursor(1)
+	nm, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.NotNil(t, cmd)
+	m = step(t, o, nm.(RootModel), cmd())
+	assert.Nil(t, m.forum)
+	assert.Equal(t, domain.HistoryKey{ChatID: botID, TopicID: 12}, m.currentHistory())
+	assert.Equal(t, "TopicBot › Releases", m.chat.HeaderTitle())
+	assert.Equal(t, 1, m.chatList.ActiveIdx(), "active indicator stays on the opened bot topic row")
+
+	// Space over an inline bot topic row acts on that topic.
+	m.focus = FocusChatList
+	m.chatList.SetCursor(1)
+	m = step(t, o, m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	require.NotNil(t, m.chatMenu)
+	nm, cmd = m.Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	require.NotNil(t, cmd)
+	m = step(t, o, nm.(RootModel), cmd())
+	require.NotEmpty(t, o.calls)
+	assert.Equal(t, 12, o.calls[len(o.calls)-1].topic)
+
+	// Arrival flashes the exact inline bot topic row.
+	m = step(t, o, m, core.Incoming{ChatID: botID, TopicID: 30})
+	assert.Equal(t, screens.ChatRowKey{ChatID: botID, TopicID: 30}, m.chatList.HighlightedKey())
 }

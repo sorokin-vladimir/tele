@@ -119,11 +119,11 @@ func TestBuildTopicList_WindowsTheForumsTopics(t *testing.T) {
 	got := project.BuildTopicList(r, project.TopicListWindow{ChatID: forum, Offset: 0, Limit: 3})
 
 	assert.Equal(t, int64(forum), got.ChatID)
-	assert.Equal(t, 4, got.Total)
+	assert.Equal(t, 5, got.Total)
 	require.Len(t, got.Rows, 3)
-	assert.Equal(t, project.TopicRow{ID: 12, Title: "Releases", Pinned: true, Unread: 2, Mentions: 1, Reactions: 3}, got.Rows[0])
-	assert.True(t, got.Rows[1].Hidden)
-	assert.True(t, got.Rows[2].Closed)
+	assert.Equal(t, project.TopicRow{ID: domain.AllTopicsID, Title: "All", Unread: 2, Mentions: 1, Reactions: 3}, got.Rows[0])
+	assert.Equal(t, project.TopicRow{ID: 12, Title: "Releases", Pinned: true, Unread: 2, Mentions: 1, Reactions: 3}, got.Rows[1])
+	assert.True(t, got.Rows[2].Hidden)
 }
 
 // A topic row shows whether the topic is muted, which it is by its own setting
@@ -139,10 +139,12 @@ func TestBuildTopicList_ARowIsMutedByItsOwnSettingOrTheForums(t *testing.T) {
 
 	got := project.BuildTopicList(r, project.TopicListWindow{ChatID: forum, Limit: 10})
 
-	require.Len(t, got.Rows, 3)
-	assert.True(t, got.Rows[0].Muted, "follows the muted forum")
-	assert.False(t, got.Rows[1].Muted, "unmuted in a muted forum")
-	assert.True(t, got.Rows[2].Muted)
+	require.Len(t, got.Rows, 4)
+	assert.Equal(t, domain.AllTopicsID, got.Rows[0].ID)
+	assert.True(t, got.Rows[0].Muted, "All follows the muted forum")
+	assert.True(t, got.Rows[1].Muted, "follows the muted forum")
+	assert.False(t, got.Rows[2].Muted, "unmuted in a muted forum")
+	assert.True(t, got.Rows[3].Muted)
 }
 
 func TestDiffTopicList_AChangedTopicIsOneRow(t *testing.T) {
@@ -153,9 +155,11 @@ func TestDiffTopicList_AChangedTopicIsOneRow(t *testing.T) {
 
 	got := project.DiffTopicList(prev, project.BuildTopicList(r, w))
 
-	require.Len(t, got, 1)
+	require.Len(t, got, 2)
 	assert.Equal(t, project.TopicListRow, got[0].Kind)
-	assert.Equal(t, 30, got[0].Row.ID)
+	assert.Equal(t, domain.AllTopicsID, got[0].Row.ID)
+	assert.Equal(t, project.TopicListRow, got[1].Kind)
+	assert.Equal(t, 30, got[1].Row.ID)
 }
 
 func TestDiffTopicList_ATopicMovingIsAReset(t *testing.T) {
@@ -244,4 +248,43 @@ func TestBuildHistory_ATopicNotYetDescribedStillShowsItsMessages(t *testing.T) {
 
 	require.Len(t, got.Messages, 1)
 	assert.Empty(t, got.TopicTitle)
+}
+
+func TestBuildChatList_BotForumExpandsTopicsInlineAndDiffsReorders(t *testing.T) {
+	const botID = int64(77)
+	bot := domain.Chat{
+		ID: botID, Title: "MyBot", IsBot: true, IsForum: true, UnreadCount: 3,
+		Peer: domain.Peer{ID: botID, Type: domain.PeerUser},
+	}
+	r := &fakeReader{
+		chats: []domain.Chat{bot},
+		topics: map[int64][]domain.Topic{
+			botID: {
+				{ChatID: botID, ID: 12, Title: "Releases", UnreadCount: 2},
+				{ChatID: botID, ID: 30, Title: "Design", Closed: true},
+			},
+		},
+	}
+
+	got := project.BuildChatList(r, project.ChatListWindow{Limit: 10})
+	require.Equal(t, 3, got.Total)
+	require.Len(t, got.Rows, 3)
+	assert.Equal(t, botID, got.Rows[0].ID)
+	assert.False(t, got.Rows[0].IsBotTopic)
+	assert.Equal(t, 1, got.Rows[0].Unread)
+
+	assert.Equal(t, botID, got.Rows[1].ID)
+	assert.Equal(t, 12, got.Rows[1].TopicID)
+	assert.Equal(t, "MyBot", got.Rows[1].BotTitle)
+	assert.True(t, got.Rows[1].IsBotTopic)
+	assert.Equal(t, 2, got.Rows[1].Unread)
+
+	assert.Equal(t, 30, got.Rows[2].TopicID)
+	assert.True(t, got.Rows[2].TopicClosed)
+
+	// Reordering topics emits a Reset even though chat IDs are unchanged.
+	r.topics[botID][0], r.topics[botID][1] = r.topics[botID][1], r.topics[botID][0]
+	deltas := project.DiffChatList(got, project.BuildChatList(r, project.ChatListWindow{Limit: 10}))
+	require.Len(t, deltas, 1)
+	assert.Equal(t, project.ChatListReset, deltas[0].Kind)
 }

@@ -222,6 +222,9 @@ func setupDispatcher(
 		if chatID == 0 {
 			return nil
 		}
+		if upd.TopMsgID != 0 {
+			return topicsChanged(ctx, store.Event{ChatID: chatID, MsgIDs: []int{upd.TopMsgID}})
+		}
 		select {
 		case mustDeliver <- store.Event{Kind: store.EventReadInbox, ChatID: chatID, ReadMaxID: upd.MaxID}:
 		case <-ctx.Done():
@@ -293,7 +296,7 @@ func setupDispatcher(
 	dispatcher.OnUserTyping(func(ctx context.Context, e tg.Entities, upd *tg.UpdateUserTyping) error {
 		action := convertTypingAction(upd.Action)
 		select {
-		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.UserID, TypingAction: action}:
+		case droppable <- store.Event{Kind: store.EventTyping, ChatID: upd.UserID, TopicID: upd.TopMsgID, TypingAction: action}:
 		default:
 			logDrop("user_typing")
 		}

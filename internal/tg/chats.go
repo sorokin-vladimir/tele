@@ -366,6 +366,7 @@ func convertUser(u *tg.User) (domain.Chat, bool) {
 		Peer:      domain.Peer{ID: u.ID, Type: domain.PeerUser, AccessHash: u.AccessHash},
 		IsContact: u.Contact,
 		IsBot:     u.Bot,
+		IsForum:   u.BotForumView,
 		Online:    isOnline,
 	}, true
 }

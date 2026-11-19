@@ -122,6 +122,16 @@ func (ml *MessageList) SelectedMessageReplyToMsgID() int {
 	return 0
 }
 
+// MessageTopicID returns the topic ID of held message id, or 0 if not held.
+func (ml *MessageList) MessageTopicID(id int) int {
+	for _, it := range ml.items {
+		if it.kind == itemMessage && it.msg.ID == id {
+			return it.msg.TopicID
+		}
+	}
+	return 0
+}
+
 func (ml *MessageList) SelectedMessagePhotoID() int64 {
 	if msg := ml.computeSelectedMsg(); msg != nil && msg.Photo != nil {
 		return msg.Photo.ID

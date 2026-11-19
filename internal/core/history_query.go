@@ -25,7 +25,7 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 	if err != nil {
 		return nil, err
 	}
-	if chat.IsForum && h.TopicID == 0 {
+	if chat.IsForum && !chat.IsBot && h.TopicID == 0 {
 		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
 	peer := chat.Peer
@@ -33,7 +33,7 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 	_, held := st.GetChat(h.ChatID)
 	fetch := func(offsetID int) ([]domain.Message, error) {
 		page := max(limit, o.Config().UI.HistoryLimit)
-		if h.TopicID != 0 {
+		if h.TopicID > 0 {
 			return o.client.GetReplies(ctx, peer, h.TopicID, offsetID, page)
 		}
 		return o.client.GetHistory(ctx, peer, offsetID, page)

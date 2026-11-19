@@ -35,7 +35,7 @@ func (m RootModel) handleChatListDelta(d *project.ChatListDelta) (RootModel, tea
 	switch d.Kind {
 	case project.ChatListReset:
 		m.chatList.SetWindow(d.Offset, d.Total, d.Rows)
-		m.chatList.SetActive(m.currentChatID)
+		m.chatList.SetActiveHistory(m.currentHistory())
 
 	case project.ChatListRow:
 		m.chatList.SetRow(d.Row)
@@ -80,7 +80,7 @@ func (m *RootModel) setFolders(filters []domain.FolderFilter) tea.Cmd {
 // chat moving to the top (#39). It says nothing about whether the user should be
 // interrupted — that arrives separately, as a Notification.
 func (m RootModel) handleIncoming(in core.Incoming) (RootModel, tea.Cmd) {
-	m.chatList.HighlightChat(in.ChatID)
+	m.chatList.HighlightChatTopic(in.ChatID, in.TopicID)
 	if m.forum != nil && m.forum.ChatID() == in.ChatID && in.TopicID != 0 {
 		m.forum.HighlightTopic(in.TopicID)
 	}

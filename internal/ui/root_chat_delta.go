@@ -340,8 +340,8 @@ func (m *RootModel) readReactionsOnScreen(c project.HistoryContents) tea.Cmd {
 // handleTyping shows a composing indicator and arms its expiry. The owner sends
 // no state to clear, so the client's own timeout is what ends it.
 func (m RootModel) handleTyping(t core.Typing) (RootModel, tea.Cmd) {
-	// In a forum somebody types in one topic, and only that topic shows it.
-	if t.ChatID != m.currentChatID || t.TopicID != m.currentTopicID {
+	// In a forum somebody types in one topic, and only that topic (or All) shows it.
+	if t.ChatID != m.currentChatID || (m.currentTopicID != domain.AllTopicsID && t.TopicID != m.currentTopicID) {
 		return m, nil
 	}
 	return m.applyTypingLabelCmd(t.Label)

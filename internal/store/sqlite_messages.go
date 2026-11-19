@@ -1,7 +1,9 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +15,9 @@ import (
 func (s *SQLiteStore) Messages(h domain.HistoryKey) []domain.Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if h.TopicID == domain.AllTopicsID {
+		return s.allChatMessagesLocked(h.ChatID)
+	}
 	msgs := s.messages[h]
 	if msgs == nil {
 		return nil
@@ -20,6 +25,21 @@ func (s *SQLiteStore) Messages(h domain.HistoryKey) []domain.Message {
 	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
 	return cp
+}
+
+// allChatMessagesLocked returns every message held across all real histories
+// of chatID, ordered chronologically. Caller holds at least RLock.
+func (s *SQLiteStore) allChatMessagesLocked(chatID int64) []domain.Message {
+	var combined []domain.Message
+	for _, kh := range s.chatHistoriesLocked(chatID) {
+		if kh.TopicID == domain.AllTopicsID {
+			continue
+		}
+		if msgs := s.messages[kh]; len(msgs) > 0 {
+			combined = domain.MergeMessages(combined, msgs)
+		}
+	}
+	return combined
 }
 
 func (s *SQLiteStore) Message(chatID int64, msgID int) (domain.Message, bool) {
@@ -70,6 +90,9 @@ func (s *SQLiteStore) chatHistoriesLocked(chatID int64) []domain.HistoryKey {
 // noteHistoryLocked records that a chat holds a history in memory. Caller holds
 // the lock.
 func (s *SQLiteStore) noteHistoryLocked(h domain.HistoryKey) {
+	if h.TopicID == domain.AllTopicsID {
+		return
+	}
 	topics := s.histories[h.ChatID]
 	if topics == nil {
 		topics = make(map[int]struct{})
@@ -113,6 +136,7 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 		keep[m.ID] = struct{}{}
 	}
 	pages := s.byHistoryLocked(msgs)
+	delete(s.runs, domain.HistoryKey{ChatID: chatID, TopicID: domain.AllTopicsID})
 	for _, h := range s.chatHistoriesLocked(chatID) {
 		delete(s.runs, h)
 		if _, kept := pages[h]; !kept {
@@ -127,6 +151,11 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 			s.runs[h] = spans
 		}
 		s.capMessagesLocked(h)
+	}
+	if chat, ok := s.chats[chatID]; ok && chat.IsForum {
+		if spans := tailRunOf(msgs); spans != nil {
+			s.runs[domain.HistoryKey{ChatID: chatID, TopicID: domain.AllTopicsID}] = spans
+		}
 	}
 }
 
@@ -172,6 +201,10 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 		// repair that adds fifty and pushes fifty older ones out still changed
 		// every window looking at it.
 		added += len(merged) - len(before)
+	}
+	allKey := domain.HistoryKey{ChatID: chatID, TopicID: domain.AllTopicsID}
+	if len(s.runs[allKey]) > 0 {
+		s.landOnTailLocked(allKey, msgs)
 	}
 	return added
 }
@@ -372,6 +405,7 @@ func (s *SQLiteStore) purgePendingLocked(chatID int64) bool {
 // history, its runs and its loaded mark, its topics, and the rows of histories
 // this session never opened. Caller holds the lock.
 func (s *SQLiteStore) discardChatLocked(chatID int64) {
+	delete(s.runs, domain.HistoryKey{ChatID: chatID, TopicID: domain.AllTopicsID})
 	for _, h := range s.chatHistoriesLocked(chatID) {
 		for _, m := range s.messages[h] {
 			delete(s.msgChat, m.ID)
@@ -514,40 +548,13 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 		s.noteHistoryLocked(h)
 		return
 	}
-
-	rows, err := s.db.Query(`SELECT data FROM messages WHERE chat_id = ? AND topic_id = ? ORDER BY date, msg_id`, h.ChatID, h.TopicID)
-	if err != nil {
-		s.log.Error("load messages failed", zap.Int64("chat_id", h.ChatID), zap.Int("topic_id", h.TopicID), zap.Error(err))
+	if h.TopicID == domain.AllTopicsID {
+		s.loadAllMessagesLocked(h)
 		return
 	}
-	defer func() { _ = rows.Close() }()
 
-	var disk []domain.Message
-	for rows.Next() {
-		var data []byte
-		if err := rows.Scan(&data); err != nil {
-			s.log.Error("scan message failed", zap.Int64("chat_id", h.ChatID), zap.Error(err))
-			return
-		}
-		var m domain.Message
-		if err := json.Unmarshal(data, &m); err != nil {
-			s.log.Error("unmarshal message failed", zap.Int64("chat_id", h.ChatID), zap.Error(err))
-			continue
-		}
-		// A delete that has not reached disk yet already happened as far as the
-		// rest of the app is concerned; its row must not come back on open.
-		if s.msgDeletePendingLocked(h.ChatID, m.ID) {
-			continue
-		}
-		// A row written before #294 holds reactions as Telegram spells them;
-		// everything past the boundary compares them in emoji presentation.
-		for i := range m.Reactions {
-			m.Reactions[i].Emoji = domain.EmojiPresentation(m.Reactions[i].Emoji)
-		}
-		disk = append(disk, m)
-	}
-	if err := rows.Err(); err != nil {
-		s.log.Error("iterate messages failed", zap.Int64("chat_id", h.ChatID), zap.Error(err))
+	disk, ok := s.queryDiskMessagesLocked(h.ChatID, `SELECT data FROM messages WHERE chat_id = ? AND topic_id = ? ORDER BY date, msg_id`, h.ChatID, h.TopicID)
+	if !ok {
 		return
 	}
 
@@ -574,6 +581,103 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 	}
 }
 
+func (s *SQLiteStore) queryDiskMessagesLocked(chatID int64, query string, args ...any) ([]domain.Message, bool) {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		s.log.Error("load messages failed", zap.Int64("chat_id", chatID), zap.Error(err))
+		return nil, false
+	}
+	defer func() { _ = rows.Close() }()
+	return s.scanDiskMessagesLocked(chatID, rows)
+}
+
+func (s *SQLiteStore) scanDiskMessagesLocked(chatID int64, rows *sql.Rows) ([]domain.Message, bool) {
+	var disk []domain.Message
+	for rows.Next() {
+		var data []byte
+		if err := rows.Scan(&data); err != nil {
+			s.log.Error("scan message failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			return nil, false
+		}
+		var m domain.Message
+		if err := json.Unmarshal(data, &m); err != nil {
+			s.log.Error("unmarshal message failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			continue
+		}
+		// A delete that has not reached disk yet already happened as far as the
+		// rest of the app is concerned; its row must not come back on open.
+		if s.msgDeletePendingLocked(chatID, m.ID) {
+			continue
+		}
+		// A row written before #294 holds reactions as Telegram spells them;
+		// everything past the boundary compares them in emoji presentation.
+		for i := range m.Reactions {
+			m.Reactions[i].Emoji = domain.EmojiPresentation(m.Reactions[i].Emoji)
+		}
+		disk = append(disk, m)
+	}
+	if err := rows.Err(); err != nil {
+		s.log.Error("iterate messages failed", zap.Int64("chat_id", chatID), zap.Error(err))
+		return nil, false
+	}
+	return disk, true
+}
+
+func (s *SQLiteStore) loadAllMessagesLocked(h domain.HistoryKey) {
+	disk, ok := s.queryDiskMessagesLocked(h.ChatID, `SELECT data FROM messages WHERE chat_id = ? ORDER BY date, msg_id`, h.ChatID)
+	if !ok {
+		return
+	}
+	diskRuns, err := s.readRunsLocked(h)
+	if err != nil {
+		s.log.Error("load runs failed", zap.Int64("chat_id", h.ChatID), zap.Int("topic_id", h.TopicID), zap.Error(err))
+		return
+	}
+	for key, diskMsgs := range s.byHistoryLocked(disk) {
+		if s.loaded[key] {
+			continue
+		}
+		if mem := s.messages[key]; len(mem) == 0 {
+			s.messages[key] = diskMsgs
+		} else {
+			s.messages[key] = mergeMessagesByID(diskMsgs, mem)
+		}
+		s.noteHistoryLocked(key)
+		if chat, ok := s.chats[h.ChatID]; ok && sharedPtsBox(chat.Peer) {
+			for _, m := range s.messages[key] {
+				s.msgChat[m.ID] = h.ChatID
+			}
+		}
+	}
+	// Do not synthesize a chat-wide tail run from disk rows if diskRuns is empty:
+	// those rows may belong to disconnected per-topic fetches.
+	s.writtenRuns[h] = slices.Clone(diskRuns)
+	memRuns := s.runs[h]
+	s.runs[h] = slices.Clone(diskRuns)
+	if len(diskRuns) > 0 {
+		newest := 0
+		for _, sp := range s.runs[h] {
+			newest = max(newest, sp.hi)
+		}
+		var newer []domain.Message
+		for _, m := range disk {
+			if m.ID > newest {
+				newer = append(newer, m)
+			}
+		}
+		if sp, ok := pageSpan(newer); ok {
+			s.landOnTailOrStartLocked(h, sp)
+		}
+	}
+	for _, sp := range memRuns {
+		if sp.atTail {
+			s.landOnTailOrStartLocked(h, sp)
+			continue
+		}
+		s.addSpanLocked(h, sp)
+	}
+}
+
 // capMessagesLocked bounds a history to MaxMessagesPerChat, clearing the index
 // entries and queueing the row deletes of what it drops. Caller holds the
 // lock. See issue #73.
@@ -584,6 +688,12 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 // visible, and a person who scrolled far back is looking at what they scrolled
 // to. A history may therefore hold more than the cap while somebody looks.
 func (s *SQLiteStore) capMessagesLocked(h domain.HistoryKey) {
+	if h.TopicID == domain.AllTopicsID {
+		for _, kh := range s.chatHistoriesLocked(h.ChatID) {
+			s.capMessagesLocked(kh)
+		}
+		return
+	}
 	if len(s.messages[h]) <= MaxMessagesPerChat {
 		return
 	}
@@ -646,6 +756,10 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 	s.messages[h] = append(s.messages[h], msg)
 	s.noteHistoryLocked(h)
 	s.landOnTailLocked(h, []domain.Message{msg})
+	allKey := domain.HistoryKey{ChatID: msg.ChatID, TopicID: domain.AllTopicsID}
+	if len(s.runs[allKey]) > 0 {
+		s.landOnTailLocked(allKey, []domain.Message{msg})
+	}
 	s.markMsgDirtyLocked(msg.ChatID, msg.ID)
 	if chat, ok := s.chats[msg.ChatID]; ok {
 		m := msg

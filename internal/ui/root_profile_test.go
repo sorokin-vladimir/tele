@@ -200,6 +200,17 @@ func TestProfileOpenChat_WithADialog_OpensIt(t *testing.T) {
 	assert.Equal(t, "Alice", req.Title)
 }
 
+func TestProfileOpenChat_BotForum_PreservesIsForum(t *testing.T) {
+	m, _ := newRootOnChat(t)
+	_, cmd := m.Update(components.ProfileOpenChatRequest{UserID: 42, Title: "TopicBot", IsForum: true})
+	require.NotNil(t, cmd)
+	req, ok := cmd().(screens.OpenChatMsg)
+	require.True(t, ok)
+	assert.Equal(t, int64(42), req.ChatID)
+	assert.Equal(t, "TopicBot", req.Title)
+	assert.True(t, req.IsForum)
+}
+
 func TestProfileOpenChat_WithNoDialog_OpensByID(t *testing.T) {
 	// A person never messaged has no dialog and no history. The chat still opens
 	// by id alone: the owner kept their address when the profile was fetched.

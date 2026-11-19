@@ -96,6 +96,7 @@ func (o *Owner) SearchMessages(ctx context.Context, scope project.SearchScope, t
 		if known {
 			m.TopicID = chat.HistoryOf(m).TopicID
 			f.Private = chat.Peer.Type == domain.PeerUser
+			f.Bot = chat.IsBot
 		}
 		if m.TopicID != 0 {
 			f.Topic = topicTitle(m.ChatID, m.TopicID)
@@ -123,7 +124,7 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 	if err != nil {
 		return nil, err
 	}
-	if chat.IsForum && h.TopicID == 0 {
+	if chat.IsForum && !chat.IsBot && h.TopicID == 0 {
 		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
 	st := o.state.Store()
@@ -140,7 +141,7 @@ func (o *Owner) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limi
 		o.state.MergeAround(h, msgs)
 	}
 	if telerr.Of(err) == telerr.NotFound {
-		if h.TopicID != 0 {
+		if h.TopicID > 0 {
 			return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: fmt.Sprintf("no topic %d", h.TopicID)}
 		}
 		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoMessage, Detail: fmt.Sprintf("no message %d", id)}

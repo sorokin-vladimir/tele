@@ -108,6 +108,7 @@ func (o *Owner) knownUser(userID int64) (domain.User, bool) {
 			FirstName: chat.Title,
 			Online:    chat.Online,
 			IsBot:     chat.IsBot,
+			IsForum:   chat.IsForum,
 			IsContact: chat.IsContact,
 		}, true
 	}

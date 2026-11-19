@@ -17,7 +17,7 @@ func (o *Owner) SetMuted(ctx context.Context, h domain.HistoryKey, muted bool) e
 	if err != nil {
 		return err
 	}
-	if h.TopicID != 0 {
+	if h.TopicID > 0 {
 		mute := domain.TopicUnmuted
 		if muted {
 			mute = domain.TopicMuted
@@ -68,7 +68,27 @@ func (o *Owner) MarkRead(ctx context.Context, h domain.HistoryKey, maxID int) er
 		return err
 	}
 	if chat, ok := o.state.Store().GetChat(chatID); ok && chat.IsForum {
-		return o.markForumRead(ctx, peer, h, maxID)
+		if chat.IsBot && h.TopicID == 0 && maxID > 0 {
+			// Topicless read in a bot forum: mark only direct messages up to maxID.
+			if err := o.client.MarkRead(ctx, peer, maxID); err != nil {
+				return err
+			}
+			o.state.ApplyReadInbox(chatID, maxID)
+			return nil
+		}
+		err := o.markForumRead(ctx, peer, h, maxID)
+		if chat.IsBot && (h.TopicID == 0 || h.TopicID == domain.AllTopicsID) {
+			if directErr := o.client.MarkRead(ctx, peer, maxID); directErr != nil && err == nil {
+				err = directErr
+			} else if directErr == nil {
+				if maxID == 0 {
+					o.state.ApplyChatRead(chatID)
+				} else {
+					o.state.ApplyReadInbox(chatID, maxID)
+				}
+			}
+		}
+		return err
 	}
 	if err := o.client.MarkRead(ctx, peer, maxID); err != nil {
 		return err
@@ -87,7 +107,7 @@ func (o *Owner) MarkRead(ctx context.Context, h domain.HistoryKey, maxID int) er
 // is its own request, so one refused leaves the others read.
 func (o *Owner) markForumRead(ctx context.Context, peer domain.Peer, h domain.HistoryKey, maxID int) error {
 	var topics []domain.Topic
-	if h.TopicID != 0 {
+	if h.TopicID > 0 {
 		t, ok := o.state.Store().Topic(h.ChatID, h.TopicID)
 		if !ok {
 			t = domain.Topic{ChatID: h.ChatID, ID: h.TopicID}
@@ -98,9 +118,16 @@ func (o *Owner) markForumRead(ctx context.Context, peer domain.Peer, h domain.Hi
 		topics = []domain.Topic{t}
 	} else {
 		for _, t := range o.state.Store().Topics(h.ChatID) {
-			if t.UnreadCount > 0 {
-				topics = append(topics, t)
+			if t.UnreadCount <= 0 {
+				continue
 			}
+			if maxID > 0 && t.ReadInboxMaxID >= maxID {
+				continue
+			}
+			if maxID > 0 && (t.TopMessageID == 0 || maxID < t.TopMessageID) {
+				t.TopMessageID = maxID
+			}
+			topics = append(topics, t)
 		}
 	}
 	var first error
@@ -130,12 +157,21 @@ func (o *Owner) ReadReactions(ctx context.Context, h domain.HistoryKey) error {
 	if err != nil {
 		return err
 	}
-	if h.TopicID != 0 {
-		o.state.ApplyTopicReactionsRead(h.ChatID, h.TopicID)
-	} else {
-		o.state.ApplyReactionsRead(h.ChatID)
+	topicID := h.TopicID
+	if topicID > 0 {
+		o.state.ApplyTopicReactionsRead(h.ChatID, topicID)
+		return o.client.ReadReactions(ctx, peer, topicID)
 	}
-	return o.client.ReadReactions(ctx, peer, h.TopicID)
+	if topicID == domain.AllTopicsID {
+		for _, t := range o.state.Store().Topics(h.ChatID) {
+			if t.UnreadReactionsCount > 0 {
+				o.state.ApplyTopicReactionsRead(h.ChatID, t.ID)
+			}
+		}
+		topicID = 0
+	}
+	o.state.ApplyReactionsRead(h.ChatID)
+	return o.client.ReadReactions(ctx, peer, topicID)
 }
 
 // ReadMentions marks every unread mention in a chat as read, clearing the badge
@@ -146,12 +182,21 @@ func (o *Owner) ReadMentions(ctx context.Context, h domain.HistoryKey) error {
 	if err != nil {
 		return err
 	}
-	if h.TopicID != 0 {
-		o.state.ApplyTopicMentionsRead(h.ChatID, h.TopicID)
-	} else {
-		o.state.ApplyMentionsRead(h.ChatID)
+	topicID := h.TopicID
+	if topicID > 0 {
+		o.state.ApplyTopicMentionsRead(h.ChatID, topicID)
+		return o.client.ReadMentions(ctx, peer, topicID)
 	}
-	return o.client.ReadMentions(ctx, peer, h.TopicID)
+	if topicID == domain.AllTopicsID {
+		for _, t := range o.state.Store().Topics(h.ChatID) {
+			if t.UnreadMentionsCount > 0 {
+				o.state.ApplyTopicMentionsRead(h.ChatID, t.ID)
+			}
+		}
+		topicID = 0
+	}
+	o.state.ApplyMentionsRead(h.ChatID)
+	return o.client.ReadMentions(ctx, peer, topicID)
 }
 
 // AddToFolder adds or removes a chat from a folder filter.

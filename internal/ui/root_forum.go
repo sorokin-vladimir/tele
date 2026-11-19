@@ -91,6 +91,9 @@ func (m *RootModel) placeForumCursor(rows []project.TopicRow) {
 		return
 	}
 	for _, r := range rows {
+		if r.ID == domain.AllTopicsID {
+			continue
+		}
 		if r.Unread > 0 {
 			m.forum.SetCursorByID(int64(r.ID))
 			return
@@ -135,7 +138,7 @@ func (m RootModel) openHistory(h domain.HistoryKey, title string) (RootModel, te
 	// gifMaxFrames RGBA images each) and otherwise accumulate for the whole
 	// session. They re-decode on demand if a GIF is selected again.
 	clear(m.gifFrames)
-	m.chatList.SetActiveByID(h.ChatID)
+	m.chatList.SetActiveHistoryByKey(h)
 	if m.owner != nil {
 		m.owner.SetFocus(h)
 	}

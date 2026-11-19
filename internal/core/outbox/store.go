@@ -385,6 +385,9 @@ func (s *Store) All() []domain.OutboxEntry {
 // ForHistory returns one history's entries in submission order: a chat's, or
 // one topic's of a forum.
 func (s *Store) ForHistory(h domain.HistoryKey) []domain.OutboxEntry {
+	if h.TopicID == domain.AllTopicsID {
+		return s.ForChat(h.ChatID)
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []domain.OutboxEntry

@@ -11,6 +11,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Private chats with forum-enabled bots (`BotForumView`) list their topics as
+  separate rows directly under the bot in `[1] Chats` so switching topics
+  keeps the chat list visible, while selecting the bot itself or any forum's
+  `All` entry opens one chronological feed across all topics and topicless
+  messages (#371).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

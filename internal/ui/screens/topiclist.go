@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -30,6 +31,9 @@ type LeaveForumMsg struct {
 // TopicTitle is what a topic is called on screen: its title, or its id for a
 // topic whose messages arrived before anything about it did.
 func TopicTitle(r project.TopicRow) string {
+	if r.ID == domain.AllTopicsID {
+		return "All"
+	}
 	if r.Title != "" {
 		return r.Title
 	}
@@ -38,10 +42,10 @@ func TopicTitle(r project.TopicRow) string {
 
 // TopicListModel renders a window onto one forum's topics, in the middle pane
 // where the chat list was. A topic row reads like a chat row, with a marker in
-// front where a chat shows its presence: # for an open topic, - for a closed
-// one (#275).
+// front where a chat shows its presence: * for All, # for an open topic, - for
+// a closed one (#275).
 type TopicListModel struct {
-	rowList[project.TopicRow]
+	rowList[project.TopicRow, int64]
 	chatID int64
 	title  string
 	width  int
@@ -49,7 +53,7 @@ type TopicListModel struct {
 
 func NewTopicListModel(chatID int64, title string) *TopicListModel {
 	return &TopicListModel{
-		rowList: rowList[project.TopicRow]{idOf: func(r project.TopicRow) int64 { return int64(r.ID) }},
+		rowList: rowList[project.TopicRow, int64]{keyOf: func(r project.TopicRow) int64 { return int64(r.ID) }},
 		chatID:  chatID,
 		title:   title,
 	}
@@ -59,11 +63,15 @@ func NewTopicListModel(chatID int64, title string) *TopicListModel {
 func (m *TopicListModel) ChatID() int64 { return m.chatID }
 func (m *TopicListModel) Title() string { return m.title }
 
+func (m *TopicListModel) SetActive(id int64)     { m.SetActiveKey(id) }
+func (m *TopicListModel) SetActiveByID(id int64) { m.SetActiveByKey(id) }
+func (m *TopicListModel) SetCursorByID(id int64) { m.SetCursorByKey(id) }
+
 // HighlightTopic starts a fade highlight on a topic's row.
 func (m *TopicListModel) HighlightTopic(id int) { m.highlight(int64(id)) }
 
 // HighlightedTopicID returns the topic currently flashed (0 when none).
-func (m *TopicListModel) HighlightedTopicID() int64 { return m.highlightID }
+func (m *TopicListModel) HighlightedTopicID() int64 { return m.highlightKey }
 
 // CursorTopic returns the row under the cursor.
 func (m *TopicListModel) CursorTopic() (project.TopicRow, bool) { return m.rowAt(m.cursor) }
@@ -93,7 +101,7 @@ func (m *TopicListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 	switch action.Action {
 	case keys.ActionConfirm:
 		if row, ok := m.rowAt(m.cursor); ok {
-			m.activeID = int64(row.ID)
+			m.activeKey = int64(row.ID)
 			chatID, title := m.chatID, TopicTitle(row)
 			return m, func() tea.Msg { return OpenTopicMsg{ChatID: chatID, TopicID: row.ID, Title: title} }
 		}
@@ -128,7 +136,9 @@ func (m *TopicListModel) View() string {
 		}
 		marker := "#"
 		titleBase := base
-		if row.Closed {
+		if row.ID == domain.AllTopicsID {
+			marker = "*"
+		} else if row.Closed {
 			marker = "-"
 			titleBase = base.Foreground(theme.T().TextMuted)
 		}

@@ -120,6 +120,11 @@ func (s *SQLiteStore) ApplyIncomingTopic(msg domain.Message) (domain.HistoryKey,
 		return domain.HistoryKey{ChatID: msg.ChatID}, true
 	}
 	h := chat.HistoryOf(msg)
+	if h.TopicID == 0 {
+		// In a bot forum, topicless direct messages live at TopicID 0 rather
+		// than inside a named topic (#371).
+		return h, true
+	}
 	t, known := s.topics[h.ChatID][h.TopicID]
 	if !known {
 		t = domain.Topic{ChatID: h.ChatID, ID: h.TopicID}

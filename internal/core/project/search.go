@@ -36,4 +36,5 @@ type FoundMessage struct {
 	Chat    string
 	Topic   string
 	Private bool
+	Bot     bool
 }

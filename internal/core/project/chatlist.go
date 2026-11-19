@@ -23,6 +23,12 @@ type ChatRow struct {
 	// IsForum marks a chat opened through its topic list (#275). Its Unread is
 	// how many of its topics have unread, as Telegram Desktop badges a forum.
 	IsForum bool
+	// TopicID, BotTitle, IsBotTopic and TopicClosed populate inline bot-topic
+	// rows emitted right beneath their bot chat in the chat list (#371).
+	TopicID     int
+	BotTitle    string
+	IsBotTopic  bool
+	TopicClosed bool
 }
 
 // ChatKind is what a chat is to the person: whom or what they talk to there.
@@ -79,9 +85,20 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 	filters := r.FolderFilters()
 	filtered := filterChats(all, w.Folder, filters)
 
+	allRows := make([]ChatRow, 0, len(filtered))
+	for _, c := range filtered {
+		topics := r.Topics(c.ID)
+		allRows = append(allRows, Row(c, topics))
+		if c.IsBotForum() {
+			for _, t := range topics {
+				allRows = append(allRows, botTopicRow(c, t))
+			}
+		}
+	}
+
 	out := ChatListContents{
 		Offset:  w.Offset,
-		Total:   len(filtered),
+		Total:   len(allRows),
 		Folders: folderCounts(r, all, filters),
 	}
 
@@ -89,18 +106,34 @@ func BuildChatList(r Reader, w ChatListWindow) ChatListContents {
 	if start < 0 {
 		start = 0
 	}
-	if start > len(filtered) {
-		start = len(filtered)
+	if start > len(allRows) {
+		start = len(allRows)
 	}
 	end := start + w.Limit
-	if end > len(filtered) {
-		end = len(filtered)
+	if end > len(allRows) {
+		end = len(allRows)
 	}
-	out.Rows = make([]ChatRow, 0, end-start)
-	for _, c := range filtered[start:end] {
-		out.Rows = append(out.Rows, Row(c, r.Topics(c.ID)))
-	}
+	out.Rows = make([]ChatRow, end-start)
+	copy(out.Rows, allRows[start:end])
 	return out
+}
+
+func botTopicRow(c domain.Chat, t domain.Topic) ChatRow {
+	return ChatRow{
+		ID:          c.ID,
+		TopicID:     t.ID,
+		Title:       t.Title,
+		BotTitle:    c.Title,
+		Kind:        ChatKindBot,
+		IsUser:      true,
+		IsForum:     true,
+		IsBotTopic:  true,
+		TopicClosed: t.Closed,
+		Unread:      t.UnreadCount,
+		Mentions:    t.UnreadMentionsCount,
+		Reactions:   t.UnreadReactionsCount,
+		Muted:       t.MutedIn(c.IsMuted),
+	}
 }
 
 // Row is how a chat reaches a client: everything a row or a menu over it shows,
@@ -134,15 +167,26 @@ func Row(c domain.Chat, topics []domain.Topic) ChatRow {
 			row.Mentions += t.UnreadMentionsCount
 			row.Reactions += t.UnreadReactionsCount
 		}
+		if c.IsBot {
+			if row.Unread == 0 && c.UnreadCount > 0 {
+				row.Unread = c.UnreadCount
+			}
+			row.Mentions = max(row.Mentions, c.UnreadMentionsCount)
+			row.Reactions = max(row.Reactions, c.UnreadReactionsCount)
+		}
 	}
 	return row
 }
 
 // hasUnread reports whether a chat counts as unread for a folder: a forum when
-// any of its topics is, any other chat by its own count.
+// any of its topics is (or topicless messages exist in a bot forum), any other
+// chat by its own count.
 func hasUnread(r Reader, c domain.Chat) bool {
 	if !c.IsForum {
 		return c.UnreadCount > 0
+	}
+	if c.IsBot && c.UnreadCount > 0 {
+		return true
 	}
 	for _, t := range r.Topics(c.ID) {
 		if t.UnreadCount > 0 {

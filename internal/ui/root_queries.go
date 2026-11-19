@@ -86,6 +86,19 @@ func (m RootModel) openChatMenu() (RootModel, tea.Cmd) {
 	if !ok || m.owner == nil {
 		return m, nil
 	}
+	if row.IsBotTopic {
+		topic := project.TopicRow{
+			ID:        row.TopicID,
+			Title:     screens.TopicTitle(project.TopicRow{ID: row.TopicID, Title: row.Title}),
+			Closed:    row.TopicClosed,
+			Unread:    row.Unread,
+			Mentions:  row.Mentions,
+			Reactions: row.Reactions,
+			Muted:     row.Muted,
+		}
+		m.chatMenu = components.NewTopicContextMenu(row.ID, topic, m.keyMap)
+		return m, nil
+	}
 	m.chatMenu = components.NewChatContextMenu(row, nil, m.keyMap)
 	ctx, owner, chatID := m.ctx, m.owner, row.ID
 	return m, func() tea.Msg {

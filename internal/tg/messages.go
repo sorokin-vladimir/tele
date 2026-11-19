@@ -141,7 +141,7 @@ func (c *GotdClient) GetHistoryAfter(ctx context.Context, peer domain.Peer, topi
 	err = WithRetry(ctx, func() error {
 		var result tg.MessagesMessagesClass
 		var err error
-		if topicID != 0 {
+		if topicID > 0 {
 			result, err = api.MessagesGetReplies(ctx, buildAfterRepliesRequest(inputPeer, topicID, afterID, limit))
 		} else {
 			result, err = api.MessagesGetHistory(ctx, buildAfterRequest(inputPeer, afterID, limit))
@@ -502,13 +502,21 @@ func (c *GotdClient) ReadMentions(ctx context.Context, peer domain.Peer, topicID
 // buildReadReactionsRequest reads a chat's unread reactions, or one forum
 // topic's (#275).
 func buildReadReactionsRequest(peer tg.InputPeerClass, topicID int) *tg.MessagesReadReactionsRequest {
-	return &tg.MessagesReadReactionsRequest{Peer: peer, TopMsgID: topicID}
+	req := &tg.MessagesReadReactionsRequest{Peer: peer}
+	if topicID > 0 {
+		req.TopMsgID = topicID
+	}
+	return req
 }
 
 // buildReadMentionsRequest reads a chat's unread mentions, or one forum
 // topic's (#275).
 func buildReadMentionsRequest(peer tg.InputPeerClass, topicID int) *tg.MessagesReadMentionsRequest {
-	return &tg.MessagesReadMentionsRequest{Peer: peer, TopMsgID: topicID}
+	req := &tg.MessagesReadMentionsRequest{Peer: peer}
+	if topicID > 0 {
+		req.TopMsgID = topicID
+	}
+	return req
 }
 
 // ReadDiscussion marks a forum topic read up to maxID. A topic is a replies

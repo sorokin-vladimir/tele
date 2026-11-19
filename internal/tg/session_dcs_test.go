@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"maps"
 	"net"
 	"path/filepath"
 	"sync"
@@ -61,7 +62,7 @@ func dialledOnStart(t *testing.T, sessionFile string) map[string]bool {
 
 	mu.Lock()
 	defer mu.Unlock()
-	return dialled
+	return maps.Clone(dialled)
 }
 
 // gotd keeps the addresses Telegram sent in the session but starts from its

@@ -212,11 +212,10 @@ func TestVisual_GlobalKeysOtherThanFocusDoNothing(t *testing.T) {
 	m = pressKeys(m, "V", "k")
 
 	presses := map[string]tea.KeyPressMsg{
-		"/":      {Code: '/', Text: "/"},
-		"?":      {Code: '?', Text: "?"},
-		",":      {Code: ',', Text: ","},
-		"q":      {Code: 'q', Text: "q"},
-		"ctrl+c": {Code: 'c', Mod: tea.ModCtrl},
+		"/": {Code: '/', Text: "/"},
+		"?": {Code: '?', Text: "?"},
+		",": {Code: ',', Text: ","},
+		"q": {Code: 'q', Text: "q"},
 	}
 	for name, press := range presses {
 		nm, cmd := m.Update(press)
@@ -230,6 +229,31 @@ func TestVisual_GlobalKeysOtherThanFocusDoNothing(t *testing.T) {
 	assert.False(t, m.SettingsOpen())
 	assert.Equal(t, keys.ModeVisual, m.VimMode())
 	assert.Len(t, m.Chat().VisualSelection(), 2)
+}
+
+func TestVisual_CtrlCLeavesTheModeWithoutQuitting(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m, "V", "k")
+
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, keys.ModeNormal, m.VimMode())
+	assert.False(t, m.Chat().InVisual())
+}
+
+func TestVisual_CtrlCAfterAChordPrefixLeavesTheMode(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m, "V", "k", "g")
+
+	nm, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+	m = pressKeys(m, "/")
+
+	assert.Equal(t, keys.ModeNormal, m.VimMode())
+	require.NotNil(t, m.MessageSearch())
+	assert.False(t, m.MessageSearch().Opened().Everywhere, "the g before ctrl+c is dropped")
 }
 
 func TestVisual_MovingFocusOutOfTheChatLeavesTheMode(t *testing.T) {

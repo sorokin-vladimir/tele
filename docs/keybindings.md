@@ -93,7 +93,7 @@ A reply line is kept only when the message replied to is loaded in the chat.
 A selection with gaps is copied with names by `y` and `Y` alike, so that the gaps show.
 `Space` opens a menu with the copies the selection offers.
 
-`Esc` leaves Visual mode and clears the selection, and other keys do nothing.
+`Esc` or `Ctrl+C` leaves Visual mode and clears the selection, and other keys do nothing.
 Switching chats or moving focus out of the chat pane leaves Visual mode too.
 A message deleted while you select, in the selection or outside it, leaves the rest where it was.
 

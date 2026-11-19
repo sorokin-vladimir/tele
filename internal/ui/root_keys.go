@@ -247,6 +247,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, mentionCmd, m.markReadCmd())
 	}
 
+	if m.vimState.Mode == keys.ModeVisual && keyStr == "ctrl+c" {
+		m.matcher.Reset()
+		m.endVisual()
+		return m, nil
+	}
+
 	// Global bindings take priority, unless the focused context explicitly binds
 	// the key — a context-specific override (e.g. chatlist "confirm: l") must win
 	// over a conflicting global binding (issue #132).

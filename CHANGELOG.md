@@ -17,7 +17,7 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the focused message and `m` marks messages one by one. `y` copies their
   text, oldest first, and `Y` copies them with times and names the way
   `tele show` prints them. `Space` opens a menu with the same copies, and
-  `Esc` leaves (#361).
+  `Esc` or `Ctrl+C` leaves (#361).
 
 ## [2.1.3] - 2026-11-13
 

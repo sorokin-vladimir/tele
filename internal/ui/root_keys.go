@@ -463,6 +463,20 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if action == keys.ActionToggleDetails && m.focus == FocusChat {
+		if m.chat != nil {
+			if m.chat.ToggleDetails() {
+				m.statusBar.SetStatus("Details expanded")
+			} else {
+				m.statusBar.SetStatus("Details collapsed")
+			}
+			m, gifCmd := m.reconcileGifAnim()
+			m.showNewCount()
+			return m, tea.Batch(m.markReadCmd(), gifCmd)
+		}
+		return m, nil
+	}
+
 	if action == keys.ActionConfirm && m.focus == FocusChat {
 		// enter was already bound in the chat pane with no handler behind it
 		// (internal/ui/keys/keys.go): an inert binding whose meaning — activate

@@ -134,7 +134,7 @@ func (ml *MessageList) msgHeight(msg domain.Message) int {
 		// Rich body rows come from the block layout at the bubble's content
 		// width, in lock-step with bubbleContentLines (both call richMessageLines
 		// at measureBubble's actualW).
-		h += len(richMessageLines(msg.Rich, ml.measureBubble(msg).actualW))
+		h += len(richMessageLines(msg.Rich, ml.measureBubble(msg).actualW, ml.detailsExpanded))
 	case msg.Text != "":
 		// The width the renderer will actually wrap at, not the widest one it is
 		// allowed. A bubble is widened past its text by a long sender name, a row

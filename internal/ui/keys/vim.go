@@ -63,6 +63,7 @@ const (
 	ActionToggleSendAs    Action = "toggle_send_as"
 	ActionCancelUpload    Action = "cancel_upload"
 	ActionDownloadFile    Action = "download_file"
+	ActionToggleDetails   Action = "toggle_details"
 	ActionCopyMessage     Action = "copy_message"
 	ActionPasteImage      Action = "paste_image"
 	// Profile actions (#222). ActionShowProfile opens the overlay from wherever

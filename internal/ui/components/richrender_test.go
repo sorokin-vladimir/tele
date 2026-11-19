@@ -28,26 +28,26 @@ func stripAll(rows []string) []string {
 }
 
 func TestRichMessageLines_NoRowsWhenNil(t *testing.T) {
-	assert.Nil(t, richMessageLines(nil, 40))
-	assert.Nil(t, richMessageLines(&domain.RichMessage{}, 40))
+	assert.Nil(t, richMessageLines(nil, 40, false))
+	assert.Nil(t, richMessageLines(&domain.RichMessage{}, 40, false))
 }
 
 func TestRichMessageLines_ParagraphWrapAndHug(t *testing.T) {
 	r := richMessageWith(domain.RichBlock{Kind: domain.RichParagraph, Text: para("один два три четыре пять")})
-	rows := richMessageLines(r, 10)
+	rows := richMessageLines(r, 10, false)
 	require.NotEmpty(t, rows)
 	// Wrapped into two rows, not padded to the 10-wide budget.
 	assert.Greater(t, len(rows), 1)
 	for _, row := range rows {
 		assert.LessOrEqual(t, lipglossWidth(row), 10, "paragraph row must fit its content width")
 	}
-	assert.Equal(t, 10, richMessageWidth(r, 10), "a paragraph filling the budget wants full width")
+	assert.Equal(t, 10, richMessageWidth(r, 10, false), "a paragraph filling the budget wants full width")
 }
 
 func TestRichMessageLines_ShortMessageHugs(t *testing.T) {
 	r := richMessageWith(domain.RichBlock{Kind: domain.RichParagraph, Text: para("hi")})
-	assert.Equal(t, "hi", stripAll(richMessageLines(r, 200))[0])
-	assert.Equal(t, 2, richMessageWidth(r, 200), "short text hugs its natural width")
+	assert.Equal(t, "hi", stripAll(richMessageLines(r, 200, false))[0])
+	assert.Equal(t, 2, richMessageWidth(r, 200, false), "short text hugs its natural width")
 }
 
 func TestRichMessageLines_HeadingSubtitleBlockquote(t *testing.T) {
@@ -57,7 +57,7 @@ func TestRichMessageLines_HeadingSubtitleBlockquote(t *testing.T) {
 		domain.RichBlock{Kind: domain.RichParagraph, Text: para("body")},
 		domain.RichBlock{Kind: domain.RichBlockquote, Text: para("quoted")},
 	)
-	rows := stripAll(richMessageLines(r, 60))
+	rows := stripAll(richMessageLines(r, 60, false))
 	joined := strings.Join(rows, "\n")
 	assert.Contains(t, joined, "Headline")
 	assert.Contains(t, joined, "sub")
@@ -74,7 +74,7 @@ func TestRichMessageLines_ListMarkers(t *testing.T) {
 			{Text: para("eggs")},
 		},
 	})
-	rows := stripAll(richMessageLines(r, 40))
+	rows := stripAll(richMessageLines(r, 40, false))
 	assert.Equal(t, "• milk", strings.TrimSpace(rows[0]))
 	assert.Equal(t, "• eggs", strings.TrimSpace(rows[1]))
 
@@ -85,7 +85,7 @@ func TestRichMessageLines_ListMarkers(t *testing.T) {
 			{Text: para("second")},
 		},
 	})
-	orows := stripAll(richMessageLines(ol, 40))
+	orows := stripAll(richMessageLines(ol, 40, false))
 	assert.Equal(t, "1. first", strings.TrimSpace(orows[0]))
 	assert.Equal(t, "2. second", strings.TrimSpace(orows[1]))
 }
@@ -105,7 +105,7 @@ func TestRichMessageLines_Table(t *testing.T) {
 			},
 		},
 	})
-	rows := stripAll(richMessageLines(r, 60))
+	rows := stripAll(richMessageLines(r, 60, false))
 	require.NotEmpty(t, rows)
 	joined := strings.Join(rows, "\n")
 	assert.Contains(t, joined, "Name")
@@ -139,8 +139,8 @@ func TestRichMessageLines_HeaderRowBold(t *testing.T) {
 			},
 		},
 	})
-	rows := richMessageLines(r, 60) // raw, ANSI intact
-	require.Len(t, rows, 5)         // top rule, header, rule, body, bottom rule
+	rows := richMessageLines(r, 60, false) // raw, ANSI intact
+	require.Len(t, rows, 5)                // top rule, header, rule, body, bottom rule
 	assert.Contains(t, rows[1], "\x1b[1m", "header cells render bold")
 	assert.Contains(t, xansi.Strip(rows[1]), "Name")
 	assert.NotContains(t, rows[3], "\x1b[1m", "body cells stay in the body style")
@@ -161,7 +161,7 @@ func TestRichMessageLines_RowHeaderBold(t *testing.T) {
 			},
 		},
 	})
-	rows := richMessageLines(r, 60)
+	rows := richMessageLines(r, 60, false)
 	require.Len(t, rows, 2)
 	for _, row := range rows {
 		// Split the row at the two-space gap between the unbordered columns and
@@ -192,7 +192,7 @@ func TestRichMessageLines_TableNarrowFits(t *testing.T) {
 			{{Text: para("c")}, {Text: para("d")}},
 		},
 	})
-	assert.Equal(t, 9, richMessageWidth(r, 60), "a small bordered table hugs its natural width (pads + bars + two 1-wide cells)")
+	assert.Equal(t, 9, richMessageWidth(r, 60, false), "a small bordered table hugs its natural width (pads + bars + two 1-wide cells)")
 }
 
 func TestRichMessageLines_QuotesFitWidth(t *testing.T) {
@@ -212,7 +212,7 @@ func TestRichMessageLines_QuotesFitWidth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, w := range []int{1, 2, 3, 10, 24, 80} {
-				rows := richMessageLines(tc.rich, w)
+				rows := richMessageLines(tc.rich, w, false)
 				require.NotEmpty(t, rows)
 				assertRowsFit(t, rows, w)
 			}
@@ -231,7 +231,7 @@ func TestRichMessageLines_QuoteInsideListFits(t *testing.T) {
 		},
 	})
 	for _, w := range []int{1, 2, 8, 24, 80} {
-		assertRowsFit(t, richMessageLines(r, w), w)
+		assertRowsFit(t, richMessageLines(r, w, false), w)
 	}
 }
 
@@ -248,13 +248,13 @@ func TestRichMessageLines_NestedListAndQuoteInList(t *testing.T) {
 			}},
 		},
 	})
-	rows := stripAll(richMessageLines(r, 40))
+	rows := stripAll(richMessageLines(r, 40, false))
 	joined := strings.Join(rows, "\n")
 	assert.Contains(t, joined, "outer")
 	assert.Contains(t, joined, "nested", "a nested list renders its items")
 	assert.Contains(t, joined, "quoted in a list", "a quote nested in a list renders")
 	assert.Contains(t, joined, "▌", "the quote keeps its glyph")
-	assertRowsFit(t, richMessageLines(r, 40), 40)
+	assertRowsFit(t, richMessageLines(r, 40, false), 40)
 }
 
 func TestRichMessageLines_TablesFitWidth(t *testing.T) {
@@ -266,7 +266,7 @@ func TestRichMessageLines_TablesFitWidth(t *testing.T) {
 	}
 	r := richMessageWith(domain.RichBlock{Kind: domain.RichTable, Bordered: true, Rows: rows})
 	for _, w := range []int{5, 10, 20, 24, 60} {
-		assertRowsFit(t, richMessageLines(r, w), w)
+		assertRowsFit(t, richMessageLines(r, w, false), w)
 	}
 }
 
@@ -303,7 +303,7 @@ func assertRowsFit(t *testing.T, rows []string, w int) {
 	}
 }
 
-func TestRichMessageLines_DetailsExpandedShowsBody(t *testing.T) {
+func TestRichMessageLines_DetailsCollapsedAndExpanded(t *testing.T) {
 	r := richMessageWith(domain.RichBlock{
 		Kind:  domain.RichDetails,
 		Title: para("More"),
@@ -311,10 +311,45 @@ func TestRichMessageLines_DetailsExpandedShowsBody(t *testing.T) {
 			{Kind: domain.RichParagraph, Text: para("the hidden body")},
 		},
 	})
-	rows := stripAll(richMessageLines(r, 40))
-	joined := strings.Join(rows, "\n")
-	assert.Contains(t, joined, "More")
-	assert.Contains(t, joined, "the hidden body")
+	collapsed := strings.Join(stripAll(richMessageLines(r, 40, false)), "\n")
+	assert.Contains(t, collapsed, "▸ More")
+	assert.NotContains(t, collapsed, "the hidden body")
+
+	expanded := strings.Join(stripAll(richMessageLines(r, 40, true)), "\n")
+	assert.Contains(t, expanded, "▾ More")
+	assert.Contains(t, expanded, "the hidden body")
+}
+
+func TestMessageList_ToggleDetailsUpdatesHeightsAndRender(t *testing.T) {
+	msg := domain.Message{
+		ID:   1,
+		Date: time.Now(),
+		Rich: richMessageWith(domain.RichBlock{
+			Kind:  domain.RichDetails,
+			Title: para("Summary"),
+			Blocks: []domain.RichBlock{
+				{Kind: domain.RichParagraph, Text: para("hidden secret inside details")},
+			},
+		}),
+	}
+	ml := NewMessageList(20, 60)
+	ml.SetMessages([]domain.Message{msg})
+
+	assert.False(t, ml.DetailsExpanded())
+	collapsedView := xansi.Strip(ml.View())
+	assert.Contains(t, collapsedView, "▸ Summary")
+	assert.NotContains(t, collapsedView, "hidden secret inside details")
+	assert.Equal(t, ml.itemHeight(0), len(ml.renderItem(0, false)))
+
+	assert.True(t, ml.ToggleDetails())
+	assert.True(t, ml.DetailsExpanded())
+	expandedView := xansi.Strip(ml.View())
+	assert.Contains(t, expandedView, "▾ Summary")
+	assert.Contains(t, expandedView, "hidden secret inside details")
+	assert.Equal(t, ml.itemHeight(0), len(ml.renderItem(0, false)))
+
+	assert.False(t, ml.ToggleDetails())
+	assert.NotContains(t, xansi.Strip(ml.View()), "hidden secret inside details")
 }
 
 func TestRichMessageLines_MediaAndDivider(t *testing.T) {
@@ -323,7 +358,7 @@ func TestRichMessageLines_MediaAndDivider(t *testing.T) {
 		domain.RichBlock{Kind: domain.RichVideo},
 		domain.RichBlock{Kind: domain.RichDivider},
 	)
-	rows := stripAll(richMessageLines(r, 40))
+	rows := stripAll(richMessageLines(r, 40, false))
 	joined := strings.Join(rows, "\n")
 	assert.Contains(t, joined, "[photo]")
 	assert.Contains(t, joined, "sunset")
@@ -386,20 +421,23 @@ func TestRichItemHeightMatchesRenderedLines(t *testing.T) {
 		richMsg(6, domain.RichBlock{Kind: domain.RichParagraph, Text: para(longText)}),
 	}
 
-	for _, group := range []bool{false, true} {
-		for w := 24; w <= 200; w += 3 {
-			ml := NewMessageList(30, w)
-			ml.isGroup = group
-			ml.SetMessages(msgs)
-			for i := range ml.items {
-				if ml.items[i].kind != itemMessage {
-					continue
-				}
-				est := ml.itemHeight(i)
-				got := len(ml.renderItem(i, false))
-				if est != got {
-					t.Fatalf("group=%v w=%d item %d (msg %d): itemHeight=%d rendered=%d",
-						group, w, i, ml.items[i].msg.ID, est, got)
+	for _, expanded := range []bool{false, true} {
+		for _, group := range []bool{false, true} {
+			for w := 24; w <= 200; w += 3 {
+				ml := NewMessageList(30, w)
+				ml.isGroup = group
+				ml.SetDetailsExpanded(expanded)
+				ml.SetMessages(msgs)
+				for i := range ml.items {
+					if ml.items[i].kind != itemMessage {
+						continue
+					}
+					est := ml.itemHeight(i)
+					got := len(ml.renderItem(i, false))
+					if est != got {
+						t.Fatalf("expanded=%v group=%v w=%d item %d (msg %d): itemHeight=%d rendered=%d",
+							expanded, group, w, i, ml.items[i].msg.ID, est, got)
+					}
 				}
 			}
 		}

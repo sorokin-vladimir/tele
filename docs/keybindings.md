@@ -63,6 +63,7 @@ The chat list keys move through them.
 | `u`       | Attach a file to send          |
 | `x`       | Cancel staged upload / clear reply or edit |
 | `s`       | Download the selected file     |
+| `z`       | Expand or collapse details blocks in rich messages |
 | `g`       | Jump to original (for replies), however old |
 | `o`       | Open / view media: photo in the OS viewer, video inline (Kitty + ffmpeg) or in the system player |
 | `O`       | Open the selected video in the external player |

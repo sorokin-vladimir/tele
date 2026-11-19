@@ -80,6 +80,7 @@ var defaultLabels = map[Action]Label{
 	ActionOpenExternal:     {Short: "open ext", Long: "open externally"},
 	ActionPlayVoice:        {Short: "play"},
 	ActionDownloadFile:     {Short: "download"},
+	ActionToggleDetails:    {Short: "details", Long: "expand or collapse details blocks"},
 	ActionCopyMessage:      {Short: "copy"},
 	ActionAttach:           {Short: "upload"},
 	ActionToggleSendAs:     {Short: "photo/file"},

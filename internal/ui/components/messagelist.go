@@ -80,6 +80,9 @@ type MessageList struct {
 	// heightComputes counts cache misses (full height computations); test-only
 	// instrumentation exposed via HeightComputesForTest.
 	heightComputes int
+	// detailsExpanded controls whether rich-message <details> blocks render
+	// their inner body or only their collapsed summary line.
+	detailsExpanded bool
 }
 
 // HeightComputesForTest reports the cumulative number of full message-height
@@ -195,3 +198,29 @@ func (ml *MessageList) SetImageMode(mode media.Mode) {
 }
 
 func (ml *MessageList) SetShowIndicator(v bool) { ml.showIndicator = v }
+
+// DetailsExpanded reports whether rich-message <details> blocks render expanded.
+func (ml *MessageList) DetailsExpanded() bool { return ml.detailsExpanded }
+
+// SetDetailsExpanded sets whether rich-message <details> blocks render expanded.
+func (ml *MessageList) SetDetailsExpanded(v bool) {
+	if ml.detailsExpanded == v {
+		return
+	}
+	wasAtBottom := ml.AtBottom()
+	ml.detailsExpanded = v
+	ml.invalidateHeights()
+	if wasAtBottom {
+		ml.viewStart, ml.lineOffset = ml.positionAtBottom()
+	} else {
+		ml.reanchorIfUnderfilled()
+	}
+	ml.clampCursorToViewport()
+}
+
+// ToggleDetails flips whether rich-message <details> blocks render expanded and
+// returns the new state.
+func (ml *MessageList) ToggleDetails() bool {
+	ml.SetDetailsExpanded(!ml.detailsExpanded)
+	return ml.detailsExpanded
+}

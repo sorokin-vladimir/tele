@@ -27,11 +27,13 @@ import (
 // Blocks are separated by a blank row. Rows carry their own styling; they are
 // not padded to width — the bubble renderer pads them. The result has no
 // trailing or leading blank row.
-func richMessageLines(r *domain.RichMessage, w int) []string {
+// richMessageLines lays out a rich message into display rows at content width w.
+// detailsExpanded controls whether <details> blocks show their inner body.
+func richMessageLines(r *domain.RichMessage, w int, detailsExpanded bool) []string {
 	if r == nil || len(r.Blocks) == 0 {
 		return nil
 	}
-	rows := renderBlockSequence(r.Blocks, w, 0)
+	rows := renderBlockSequence(r.Blocks, w, 0, detailsExpanded)
 	if len(rows) == 0 {
 		// Every block rendered nothing (an anchor-only message, say). Keep the
 		// height and render lock-step by drawing one empty content row, exactly
@@ -44,13 +46,13 @@ func richMessageLines(r *domain.RichMessage, w int) []string {
 // richMessageWidth returns the content width a rich message would like, laid
 // out at up to maxW: the widest row it produces, capped at maxW. Callers use it
 // the way the text path measures msg.Text to size the bubble.
-func richMessageWidth(r *domain.RichMessage, maxW int) int {
+func richMessageWidth(r *domain.RichMessage, maxW int, detailsExpanded bool) int {
 	if r == nil || len(r.Blocks) == 0 {
 		return 0
 	}
 	w := 0
 	for i := range r.Blocks {
-		rows := richBlockLines(&r.Blocks[i], maxW, 0)
+		rows := richBlockLines(&r.Blocks[i], maxW, 0, detailsExpanded)
 		for _, row := range rows {
 			if lw := lipgloss.Width(strings.TrimRight(row, " ")); lw > w {
 				w = lw
@@ -68,7 +70,7 @@ func richMessageWidth(r *domain.RichMessage, maxW int) int {
 
 // richBlockLines renders one block into rows at content width w. depth is the
 // block nesting depth and indents nested content (details bodies, list items).
-func richBlockLines(b *domain.RichBlock, w int, depth int) []string {
+func richBlockLines(b *domain.RichBlock, w int, depth int, detailsExpanded bool) []string {
 	if w < 1 {
 		w = 1
 	}
@@ -92,13 +94,13 @@ func richBlockLines(b *domain.RichBlock, w int, depth int) []string {
 	case domain.RichPreformatted:
 		return preformattedLines(b, w)
 	case domain.RichBlockquote:
-		return blockquoteLines(b, w, depth)
+		return blockquoteLines(b, w, depth, detailsExpanded)
 	case domain.RichPullquote:
 		return pullquoteLines(b, w)
 	case domain.RichList, domain.RichOrderedList:
-		return listLines(b, w)
+		return listLines(b, w, detailsExpanded)
 	case domain.RichDetails:
-		return detailsLines(b, w, depth)
+		return detailsLines(b, w, depth, detailsExpanded)
 	case domain.RichTable:
 		return tableLines(b, w)
 	case domain.RichAnchor:
@@ -191,7 +193,7 @@ func preformattedLines(b *domain.RichBlock, w int) []string {
 // blockquoteLines renders a quote block: its own text (or nested blocks) with a
 // quote glyph on the left of every row. depth controls the inner indentation of
 // nested quote blocks.
-func blockquoteLines(b *domain.RichBlock, w int, depth int) []string {
+func blockquoteLines(b *domain.RichBlock, w int, depth int, detailsExpanded bool) []string {
 	prefix := quotePrefix(depth)
 	if lipgloss.Width(prefix) >= w {
 		// No room for the glyph: the quote's content still gets the whole width.
@@ -204,7 +206,7 @@ func blockquoteLines(b *domain.RichBlock, w int, depth int) []string {
 	var rows []string
 	var quoteRows []string
 	if len(b.Blocks) > 0 {
-		quoteRows = renderBlockSequence(b.Blocks, innerW, depth)
+		quoteRows = renderBlockSequence(b.Blocks, innerW, depth, detailsExpanded)
 	} else {
 		quoteRows = paraLines(b.Text, innerW, theme.S().Body)
 	}
@@ -253,7 +255,7 @@ func pullquoteLines(b *domain.RichBlock, w int) []string {
 
 // listLines renders a bulleted or ordered list, hanging the item markers in
 // their own column so wrapped item lines align under the first word.
-func listLines(b *domain.RichBlock, w int) []string {
+func listLines(b *domain.RichBlock, w int, detailsExpanded bool) []string {
 	markers := make([]string, len(b.Items))
 	markerW := 0
 	start := b.Start
@@ -300,7 +302,7 @@ func listLines(b *domain.RichBlock, w int) []string {
 	var rows []string
 	for i, item := range b.Items {
 		if len(item.Blocks) > 0 {
-			itemRows := renderBlockSequence(item.Blocks, innerW, 1)
+			itemRows := renderBlockSequence(item.Blocks, innerW, 1, detailsExpanded)
 			for j, row := range itemRows {
 				prefix := theme.Pad(markerW)
 				if j == 0 {
@@ -322,42 +324,69 @@ func listLines(b *domain.RichBlock, w int) []string {
 	return rows
 }
 
-// detailsLines renders a collapsible details block. Terminal tele cannot toggle
-// the block, so the content always renders, indented under the title. depth
-// indents nested details.
-func detailsLines(b *domain.RichBlock, w int, depth int) []string {
-	title := paraLines(b.Title, w, theme.S().Body.Bold(true))
-	if len(title) == 0 && len(b.Blocks) == 0 {
-		return nil
+// detailsLines renders a collapsible <details> block. By default it starts
+// collapsed, showing only the toggle glyph and summary title; toggling details
+// expanded reveals the indented body blocks. depth indents nested details.
+func detailsLines(b *domain.RichBlock, w int, depth int, expanded bool) []string {
+	if len(b.Blocks) == 0 {
+		title := paraLines(b.Title, w, theme.S().Body.Bold(true))
+		if len(title) == 0 {
+			return nil
+		}
+		return title
 	}
-	rows := append([]string{}, title...)
-	if len(b.Blocks) > 0 {
-		if len(rows) > 0 {
-			rows = append(rows, "")
+	marker := "▸"
+	if expanded {
+		marker = "▾"
+	}
+	firstPrefix := theme.S().Body.Foreground(theme.T().Accent).Render(marker) + theme.Pad(1)
+	markerW := lipgloss.Width(firstPrefix)
+	titleW := w - markerW
+	if titleW < 1 {
+		firstPrefix = ""
+		markerW = 0
+		titleW = w
+	}
+	title := paraLines(b.Title, titleW, theme.S().Body.Bold(true))
+	if len(title) == 0 {
+		title = paraLines(domain.RichText{Kind: domain.RichTextPlain, Text: "Details"}, titleW, theme.S().Body.Bold(true))
+	}
+	var rows []string
+	for i, row := range title {
+		prefix := firstPrefix
+		if i > 0 {
+			prefix = theme.Pad(markerW)
 		}
-		prefix := theme.Pad(2)
-		if lipgloss.Width(prefix) >= w {
-			// No room for the indent: the body gets the whole width.
-			prefix = ""
-		}
-		innerW := w - lipgloss.Width(prefix)
-		if innerW < 1 {
-			innerW = 1
-		}
-		content := renderBlockSequence(b.Blocks, innerW, depth+1)
-		for _, row := range content {
-			rows = append(rows, prefix+row)
-		}
+		rows = append(rows, prefix+row)
+	}
+	if !expanded {
+		return rows
+	}
+	if len(rows) > 0 {
+		rows = append(rows, "")
+	}
+	prefix := theme.Pad(2)
+	if lipgloss.Width(prefix) >= w {
+		// No room for the indent: the body gets the whole width.
+		prefix = ""
+	}
+	innerW := w - lipgloss.Width(prefix)
+	if innerW < 1 {
+		innerW = 1
+	}
+	content := renderBlockSequence(b.Blocks, innerW, depth+1, expanded)
+	for _, row := range content {
+		rows = append(rows, prefix+row)
 	}
 	return rows
 }
 
 // renderBlockSequence lays out a sequence of sibling blocks at width w with
 // blank-row separation, sharing the top-level join logic.
-func renderBlockSequence(blocks []domain.RichBlock, w int, depth int) []string {
+func renderBlockSequence(blocks []domain.RichBlock, w int, depth int, detailsExpanded bool) []string {
 	var rows []string
 	for i := range blocks {
-		blockRows := richBlockLines(&blocks[i], w, depth)
+		blockRows := richBlockLines(&blocks[i], w, depth, detailsExpanded)
 		if len(blockRows) == 0 {
 			continue
 		}

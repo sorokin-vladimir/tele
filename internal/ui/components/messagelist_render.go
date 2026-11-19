@@ -91,7 +91,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 		// A rich message lays out its own blocks (paragraphs, tables, …) at the
 		// budget and hugs the widest row it produces, mirroring how the text
 		// path measures msg.Text below.
-		actualW = richMessageWidth(msg.Rich, maxContentW)
+		actualW = richMessageWidth(msg.Rich, maxContentW, ml.detailsExpanded)
 	case msg.Text != "":
 		// canvas:ok measurement only — this render is measured and thrown away,
 		// so a background would cost work per bubble and reach no cell.
@@ -388,7 +388,7 @@ func (ml *MessageList) bubbleContentLines(msg domain.Message, m bubbleMetrics) [
 		// Rich-message body: blocks are laid out to the content width in
 		// richrender.go and already carry their styling; frame each row like the
 		// text path does. Block separators arrive as empty rows.
-		for _, row := range richMessageLines(msg.Rich, actualW) {
+		for _, row := range richMessageLines(msg.Rich, actualW, ml.detailsExpanded) {
 			if row == "" {
 				sideLines = append(sideLines, blankRow())
 				continue

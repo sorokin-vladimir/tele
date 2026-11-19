@@ -122,6 +122,7 @@ func DefaultKeyMap() KeyMap {
 			"u":      ActionAttach,
 			"x":      ActionCancelUpload,
 			"s":      ActionDownloadFile,
+			"z":      ActionToggleDetails,
 			"y":      ActionCopyMessage,
 			"P":      ActionShowProfile,
 		},

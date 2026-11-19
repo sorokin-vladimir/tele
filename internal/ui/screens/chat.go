@@ -217,6 +217,7 @@ func (m *ChatModel) SetHeader(h ChatHeader) {
 
 	if changed {
 		m.composer.SetValue(m.drafts[domain.HistoryKey{ChatID: h.ChatID, TopicID: h.TopicID}])
+		m.msgList.SetDetailsExpanded(false)
 		m.syncMsgListHeight()
 	}
 }
@@ -229,6 +230,7 @@ func (m *ChatModel) Close() {
 	m.lastTypingAt = time.Time{}
 	m.msgList.SetIsGroup(false)
 	m.msgList.SetOutboxReadMaxID(0)
+	m.msgList.SetDetailsExpanded(false)
 	m.composer.SetValue("")
 	m.syncMsgListHeight()
 }
@@ -326,6 +328,8 @@ func (m *ChatModel) MaxMediaPx() int              { return m.msgList.MaxMediaPx(
 func (m *ChatModel) SetImageMode(mode media.Mode) { m.msgList.SetImageMode(mode) }
 func (m *ChatModel) SetOutboxReadMaxID(id int)    { m.msgList.SetOutboxReadMaxID(id) }
 func (m *ChatModel) SetInboxReadMaxID(id int)     { m.msgList.SetInboxReadMaxID(id) }
+func (m *ChatModel) ToggleDetails() bool          { return m.msgList.ToggleDetails() }
+func (m *ChatModel) DetailsExpanded() bool        { return m.msgList.DetailsExpanded() }
 func (m *ChatModel) InboxReadMaxID() int          { return m.msgList.InboxReadMaxID() }
 func (m *ChatModel) ScrollToFirstUnread(readMaxID int) bool {
 	return m.msgList.ScrollToFirstUnread(readMaxID)
@@ -706,6 +710,8 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			if m.msgList.CursorDown() {
 				return m, m.loadNewer()
 			}
+		case keys.ActionToggleDetails:
+			m.msgList.ToggleDetails()
 		case keys.ActionInsert:
 			m.composerFocused = true
 			m.refreshPlaceholder()

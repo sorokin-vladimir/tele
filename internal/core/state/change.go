@@ -52,6 +52,9 @@ const (
 	// ChangeTopics reports that what is known about a forum's topics changed:
 	// a page or a topic was read from Telegram, or a topic was deleted (#275).
 	ChangeTopics
+	// ChangeChatsAdded reports that chats the store had no row for were read
+	// from Telegram, which adds rows to every chat-list window.
+	ChangeChatsAdded
 )
 
 // Change describes one applied difference in domain state, carrying what a

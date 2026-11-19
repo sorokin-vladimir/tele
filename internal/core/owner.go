@@ -97,6 +97,11 @@ type Owner struct {
 	topicsMu sync.Mutex
 	topics   topicRefresh
 
+	// discovery fetches chats the store has no row for when a message arrives
+	// for one.
+	discovery     discovery
+	discoverDelay time.Duration
+
 	// focus is what each attached client is showing. The notification policy's
 	// only view of clients (#192).
 	focus *focusRegistry
@@ -139,6 +144,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		authFlow:      internaltg.NewAuthFlow(log),
 		clients:       make(map[clientID]*seat),
 		now:           time.Now,
+		discoverDelay: discoverDelay,
 		readyCh:       make(chan struct{}),
 		fetching:      make(map[subKey]bool),
 		repairing:     make(map[int64]bool),

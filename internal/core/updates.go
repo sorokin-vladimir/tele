@@ -87,6 +87,21 @@ func (o *Owner) handleEvent(evt store.Event) {
 		o.refreshTopics(c.ChatID, []int{c.UnknownTopic})
 	}
 
+	// A chat the store has no row for cannot be notified about or flashed:
+	// both read the row. It is fetched first and the message announced once it
+	// is there.
+	if evt.Kind == store.EventNewMessage {
+		if _, known := o.state.Store().GetChat(evt.Message.ChatID); !known {
+			o.discoverChat(evt)
+			return
+		}
+	}
+	o.announce(evt)
+}
+
+// announce decides what the user hears about an applied event: the notification
+// and the row flash.
+func (o *Owner) announce(evt store.Event) {
 	focused := o.focus.showing
 	now := time.Now()
 	// One snapshot for the decision and both gates: a reload between two reads

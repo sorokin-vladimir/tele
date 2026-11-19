@@ -16,6 +16,27 @@ func (s *State) SetDialogs(chats []domain.Chat) {
 	}
 }
 
+// AddDiscovered stores the chats of a reload that the store still has no row
+// for, and reports whether there were any. Unlike SetDialogs it commits, because
+// it runs mid-session when clients are already showing the chat list, and it
+// leaves known chats alone: for those the stored counters have moved with the
+// update stream since the reload was asked for, and a dialog list read earlier
+// would put them back.
+func (s *State) AddDiscovered(chats []domain.Chat) bool {
+	added := false
+	for _, c := range chats {
+		if _, known := s.st.GetChat(c.ID); known {
+			continue
+		}
+		s.st.SetChat(c)
+		added = true
+	}
+	if added {
+		s.commit(Change{Kind: ChangeChatsAdded})
+	}
+	return added
+}
+
 // SetFolderFilters writes the account's folder filters. Like SetDialogs, a bulk
 // load that commits no Change.
 func (s *State) SetFolderFilters(f []domain.FolderFilter) {

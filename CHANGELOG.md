@@ -11,6 +11,12 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- A chat that writes to you for the first time, a group or channel you were
+  just added to, and a first message you sent from another device now show up
+  in the chat list at once, instead of after the next restart (#379).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

@@ -452,3 +452,21 @@ func TestMessageSearch_OpensAskingForAQuery(t *testing.T) {
 	assert.Contains(t, last, "all chats")
 	assert.Contains(t, last, "close")
 }
+
+func TestMessageSearch_VS16EmojiResultFitsFrame(t *testing.T) {
+	m := screens.NewMessageSearchModel(aliceHere, 44, 20, keys.DefaultKeyMap())
+	m = answered(t, m, "run", project.FoundMessage{
+		Chat: "Alice",
+		Message: domain.Message{
+			ID:   1,
+			Text: "• ⚙️ `run_command` and ⚙️ `edit_file` long trailing words after",
+			Date: time.Unix(1700000000, 0),
+		},
+	})
+	lines := searchLines(m)
+	require.GreaterOrEqual(t, len(lines), 5)
+	borderW := ansi.StringWidth(lines[0])
+	for i, l := range lines {
+		assert.Equal(t, borderW, ansi.StringWidth(l), "row %d width must match frame border", i)
+	}
+}

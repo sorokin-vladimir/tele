@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -64,7 +64,7 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 		if maxNameW < 1 {
 			maxNameW = 1
 		}
-		senderName = runewidth.Truncate(senderName, maxNameW, "…")
+		senderName = xansi.Truncate(senderName, maxNameW, "…")
 		namePart = ns.Render(quoteGlyph) + ns.Render(senderName)
 		nw = lipgloss.Width(namePart)
 	}
@@ -75,7 +75,7 @@ func (ml *MessageList) renderPreviewLines(senderID int64, senderName, snippet st
 	if maxSnippetW < 1 {
 		maxSnippetW = 1
 	}
-	snippet = runewidth.Truncate(snippet, maxSnippetW, "…")
+	snippet = xansi.Truncate(snippet, maxSnippetW, "…")
 	textPart := ns.Render(quoteGlyph) + theme.S().Quote.Render(snippet)
 	textPart += theme.PadTo(lipgloss.Width(textPart), actualW)
 	snippetRow := bs.Render(b.Left) + theme.Pad(1) + textPart + theme.Pad(1) + bs.Render(b.Right)
@@ -124,12 +124,12 @@ func renderForwardLines(from string, actualW int, bs lipgloss.Style) []string {
 		maxTextW = 1
 	}
 
-	label := runewidth.Truncate(forwardLabelText, maxTextW, "…")
+	label := xansi.Truncate(forwardLabelText, maxTextW, "…")
 	labelPart := theme.S().Quote.Render(quoteGlyph) + theme.S().Quote.Render(label)
 	labelPart += theme.PadTo(lipgloss.Width(labelPart), actualW)
 	labelRow := bs.Render(b.Left) + theme.Pad(1) + labelPart + theme.Pad(1) + bs.Render(b.Right)
 
-	name = runewidth.Truncate(name, maxTextW, "…")
+	name = xansi.Truncate(name, maxTextW, "…")
 	namePart := theme.S().Quote.Render(quoteGlyph) + theme.S().NameIncoming.Render(name)
 	namePart += theme.PadTo(lipgloss.Width(namePart), actualW)
 	nameRow := bs.Render(b.Left) + theme.Pad(1) + namePart + theme.Pad(1) + bs.Render(b.Right)

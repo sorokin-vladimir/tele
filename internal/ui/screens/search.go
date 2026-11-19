@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
@@ -457,20 +457,41 @@ const searchCaret = "█"
 // hidden head. Adding caret movement would require a real scroll offset here.
 func inputLine(text string, inner int) string {
 	const prompt = "> "
-	budget := inner - runewidth.StringWidth(prompt) - runewidth.StringWidth(searchCaret)
+	budget := inner - xansi.StringWidth(prompt) - xansi.StringWidth(searchCaret)
 	if budget < 1 {
 		// Too narrow for any text at all: keep the frame intact regardless.
-		return runewidth.Truncate(prompt+searchCaret, max(inner, 0), "")
+		return xansi.Truncate(prompt+searchCaret, max(inner, 0), "")
 	}
-	// TruncateLeft pads the prefix when a wide grapheme straddles the cut, so the
-	// result is exactly budget cells wide for CJK/emoji too.
-	if w := runewidth.StringWidth(text); w > budget {
-		text = runewidth.TruncateLeft(text, w-budget+1, "…")
-	}
+	text = truncateTail(text, budget)
 	// The query text and the caret follow a styled prompt, so each ends up its
 	// own run: they take the body style rather than whatever the prompt left.
 	return theme.S().SearchPrompt.Render(prompt) + theme.S().Body.Render(text) +
 		theme.S().Body.Render(searchCaret)
+}
+
+// truncateTail trims text from the left so it fits within budget terminal
+// cells, prepending "…" when cut and keeping grapheme clusters whole.
+func truncateTail(text string, budget int) string {
+	if budget <= 0 {
+		return ""
+	}
+	w := xansi.StringWidth(text)
+	if w <= budget {
+		return text
+	}
+	if budget == 1 {
+		return "…"
+	}
+	rem := text
+	for rem != "" && w > budget-1 {
+		cluster, cw := xansi.FirstGraphemeCluster(rem, xansi.GraphemeWidth)
+		if cluster == "" {
+			break
+		}
+		rem = rem[len(cluster):]
+		w -= cw
+	}
+	return "…" + rem
 }
 
 func (m *SearchModel) View() string {
@@ -489,7 +510,7 @@ func (m *SearchModel) View() string {
 	if m.forwardMsgID != 0 && m.phase == forwardComment {
 		// A title has no caret to keep visible, so it cuts at the tail (unlike
 		// inputLine, which windows to it).
-		title := runewidth.Truncate("Comment to "+m.target.Title, inner, "…")
+		title := xansi.Truncate("Comment to "+m.target.Title, inner, "…")
 		promptLine := inputLine(m.comment, inner)
 		lines := []string{
 			theme.S().Body.Render(title),

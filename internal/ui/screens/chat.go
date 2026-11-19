@@ -275,6 +275,20 @@ func (m *ChatModel) history() domain.HistoryKey {
 	return domain.HistoryKey{ChatID: m.header.ChatID, TopicID: m.header.TopicID}
 }
 
+// sendTopicID resolves the outgoing topic for All-topics mode: replies go to
+// the replied message's topic when it has one, and fresh sends go without a topic.
+func (m *ChatModel) sendTopicID(replyID int) int {
+	if m.header.TopicID != domain.AllTopicsID {
+		return m.header.TopicID
+	}
+	if replyID != 0 {
+		if tid := m.msgList.MessageTopicID(replyID); tid > 0 {
+			return tid
+		}
+	}
+	return 0
+}
+
 // HeaderTitle is what the pane's header calls the open history.
 func (m *ChatModel) HeaderTitle() string               { return m.header.Title }
 func (m *ChatModel) SetMessages(msgs []domain.Message) { m.msgList.SetMessages(msgs) }
@@ -748,6 +762,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				// and parses the caption's markup, exactly as the text path does.
 				caption, entities := m.composer.ResolveEntities()
 				replyID := m.replyToMsgID
+				topicID := m.sendTopicID(replyID)
 				m.clearPendingAction()
 				m.composer.Reset()
 				m.composer.ClearAttachment()
@@ -756,7 +771,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				if m.header.ChatID == 0 {
 					return m, nil
 				}
-				chatID, topicID := m.header.ChatID, m.header.TopicID
+				chatID := m.header.ChatID
 				return m, func() tea.Msg {
 					return SendMediaRequest{ChatID: chatID, TopicID: topicID, Caption: caption, ReplyToMsgID: replyID, Entities: entities}
 				}
@@ -768,6 +783,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				// by the text != "" guard below (#154).
 				text, entities := m.composer.ResolveEntities()
 				replyID := m.replyToMsgID
+				topicID := m.sendTopicID(replyID)
 				editID := m.editMsgID
 				wasTyping := !m.lastTypingAt.IsZero()
 				m.clearPendingAction()
@@ -775,7 +791,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 				m.syncMsgListHeight()
 				m.lastTypingAt = time.Time{}
 				if m.header.ChatID != 0 && text != "" {
-					chatID, topicID := m.header.ChatID, m.header.TopicID
+					chatID := m.header.ChatID
 					var sendCmd tea.Cmd
 					if editID != 0 {
 						sendCmd = func() tea.Msg {
@@ -800,7 +816,7 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			m.composer = newC
 			m.syncMsgListHeight()
 			if m.header.ChatID != 0 && time.Since(m.lastTypingAt) >= 4*time.Second {
-				chatID, topicID := m.header.ChatID, m.header.TopicID
+				chatID, topicID := m.header.ChatID, m.sendTopicID(m.replyToMsgID)
 				m.lastTypingAt = time.Now()
 				typingCmd := func() tea.Msg {
 					return SetTypingRequest{ChatID: chatID, TopicID: topicID, Action: domain.TypingActionTyping}

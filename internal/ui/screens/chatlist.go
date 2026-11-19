@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
+	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
@@ -29,6 +30,7 @@ type OpenChatMsg struct {
 	// when set, opens that topic of it as well, as a notification does;
 	// TopicTitle is what the header shows until the topic's projection lands.
 	IsForum    bool
+	IsBot      bool
 	TopicID    int
 	TopicTitle string
 }
@@ -140,14 +142,25 @@ func rowIndicators(c project.ChatRow, base lipgloss.Style) string {
 // the core owns order and filtering, and hands over a slice around what is on
 // screen. The window, the cursor and the highlight are rowList's; what is here
 // is what makes the rows chats.
+// ChatRowKey uniquely identifies a row in [1] Chats: either a chat/bot row
+// (TopicID == 0) or an inline bot-topic row (TopicID > 0).
+type ChatRowKey struct {
+	ChatID  int64
+	TopicID int
+}
+
+func chatRowKey(r project.ChatRow) ChatRowKey {
+	return ChatRowKey{ChatID: r.ID, TopicID: r.TopicID}
+}
+
 type ChatListModel struct {
-	rowList[project.ChatRow]
+	rowList[project.ChatRow, ChatRowKey]
 	width   int
 	spinner components.Spinner
 }
 
 func NewChatListModel() *ChatListModel {
-	return &ChatListModel{rowList: rowList[project.ChatRow]{idOf: func(r project.ChatRow) int64 { return r.ID }}}
+	return &ChatListModel{rowList: rowList[project.ChatRow, ChatRowKey]{keyOf: chatRowKey}}
 }
 
 // TickSpinner advances the spinner frame. Called by root on SpinnerTickMsg.
@@ -158,8 +171,81 @@ func (m *ChatListModel) TickSpinner() { m.spinner.Tick() }
 // spinner tick loop (issue #147).
 func (m *ChatListModel) IsLoadingChats() bool { return m.total == 0 }
 
+func (m *ChatListModel) SetActive(id int64)        { m.SetActiveKey(ChatRowKey{ChatID: id}) }
+func (m *ChatListModel) SetActiveByID(id int64)    { m.SetActiveByKey(ChatRowKey{ChatID: id}) }
+func (m *ChatListModel) SetCursorByID(id int64)    { m.SetCursorByKey(ChatRowKey{ChatID: id}) }
+func (m *ChatListModel) SetActiveKey(k ChatRowKey) { m.rowList.SetActiveKey(k) }
+
+// SetActiveHistory marks the active row in the chat list for history h: an
+// inline bot-topic row if present, otherwise the chat's own row.
+func (m *ChatListModel) SetActiveHistory(h domain.HistoryKey) {
+	if k := m.historyRowKey(h); k.TopicID != 0 {
+		m.SetActiveKey(k)
+		return
+	}
+	m.SetActive(h.ChatID)
+}
+
+// SetActiveHistoryByKey marks the active row for history h and moves the
+// cursor onto it when visible.
+func (m *ChatListModel) SetActiveHistoryByKey(h domain.HistoryKey) {
+	m.SetActiveByKey(m.historyRowKey(h))
+}
+
+func (m *ChatListModel) historyRowKey(h domain.HistoryKey) ChatRowKey {
+	if h.TopicID > 0 {
+		k := ChatRowKey{ChatID: h.ChatID, TopicID: h.TopicID}
+		if m.hasKey(k) {
+			return k
+		}
+	}
+	return ChatRowKey{ChatID: h.ChatID}
+}
+
+// IsBotChat reports whether the window holds a bot row for chatID.
+func (m *ChatListModel) IsBotChat(chatID int64) bool {
+	for _, r := range m.rows {
+		if r.ID == chatID && r.Kind == project.ChatKindBot {
+			return true
+		}
+	}
+	return false
+}
+
+// IsForumChat reports whether the window holds a forum row for chatID.
+func (m *ChatListModel) IsForumChat(chatID int64) bool {
+	for _, r := range m.rows {
+		if r.ID == chatID && r.IsForum {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *ChatListModel) botTitle(chatID int64) string {
+	for _, r := range m.rows {
+		if r.ID == chatID && !r.IsBotTopic && r.Title != "" {
+			return r.Title
+		}
+	}
+	return ""
+}
+
 // HighlightChat starts a fade highlight on the chat-list row for the given id.
-func (m *ChatListModel) HighlightChat(id int64) { m.highlight(id) }
+func (m *ChatListModel) HighlightChat(id int64) { m.highlight(ChatRowKey{ChatID: id}) }
+
+// HighlightChatTopic highlights an inline bot-topic row when present, falling
+// back to the parent chat row otherwise.
+func (m *ChatListModel) HighlightChatTopic(chatID int64, topicID int) {
+	if topicID > 0 {
+		k := ChatRowKey{ChatID: chatID, TopicID: topicID}
+		if m.hasKey(k) {
+			m.highlight(k)
+			return
+		}
+	}
+	m.highlight(ChatRowKey{ChatID: chatID})
+}
 
 // StepChatHighlight advances the chat-row highlight fade by one step. Returns
 // true while still active; clears the highlight and returns false at 0. No-op
@@ -167,19 +253,22 @@ func (m *ChatListModel) HighlightChat(id int64) { m.highlight(id) }
 func (m *ChatListModel) StepChatHighlight() bool { return m.StepHighlight() }
 
 // HighlightedChatID returns the currently highlighted chat id (0 when none).
-func (m *ChatListModel) HighlightedChatID() int64 { return m.highlightID }
+func (m *ChatListModel) HighlightedChatID() int64 { return m.highlightKey.ChatID }
+
+// HighlightedKey returns the key of the currently highlighted chat-list row.
+func (m *ChatListModel) HighlightedKey() ChatRowKey { return m.highlightKey }
 
 // styleTitle applies the fade-accent foreground to a row's (already truncated)
 // title while that row is the active highlight target. The focused-cursor row
 // keeps its selection background instead, so it is left unstyled here.
-func (m *ChatListModel) styleTitle(i int, id int64, truncated string, base lipgloss.Style) string {
-	return styleHighlighted(&m.rowList, i, id, truncated, base, theme.T().HighlightBaseChat)
+func (m *ChatListModel) styleTitle(i int, key ChatRowKey, truncated string, base lipgloss.Style) string {
+	return styleHighlighted(&m.rowList, i, key, truncated, base, theme.T().HighlightBaseChat)
 }
 
 // styleHighlighted paints a row title with the fade accent while the row is the
 // highlight target, for any list built on rowList.
-func styleHighlighted[R any](m *rowList[R], i int, id int64, truncated string, base lipgloss.Style, from color.Color) string {
-	if m.highlightStep <= 0 || id != m.highlightID {
+func styleHighlighted[R any, K comparable](m *rowList[R, K], i int, key K, truncated string, base lipgloss.Style, from color.Color) string {
+	if m.highlightStep <= 0 || key != m.highlightKey {
 		return base.Render(truncated)
 	}
 	if i == m.cursor && m.focused {
@@ -233,8 +322,27 @@ func (m *ChatListModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 		}
 		if msg.Action == keys.ActionConfirm {
 			if row, ok := m.rowAt(m.cursor); ok {
-				m.activeID = row.ID
-				return m, func() tea.Msg { return OpenChatMsg{ChatID: row.ID, Title: row.Title, IsForum: row.IsForum} }
+				m.activeKey = chatRowKey(row)
+				title, topicTitle := row.Title, ""
+				if row.IsBotTopic {
+					topicTitle = TopicTitle(project.TopicRow{ID: row.TopicID, Title: row.Title})
+					title = row.BotTitle
+					if title == "" {
+						title = m.botTitle(row.ID)
+					}
+				}
+				isBot := row.Kind == project.ChatKindBot
+				chatID, isForum, topicID := row.ID, row.IsForum, row.TopicID
+				return m, func() tea.Msg {
+					return OpenChatMsg{
+						ChatID:     chatID,
+						Title:      title,
+						IsForum:    isForum,
+						IsBot:      isBot,
+						TopicID:    topicID,
+						TopicTitle: topicTitle,
+					}
+				}
 			}
 		}
 	}
@@ -281,6 +389,26 @@ func (m *ChatListModel) View() string {
 
 		badge := rowIndicators(row, base)
 
+		if row.IsBotTopic {
+			lead := "  "
+			if i == activeIdx {
+				lead = "▶ "
+			}
+			marker := "#"
+			titleBase := base
+			if row.TopicClosed {
+				marker = "-"
+				titleBase = base.Foreground(theme.T().TextMuted)
+			}
+			prefix := base.Render(lead) + titleBase.Render(marker) + base.Render(" ")
+			title := TopicTitle(project.TopicRow{ID: row.TopicID, Title: row.Title})
+			key := chatRowKey(row)
+			lines = append(lines, prefix+rowContent(title, badge, inner, base, func(t string) string {
+				return styleHighlighted(&m.rowList, i, key, t, titleBase, theme.T().HighlightBaseChat)
+			}))
+			continue
+		}
+
 		prefix := base.Render("    ")
 		if i == activeIdx {
 			prefix = base.Render("▶   ")
@@ -294,8 +422,9 @@ func (m *ChatListModel) View() string {
 			}
 		}
 
+		key := chatRowKey(row)
 		lines = append(lines, prefix+rowContent(row.Title, badge, inner, base, func(t string) string {
-			return m.styleTitle(i, row.ID, t, base)
+			return m.styleTitle(i, key, t, base)
 		}))
 	}
 	return strings.Join(lines, "\n")

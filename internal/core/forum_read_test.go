@@ -97,3 +97,22 @@ func TestReadMentionsAndReactions_InATopicAreThatTopics(t *testing.T) {
 	other, _ := o.state.Store().Topic(forumChat, 30)
 	assert.Equal(t, 1, other.UnreadMentionsCount)
 }
+
+func TestMarkReadAndMute_AllTopicsReadsTopicsAndMutesForum(t *testing.T) {
+	c := &stubClient{}
+	o := forumWithTopics(t, c,
+		domain.Topic{ChatID: forumChat, ID: 12, Title: "Releases", UnreadCount: 3, TopMessageID: 40, UnreadMentionsCount: 1},
+		domain.Topic{ChatID: forumChat, ID: 30, Title: "Design", UnreadCount: 2, TopMessageID: 41},
+	)
+	allKey := domain.HistoryKey{ChatID: forumChat, TopicID: domain.AllTopicsID}
+
+	require.NoError(t, o.MarkRead(context.Background(), allKey, 0))
+	assert.ElementsMatch(t, []discussionRead{{topic: 12, maxID: 40}, {topic: 30, maxID: 41}}, c.discussions)
+
+	require.NoError(t, o.SetMuted(context.Background(), allKey, true))
+	chat, _ := o.state.Store().GetChat(forumChat)
+	assert.True(t, chat.IsMuted, "muting All mutes the chat rather than a topic")
+
+	require.NoError(t, o.ReadMentions(context.Background(), allKey))
+	assert.Equal(t, []int{0}, c.mentionsReadIn)
+}

@@ -10,7 +10,7 @@ import (
 // what is on screen; cursor indexes the whole list, so it stays meaningful when
 // the window moves under it. What a row is and how it is drawn belongs to the
 // list that embeds this one (#275).
-type rowList[R any] struct {
+type rowList[R any, K comparable] struct {
 	rows   []R
 	offset int // index of rows[0] in the whole list
 	total  int // length of the whole list
@@ -19,20 +19,20 @@ type rowList[R any] struct {
 	// for the same window is silent. Zero limit means nothing asked for yet.
 	reqOffset int
 	reqLimit  int
-	// activeID is the open row, held by id rather than index so it survives a
+	// activeKey is the open row, held by key rather than index so it survives a
 	// window that no longer contains it.
-	activeID int64
-	height   int
-	focused  bool
+	activeKey K
+	height    int
+	focused   bool
 
-	// highlightID is the row currently flashed because something arrived in
-	// it; highlightStep counts down to 0 (none). Tracked by id so the highlight
+	// highlightKey is the row currently flashed because something arrived in
+	// it; highlightStep counts down to 0 (none). Tracked by key so the highlight
 	// survives a window reset.
-	highlightID   int64
+	highlightKey  K
 	highlightStep int
 
-	// idOf names a row.
-	idOf func(R) int64
+	// keyOf names a row.
+	keyOf func(R) K
 }
 
 // SetWindow replaces the window with the contents of a Reset delta. The cursor
@@ -44,19 +44,20 @@ type rowList[R any] struct {
 // jump to the end of the list moves the cursor first and only then asks for the
 // window around it, so the arriving window is precisely the one the cursor is
 // no longer inside.
-func (m *rowList[R]) SetWindow(offset, total int, rows []R) {
-	cursorID := int64(0)
+func (m *rowList[R, K]) SetWindow(offset, total int, rows []R) {
+	var zero K
+	cursorKey := zero
 	if r, ok := m.rowAt(m.cursor); ok {
-		cursorID = m.idOf(r)
+		cursorKey = m.keyOf(r)
 	}
 
 	m.rows = rows
 	m.offset = offset
 	m.total = total
 
-	if cursorID != 0 {
+	if cursorKey != zero {
 		for i, r := range rows {
-			if m.idOf(r) == cursorID {
+			if m.keyOf(r) == cursorKey {
 				m.cursor = offset + i
 				break
 			}
@@ -65,12 +66,13 @@ func (m *rowList[R]) SetWindow(offset, total int, rows []R) {
 	m.clampCursor()
 }
 
-// SetRow replaces one row in place, from a Row delta. The row is found by id: a
-// Row is only emitted while the window's order is unchanged, so the id is
+// SetRow replaces one row in place, from a Row delta. The row is found by key: a
+// Row is only emitted while the window's order is unchanged, so the key is
 // unambiguous and no index travels on the wire.
-func (m *rowList[R]) SetRow(row R) {
+func (m *rowList[R, K]) SetRow(row R) {
+	k := m.keyOf(row)
 	for i := range m.rows {
-		if m.idOf(m.rows[i]) == m.idOf(row) {
+		if m.keyOf(m.rows[i]) == k {
 			m.rows[i] = row
 			return
 		}
@@ -79,7 +81,7 @@ func (m *rowList[R]) SetRow(row R) {
 
 // rowAt returns the row at a whole-list index, translating through the window.
 // ok is false when the index falls outside the window the core has sent.
-func (m *rowList[R]) rowAt(i int) (R, bool) {
+func (m *rowList[R, K]) rowAt(i int) (R, bool) {
 	j := i - m.offset
 	if j < 0 || j >= len(m.rows) {
 		var zero R
@@ -92,7 +94,7 @@ func (m *rowList[R]) rowAt(i int) (R, bool) {
 // definition of the scroll position: View, ScrollInfo, CursorViewportRow and
 // the viewport-row lookups all derive from it, because four copies of this
 // arithmetic is how a click lands on the wrong row.
-func (m *rowList[R]) viewStart() int {
+func (m *rowList[R, K]) viewStart() int {
 	if m.height <= 0 {
 		return 0
 	}
@@ -109,7 +111,7 @@ func (m *rowList[R]) viewStart() int {
 	return start
 }
 
-func (m *rowList[R]) clampCursor() {
+func (m *rowList[R, K]) clampCursor() {
 	if m.total == 0 {
 		m.cursor = 0
 		return
@@ -130,7 +132,7 @@ func (m *rowList[R]) clampCursor() {
 // It compares against the last request rather than against the window it holds,
 // because at the end of the list the core legitimately returns fewer rows than
 // asked for and a held-window comparison would ask again forever.
-func (m *rowList[R]) WindowRequest() (offset, limit int, changed bool) {
+func (m *rowList[R, K]) WindowRequest() (offset, limit int, changed bool) {
 	h := m.height
 	if h <= 0 {
 		h = 1
@@ -147,47 +149,49 @@ func (m *rowList[R]) WindowRequest() (offset, limit int, changed bool) {
 	return offset, limit, true
 }
 
-// highlight starts a fade highlight on the row with the given id.
-func (m *rowList[R]) highlight(id int64) {
-	m.highlightID = id
+// highlight starts a fade highlight on the row with the given key.
+func (m *rowList[R, K]) highlight(key K) {
+	m.highlightKey = key
 	m.highlightStep = components.HighlightInitialStep
 }
 
 // StepHighlight advances the row highlight fade by one step. Returns true while
 // still active; clears the highlight and returns false at 0. No-op (false) when
 // no highlight is active.
-func (m *rowList[R]) StepHighlight() bool {
+func (m *rowList[R, K]) StepHighlight() bool {
 	if m.highlightStep <= 0 {
 		return false
 	}
 	m.highlightStep--
 	if m.highlightStep <= 0 {
-		m.highlightID = 0
+		var zero K
+		m.highlightKey = zero
 		return false
 	}
 	return true
 }
 
 // HighlightStep returns the current row fade step (0 when none).
-func (m *rowList[R]) HighlightStep() int { return m.highlightStep }
+func (m *rowList[R, K]) HighlightStep() int { return m.highlightStep }
 
-func (m *rowList[R]) Cursor() int { return m.cursor }
+func (m *rowList[R, K]) Cursor() int { return m.cursor }
 
 // Rows returns the window's rows. For assertions and for the mouse mapping;
 // callers must not assume it is the whole list.
-func (m *rowList[R]) Rows() []R { return m.rows }
+func (m *rowList[R, K]) Rows() []R { return m.rows }
 
 // Total is the length of the whole list, which the window is a slice of.
-func (m *rowList[R]) Total() int { return m.total }
+func (m *rowList[R, K]) Total() int { return m.total }
 
 // ActiveIdx is the whole-list index of the open row, or -1 when it is outside
 // the window (or nothing is open).
-func (m *rowList[R]) ActiveIdx() int {
-	if m.activeID == 0 {
+func (m *rowList[R, K]) ActiveIdx() int {
+	var zero K
+	if m.activeKey == zero {
 		return -1
 	}
 	for i, r := range m.rows {
-		if m.idOf(r) == m.activeID {
+		if m.keyOf(r) == m.activeKey {
 			return m.offset + i
 		}
 	}
@@ -197,34 +201,43 @@ func (m *rowList[R]) ActiveIdx() int {
 // SetActive marks a row as the open one. It does not touch the cursor: the
 // window is replaced on every reorder, and dragging the cursor back to the open
 // row each time would pin it there for as long as it is open.
-func (m *rowList[R]) SetActive(id int64) { m.activeID = id }
+func (m *rowList[R, K]) SetActiveKey(key K) { m.activeKey = key }
 
-// SetActiveByID marks a row as the open one and moves the cursor onto it. For
+// SetActiveByKey marks a row as the open one and moves the cursor onto it. For
 // the moment it is opened, where the cursor should follow.
-func (m *rowList[R]) SetActiveByID(id int64) {
-	m.activeID = id
-	m.SetCursorByID(id)
+func (m *rowList[R, K]) SetActiveByKey(key K) {
+	m.activeKey = key
+	m.SetCursorByKey(key)
 }
 
-func (m *rowList[R]) SetCursorByID(id int64) {
+func (m *rowList[R, K]) SetCursorByKey(key K) {
 	for i, r := range m.rows {
-		if m.idOf(r) == id {
+		if m.keyOf(r) == key {
 			m.cursor = m.offset + i
 			return
 		}
 	}
 }
 
-func (m *rowList[R]) Focused() bool     { return m.focused }
-func (m *rowList[R]) SetFocused(f bool) { m.focused = f }
+func (m *rowList[R, K]) hasKey(key K) bool {
+	for _, r := range m.rows {
+		if m.keyOf(r) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *rowList[R, K]) Focused() bool     { return m.focused }
+func (m *rowList[R, K]) SetFocused(f bool) { m.focused = f }
 
 // Height returns the pane's content height in rows.
-func (m *rowList[R]) Height() int { return m.height }
+func (m *rowList[R, K]) Height() int { return m.height }
 
 // ScrollInfo reports the scroll position for the pane scrollbar. It reflects
 // the whole list, not the window: the scrollbar is the user's sense of how much
 // there is.
-func (m *rowList[R]) ScrollInfo() components.ScrollInfo {
+func (m *rowList[R, K]) ScrollInfo() components.ScrollInfo {
 	if m.height <= 0 {
 		return components.ScrollInfo{Total: m.total, Visible: m.total, Offset: 0}
 	}
@@ -232,7 +245,7 @@ func (m *rowList[R]) ScrollInfo() components.ScrollInfo {
 }
 
 // CursorViewportRow returns the cursor's row index within the visible viewport.
-func (m *rowList[R]) CursorViewportRow() int {
+func (m *rowList[R, K]) CursorViewportRow() int {
 	if m.height <= 0 {
 		return m.cursor
 	}
@@ -241,7 +254,7 @@ func (m *rowList[R]) CursorViewportRow() int {
 
 // SetCursor moves the selection cursor to a whole-list index, clamped. It is a
 // no-op when the list is empty.
-func (m *rowList[R]) SetCursor(i int) {
+func (m *rowList[R, K]) SetCursor(i int) {
 	if m.total == 0 {
 		return
 	}
@@ -252,7 +265,7 @@ func (m *rowList[R]) SetCursor(i int) {
 // rowAtViewportRow maps a content row (0-based, within the visible viewport) to
 // a row. ok is false when the viewport row holds none: past the end of the
 // list, or inside a window the core has not sent yet.
-func (m *rowList[R]) rowAtViewportRow(row int) (R, bool) {
+func (m *rowList[R, K]) rowAtViewportRow(row int) (R, bool) {
 	var zero R
 	if row < 0 || m.total == 0 {
 		return zero, false
@@ -269,7 +282,7 @@ func (m *rowList[R]) rowAtViewportRow(row int) (R, bool) {
 
 // indexAtViewportRow maps a viewport row to a whole-list index, for callers
 // that move the cursor rather than read the row.
-func (m *rowList[R]) indexAtViewportRow(row int) (int, bool) {
+func (m *rowList[R, K]) indexAtViewportRow(row int) (int, bool) {
 	if row < 0 || m.total == 0 {
 		return 0, false
 	}
@@ -289,7 +302,7 @@ func (m *rowList[R]) indexAtViewportRow(row int) (int, bool) {
 
 // move applies a navigation action to the cursor and reports whether it was
 // one. Confirming is the embedding list's own business.
-func (m *rowList[R]) move(action keys.Action) bool {
+func (m *rowList[R, K]) move(action keys.Action) bool {
 	switch action {
 	case keys.ActionDown:
 		if m.cursor < m.total-1 {
@@ -317,7 +330,7 @@ func (m *rowList[R]) move(action keys.Action) bool {
 	return true
 }
 
-func (m *rowList[R]) halfStep() int {
+func (m *rowList[R, K]) halfStep() int {
 	step := m.height * 2 / 3
 	if step < 1 {
 		step = 1
@@ -326,7 +339,7 @@ func (m *rowList[R]) halfStep() int {
 }
 
 // visibleRange is the whole-list index range drawn in the viewport.
-func (m *rowList[R]) visibleRange() (start, end int) {
+func (m *rowList[R, K]) visibleRange() (start, end int) {
 	visible := m.height
 	if visible <= 0 {
 		visible = m.total

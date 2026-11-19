@@ -42,6 +42,9 @@ func (s *SQLiteStore) Runs(h domain.HistoryKey) []domain.Run {
 }
 
 func (s *SQLiteStore) runsLocked(h domain.HistoryKey) []domain.Run {
+	if h.TopicID == domain.AllTopicsID {
+		return s.allRunsLocked(h)
+	}
 	msgs := s.messages[h]
 	spans := s.runs[h]
 	if len(spans) == 0 {
@@ -55,6 +58,28 @@ func (s *SQLiteStore) runsLocked(h domain.HistoryKey) []domain.Run {
 		sp, _ := pageSpan(cp)
 		return []domain.Run{{Messages: cp, AtTail: true, UpTo: sp.hi}}
 	}
+	return buildRuns(msgs, spans)
+}
+
+func (s *SQLiteStore) allRunsLocked(h domain.HistoryKey) []domain.Run {
+	msgs := s.allChatMessagesLocked(h.ChatID)
+	spans := s.runs[h]
+	if len(spans) == 0 {
+		var pending []domain.Message
+		for _, m := range msgs {
+			if m.ID <= 0 {
+				pending = append(pending, m)
+			}
+		}
+		if len(pending) == 0 {
+			return nil
+		}
+		return []domain.Run{{Messages: pending, AtTail: true}}
+	}
+	return buildRuns(msgs, spans)
+}
+
+func buildRuns(msgs []domain.Message, spans []span) []domain.Run {
 	out := make([]domain.Run, len(spans))
 	tail := -1
 	for i, sp := range spans {
@@ -158,9 +183,14 @@ func (s *SQLiteStore) MergeAround(h domain.HistoryKey, msgs []domain.Message) in
 	}
 	// Capped once the runs say where the page lies, still under the lock.
 	defer s.capMessagesLocked(h)
-	s.ensureTailSpanLocked(h)
+	if h.TopicID != domain.AllTopicsID {
+		s.ensureTailSpanLocked(h)
+	}
 	added := s.mergePageLocked(h, "MergeAround", msgs)
 	s.addSpanLocked(h, sp)
+	if h.TopicID == domain.AllTopicsID {
+		s.noteAllSpanOnKeysLocked(msgs, span{lo: sp.lo, hi: sp.hi})
+	}
 	return added
 }
 
@@ -173,17 +203,25 @@ func (s *SQLiteStore) MergeOlder(h domain.HistoryKey, below int, msgs []domain.M
 	defer s.mu.Unlock()
 	// Capped once the runs say where the page lies, still under the lock.
 	defer s.capMessagesLocked(h)
-	s.ensureTailSpanLocked(h)
+	if h.TopicID != domain.AllTopicsID {
+		s.ensureTailSpanLocked(h)
+	}
 	added := s.mergePageLocked(h, "MergeOlder", msgs)
 	sp, ok := pageSpan(older(msgs, below))
 	switch {
 	case below == 0 && ok:
 		sp.atTail = true
 		s.addSpanLocked(h, sp)
+		if h.TopicID == domain.AllTopicsID {
+			s.noteAllSpanOnKeysLocked(msgs, span{lo: sp.lo, hi: sp.hi})
+		}
 	case below == 0:
 	case ok:
 		sp.hi = max(sp.hi, below)
 		s.addSpanLocked(h, sp)
+		if h.TopicID == domain.AllTopicsID {
+			s.noteAllSpanOnKeysLocked(msgs, span{lo: sp.lo, hi: sp.hi})
+		}
 	default:
 		if i := spanOf(s.runs[h], below); i >= 0 {
 			s.runs[h][i].atBeginning = true
@@ -201,7 +239,9 @@ func (s *SQLiteStore) MergeNewer(h domain.HistoryKey, above int, msgs []domain.M
 	defer s.mu.Unlock()
 	// Capped once the runs say where the page lies, still under the lock.
 	defer s.capMessagesLocked(h)
-	s.ensureTailSpanLocked(h)
+	if h.TopicID != domain.AllTopicsID {
+		s.ensureTailSpanLocked(h)
+	}
 	added := s.mergePageLocked(h, "MergeNewer", msgs)
 	var newer []domain.Message
 	for _, m := range msgs {
@@ -212,6 +252,9 @@ func (s *SQLiteStore) MergeNewer(h domain.HistoryKey, above int, msgs []domain.M
 	if sp, ok := pageSpan(newer); ok {
 		sp.lo = min(sp.lo, above)
 		s.addSpanLocked(h, sp)
+		if h.TopicID == domain.AllTopicsID {
+			s.noteAllSpanOnKeysLocked(msgs, span{lo: sp.lo, hi: sp.hi})
+		}
 		return added
 	}
 	if i := spanOf(s.runs[h], above); i >= 0 {
@@ -225,6 +268,19 @@ func (s *SQLiteStore) MergeNewer(h domain.HistoryKey, above int, msgs []domain.M
 		s.addSpanLocked(h, sp)
 	}
 	return added
+}
+
+// noteAllSpanOnKeysLocked records a non-tail gapless range learned via AllTopicsID
+// on each touched history so later opening an individual topic does not mistake
+// unloaded messages for a tail run. Caller holds the lock.
+func (s *SQLiteStore) noteAllSpanOnKeysLocked(msgs []domain.Message, sp span) {
+	if sp.lo == 0 || sp.hi == 0 {
+		return
+	}
+	sp.atTail = false
+	for key := range s.byHistoryLocked(msgs) {
+		s.addSpanLocked(key, sp)
+	}
 }
 
 // older is the messages of a page older than below, every one when below is
@@ -261,13 +317,13 @@ func (s *SQLiteStore) mergePageLocked(h domain.HistoryKey, via string, msgs []do
 	added := 0
 	for key, page := range s.byHistoryLocked(msgs) {
 		s.detachMovedLocked(key, page)
-		if key != h {
+		if key != h && h.TopicID != domain.AllTopicsID {
 			page = s.withinRunsLocked(key, page)
 		}
 		before := s.messages[key]
 		merged := domain.MergeMessages(before, page)
 		s.setMessagesLocked(key, merged, nil)
-		if key != h {
+		if key != h && h.TopicID != domain.AllTopicsID {
 			s.capMessagesLocked(key)
 		}
 		added += len(merged) - len(before)
@@ -413,7 +469,20 @@ func (s *SQLiteStore) SetShown(shown map[domain.HistoryKey][]Shown) {
 // across into another run. A window anchored on a message the store does not
 // hold shows nothing of it yet. Caller holds the lock.
 func (s *SQLiteStore) shownIDsLocked(h domain.HistoryKey) map[int]struct{} {
+	out := s.windowShownIDsLocked(h)
+	if h.TopicID != domain.AllTopicsID {
+		for id := range s.windowShownIDsLocked(domain.HistoryKey{ChatID: h.ChatID, TopicID: domain.AllTopicsID}) {
+			out[id] = struct{}{}
+		}
+	}
+	return out
+}
+
+func (s *SQLiteStore) windowShownIDsLocked(h domain.HistoryKey) map[int]struct{} {
 	out := make(map[int]struct{})
+	if len(s.shown[h]) == 0 {
+		return out
+	}
 	runs := s.runsLocked(h)
 	for _, w := range s.shown[h] {
 		run, idx := anchorIn(runs, w.Anchor)

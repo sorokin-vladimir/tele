@@ -60,7 +60,7 @@ func (r *focusRegistry) showing(h domain.HistoryKey) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, on := range r.on {
-		if on == h {
+		if on == h || (on.ChatID == h.ChatID && on.TopicID == domain.AllTopicsID) {
 			return true
 		}
 	}

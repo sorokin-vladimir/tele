@@ -330,3 +330,52 @@ func TestForum_ARepairLaysThePageOutAndDeepensNoTopic(t *testing.T) {
 	assert.Equal(t, []int{1002}, ids(s.Messages(topic(30))))
 	assert.Equal(t, []int{1003}, ids(s.Messages(topic(domain.GeneralTopicID))))
 }
+
+func TestBotForum_TopiclessAndAllFeedPreservedAndPersisted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	bot := domain.Chat{
+		ID: forumID, IsBot: true, IsForum: true,
+		Peer: domain.Peer{ID: forumID, Type: domain.PeerUser},
+	}
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(bot)
+
+	// Topicless message in a bot forum stays at TopicID 0 (no phantom topic 0 created).
+	topicless := topicMsg(10, 0)
+	hTopicless, known := s.ApplyIncomingTopic(topicless)
+	assert.True(t, known)
+	assert.Equal(t, domain.HistoryKey{ChatID: forumID, TopicID: 0}, hTopicless)
+	assert.Empty(t, s.Topics(forumID))
+
+	allKey := domain.HistoryKey{ChatID: forumID, TopicID: domain.AllTopicsID}
+	s.LoadMessages(allKey)
+	s.MergeOlder(allKey, 0, []domain.Message{
+		topicMsg(10, 0),
+		topicMsg(11, 12),
+		topicMsg(12, 30),
+	})
+	assert.Equal(t, []int{10}, ids(s.Messages(topic(0))))
+	assert.Equal(t, []int{11}, ids(s.Messages(topic(12))))
+	assert.Equal(t, []int{10, 11, 12}, ids(s.Messages(allKey)))
+
+	// Live arrival extends AllTopicsID tail run automatically.
+	s.AppendMessage(topicMsg(13, 0))
+	assert.Equal(t, []int{10, 11, 12, 13}, ids(s.Messages(allKey)))
+	runs := s.Runs(allKey)
+	require.Len(t, runs, 1)
+	assert.True(t, runs[0].AtTail)
+	assert.Equal(t, 13, runs[0].UpTo)
+	require.NoError(t, s.Close())
+
+	// Persist & reload AllTopicsID across sessions.
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	s2.SetChat(bot)
+	s2.LoadMessages(allKey)
+	assert.Equal(t, []int{10, 11, 12, 13}, ids(s2.Messages(allKey)))
+	runs2 := s2.Runs(allKey)
+	require.Len(t, runs2, 1)
+	assert.True(t, runs2[0].AtTail)
+}

@@ -369,8 +369,8 @@ func (m *SearchModel) Update(msg tea.Msg) (*SearchModel, tea.Cmd) {
 		}
 		// A search hit may be a contact with no dialog. It opens by id like any
 		// chat: the owner kept the address search returned (#278).
-		chatID, title, forum := chat.ID, chat.Title, chat.IsForum
-		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title, IsForum: forum} }
+		chatID, title, forum, isBot := chat.ID, chat.Title, chat.IsForum, chat.Kind == project.ChatKindBot
+		return m, func() tea.Msg { return OpenChatMsg{ChatID: chatID, Title: title, IsForum: forum, IsBot: isBot} }
 	case tea.KeyBackspace:
 		if len(m.query) > 0 {
 			runes := []rune(m.query)

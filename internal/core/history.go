@@ -108,7 +108,7 @@ func (o *Owner) backfill(ctx context.Context, a *seat, chat domain.Chat, w proje
 	limit := o.Config().UI.HistoryLimit
 	var fetched []domain.Message
 	var err error
-	if w.TopicID != 0 {
+	if w.TopicID > 0 {
 		// A topic's scrollback is its own thread. The forum's history would
 		// bring every other topic's messages in its place.
 		fetched, err = o.client.GetReplies(ctx, chat.Peer, w.TopicID, below, limit)

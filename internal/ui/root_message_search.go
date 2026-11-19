@@ -123,11 +123,17 @@ func (m RootModel) handleMessageSearchJump(j screens.MessageSearchJump) (RootMod
 	}
 	var cmd tea.Cmd
 	m.openAtMsg = msg.ID
-	if h.TopicID != 0 {
+	isBot := j.Found.Bot || m.chatList.IsBotChat(h.ChatID)
+	switch {
+	case h.TopicID != 0 && !isBot:
 		m.chatList.SetActiveByID(h.ChatID)
 		m = m.enterForum(h.ChatID, j.Found.Chat)
 		m, cmd = m.openTopic(screens.OpenTopicMsg{ChatID: h.ChatID, TopicID: h.TopicID, Title: j.Found.Topic})
-	} else {
+	case isBot && h.TopicID > 0:
+		m = m.leaveForum()
+		title := j.Found.Chat + " › " + screens.TopicTitle(project.TopicRow{ID: h.TopicID, Title: j.Found.Topic})
+		m, cmd = m.openHistory(h, title)
+	default:
 		m = m.leaveForum()
 		m, cmd = m.openHistory(h, j.Found.Chat)
 	}

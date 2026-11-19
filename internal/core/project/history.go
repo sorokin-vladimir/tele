@@ -74,7 +74,9 @@ func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
 		reactions:  chat.UnreadReactionsCount,
 		draft:      chat.Draft,
 	}
-	if w.TopicID != 0 {
+	if w.TopicID == domain.AllTopicsID {
+		out.TopicTitle = "All"
+	} else if w.TopicID != 0 {
 		topic, _ := r.Topic(w.ChatID, w.TopicID)
 		out.TopicTitle = topic.Title
 		read = readState{

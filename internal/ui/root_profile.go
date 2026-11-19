@@ -273,9 +273,9 @@ func (m RootModel) handleProfileRequest(msg tea.Msg) (RootModel, tea.Cmd, bool) 
 		// chat opens empty and composable, and the first message reaches them
 		// through the address the owner kept when the profile was fetched
 		// (#278). The title only covers the moment before the header lands.
-		userID, title, isForum := req.UserID, req.Title, req.IsForum
+		userID, title, isForum, isBot := req.UserID, req.Title, req.IsForum, req.IsBot
 		return m, tea.Batch(closeCmd, func() tea.Msg {
-			return screens.OpenChatMsg{ChatID: userID, Title: title, IsForum: isForum}
+			return screens.OpenChatMsg{ChatID: userID, Title: title, IsForum: isForum, IsBot: isBot}
 		}), true
 
 	case components.ProfileMuteRequest:

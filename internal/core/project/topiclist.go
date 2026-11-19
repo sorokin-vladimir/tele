@@ -28,15 +28,44 @@ type TopicListContents struct {
 	Rows   []TopicRow
 }
 
-// BuildTopicList slices the window out of a forum's topics. Order comes from
-// the reader; this function never sorts.
+// BuildTopicList slices the window out of a forum's topics, prepending a
+// virtual "All" entry that interleaves messages from all topics (and any
+// topicless messages). Order comes from the reader; this function never sorts.
 func BuildTopicList(r Reader, w TopicListWindow) TopicListContents {
-	all := TopicRows(r, w.ChatID)
+	topics := TopicRows(r, w.ChatID)
+	chat, hasChat := r.GetChat(w.ChatID)
+	all := make([]TopicRow, 0, len(topics)+1)
+	if (hasChat && chat.IsForum) || len(topics) > 0 {
+		all = append(all, allTopicsRow(chat, topics))
+	}
+	all = append(all, topics...)
 	out := TopicListContents{ChatID: w.ChatID, Offset: w.Offset, Total: len(all)}
 	start := min(max(w.Offset, 0), len(all))
 	end := min(start+w.Limit, len(all))
 	out.Rows = all[start:end]
 	return out
+}
+
+func allTopicsRow(chat domain.Chat, topics []TopicRow) TopicRow {
+	unread, mentions, reactions := 0, 0, 0
+	for _, t := range topics {
+		unread += t.Unread
+		mentions += t.Mentions
+		reactions += t.Reactions
+	}
+	if chat.UnreadCount > 0 && unread == 0 {
+		unread = chat.UnreadCount
+	}
+	mentions = max(mentions, chat.UnreadMentionsCount)
+	reactions = max(reactions, chat.UnreadReactionsCount)
+	return TopicRow{
+		ID:        domain.AllTopicsID,
+		Title:     "All",
+		Unread:    unread,
+		Mentions:  mentions,
+		Reactions: reactions,
+		Muted:     chat.IsMuted,
+	}
 }
 
 // TopicRows is a forum's whole topic list as rows, in the reader's order. A

@@ -226,8 +226,9 @@ type Chat struct {
 	// IsArchived reports whether the chat lives in the built-in Archive
 	// folder (folder_id 1).
 	IsArchived bool
-	// IsForum reports a group or bot chat with topics enabled: its messages are
-	// divided among topics and it has no history of its own (#275, #371).
+	// IsForum reports a group or bot chat with topics enabled (#275, #371).
+	// A group forum divides all messages among topics (defaulting topicless to General);
+	// a bot forum can additionally hold topicless messages alongside its topics.
 	IsForum bool
 	// Draft is the unsent message draft synced with Telegram (#62). It is
 	// loaded from the dialog list and kept current via updateDraftMessage; it
@@ -308,34 +309,48 @@ func (t Topic) MutedIn(forumMuted bool) bool {
 	return forumMuted
 }
 
-// GeneralTopicID is the id of the topic every forum has from the start, where
-// messages that name no topic land.
+// GeneralTopicID is the id of the topic every group forum has from the start,
+// where messages that name no topic land.
 const GeneralTopicID = 1
 
+// AllTopicsID names the virtual history of a forum that interleaves every
+// topic and any topicless messages in one chronological feed.
+const AllTopicsID = -1
+
 // HistoryKey names one history: a run of messages stored, repaired and extended
-// as one. An ordinary chat has one, with TopicID 0; a forum has one per topic
-// and none of its own (#275).
+// as one. An ordinary chat has one, with TopicID 0; a forum has one per topic,
+// AllTopicsID for the unified feed, and (for bot forums) TopicID 0 for topicless
+// messages (#275, #371).
 type HistoryKey struct {
 	ChatID  int64
 	TopicID int
 }
 
+// IsBotForum reports whether c is a bot chat with forum mode enabled (#371).
+func (c Chat) IsBotForum() bool {
+	return c.IsForum && c.IsBot
+}
+
 // HistoryOf names the history a message of this chat belongs to. Outside a
-// forum that is the chat's one history whatever the message says; inside one,
-// a message that names no topic is in General.
+// forum that is the chat's one history whatever the message says; in a bot
+// forum, a message that names no topic stays at TopicID 0; in a group forum, it
+// belongs to General.
 func (c Chat) HistoryOf(m Message) HistoryKey {
 	return c.History(m.TopicID)
 }
 
-// History names the history Telegram means by a topic id of this chat. Outside
-// a forum every topic id means the chat's one history; inside one, no topic
-// means General, which is how Telegram names General in a message, a draft or
-// a typing update.
+// History names the history Telegram means by a topic id of this chat.
 func (c Chat) History(topicID int) HistoryKey {
 	if !c.IsForum {
 		return HistoryKey{ChatID: c.ID}
 	}
+	if topicID == AllTopicsID {
+		return HistoryKey{ChatID: c.ID, TopicID: AllTopicsID}
+	}
 	if topicID == 0 {
+		if c.IsBot {
+			return HistoryKey{ChatID: c.ID}
+		}
 		return HistoryKey{ChatID: c.ID, TopicID: GeneralTopicID}
 	}
 	return HistoryKey{ChatID: c.ID, TopicID: topicID}

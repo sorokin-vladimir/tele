@@ -107,7 +107,7 @@ func (c *GotdClient) GetForumTopicsByID(ctx context.Context, peer domain.Peer, i
 // answers and carries the topic as its top. General takes messages that name
 // no topic, so sending there is sending an ordinary message (#275).
 func replyHeader(replyToMsgID, topicID int) tg.InputReplyToClass {
-	if topicID == domain.GeneralTopicID {
+	if topicID == domain.GeneralTopicID || topicID <= 0 {
 		topicID = 0
 	}
 	switch {
@@ -124,7 +124,7 @@ func replyHeader(replyToMsgID, topicID int) tg.InputReplyToClass {
 // notifyPeer names whose notification setting is changed: a chat's, or one
 // forum topic's (#275).
 func notifyPeer(peer tg.InputPeerClass, topicID int) tg.InputNotifyPeerClass {
-	if topicID != 0 {
+	if topicID > 0 {
 		return &tg.InputNotifyForumTopic{Peer: peer, TopMsgID: topicID}
 	}
 	return &tg.InputNotifyPeer{Peer: peer}
@@ -134,7 +134,7 @@ func notifyPeer(peer tg.InputPeerClass, topicID int) tg.InputNotifyPeerClass {
 // in General it is reported as in any ordinary chat.
 func buildSetTypingRequest(inputPeer tg.InputPeerClass, action tg.SendMessageActionClass, topicID int) *tg.MessagesSetTypingRequest {
 	req := &tg.MessagesSetTypingRequest{Peer: inputPeer, Action: action}
-	if topicID != 0 && topicID != domain.GeneralTopicID {
+	if topicID > 0 && topicID != domain.GeneralTopicID {
 		req.TopMsgID = topicID
 	}
 	return req

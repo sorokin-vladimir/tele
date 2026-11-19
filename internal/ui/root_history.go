@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/screens"
@@ -13,9 +14,10 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case screens.OpenChatMsg:
 		m.searchModel = nil
-		if msg.IsForum {
-			// A forum opens through its topic list: it has no history of its
-			// own. A notification names the topic it came from, and opens that.
+		isBot := msg.IsBot || m.chatList.IsBotChat(msg.ChatID)
+		if msg.IsForum && !isBot {
+			// A group forum opens through its topic list: it has no history of
+			// its own. A notification names the topic it came from, and opens that.
 			m.chatList.SetActiveByID(msg.ChatID)
 			m = m.enterForum(msg.ChatID, msg.Title)
 			if msg.TopicID != 0 {
@@ -24,9 +26,20 @@ func (m RootModel) updateNetworkMsg(msg tea.Msg) (RootModel, tea.Cmd) {
 			result, cmd := m.focusPane(FocusChatList)
 			return result.(RootModel), cmd
 		}
-		// A chat that is not a forum is never the forum on screen, so opening
-		// it is leaving that forum (#307).
+		// Ordinary chats and bot forums keep [1] Chats visible rather than
+		// replacing it with a separate topic list (#307, #371).
 		m = m.leaveForum()
+		if msg.IsForum && isBot {
+			topicID := msg.TopicID
+			topicTitle := msg.TopicTitle
+			if topicID == 0 {
+				topicID = domain.AllTopicsID
+				topicTitle = "All"
+			} else if topicTitle == "" {
+				topicTitle = screens.TopicTitle(project.TopicRow{ID: topicID})
+			}
+			return m.openHistory(domain.HistoryKey{ChatID: msg.ChatID, TopicID: topicID}, msg.Title+" › "+topicTitle)
+		}
 		return m.openHistory(domain.HistoryKey{ChatID: msg.ChatID}, msg.Title)
 
 	case screens.OpenTopicMsg:

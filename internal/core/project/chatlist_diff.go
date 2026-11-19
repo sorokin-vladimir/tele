@@ -62,7 +62,7 @@ func sameRowIDs(a, b []ChatRow) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].ID != b[i].ID {
+		if a[i].ID != b[i].ID || a[i].TopicID != b[i].TopicID {
 			return false
 		}
 	}

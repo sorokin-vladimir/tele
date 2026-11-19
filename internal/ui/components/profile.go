@@ -28,6 +28,7 @@ type (
 		UserID  int64
 		Title   string
 		IsForum bool
+		IsBot   bool
 	}
 	// ProfileMuteRequest mutes or unmutes the dialog with the person. Only ever
 	// emitted when a dialog exists.
@@ -298,9 +299,9 @@ func (p *Profile) Update(msg tea.Msg) (*Profile, tea.Cmd) {
 func (p *Profile) execute(action keys.Action) (*Profile, tea.Cmd) {
 	switch action {
 	case keys.ActionOpenChat:
-		userID, title, forum := p.user.ID, p.user.DisplayName(), p.user.IsForum
+		userID, title, forum, isBot := p.user.ID, p.user.DisplayName(), p.user.IsForum, p.user.IsBot
 		return nil, func() tea.Msg {
-			return ProfileOpenChatRequest{UserID: userID, Title: title, IsForum: forum}
+			return ProfileOpenChatRequest{UserID: userID, Title: title, IsForum: forum, IsBot: isBot}
 		}
 	case keys.ActionMute, keys.ActionUnmute:
 		muted := action == keys.ActionMute

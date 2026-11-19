@@ -71,7 +71,7 @@ func (c *GotdClient) GetHistoryAround(ctx context.Context, peer domain.Peer, top
 	err = WithRetry(ctx, func() error {
 		var res tg.MessagesMessagesClass
 		var err error
-		if topicID != 0 {
+		if topicID > 0 {
 			res, err = api.MessagesGetReplies(ctx, buildAroundRepliesRequest(peerToInput(peer), topicID, id, limit))
 		} else {
 			res, err = api.MessagesGetHistory(ctx, buildAroundRequest(peerToInput(peer), id, limit))
@@ -99,7 +99,7 @@ func buildSearchRequest(peer tg.InputPeerClass, topicID int, text string, after 
 		OffsetID: after.ID,
 		Limit:    limit,
 	}
-	if topicID != 0 {
+	if topicID > 0 {
 		req.SetTopMsgID(topicID)
 	}
 	return req

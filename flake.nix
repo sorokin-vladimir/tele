@@ -27,9 +27,10 @@
 
           src = ./.;
 
-          # Must be regenerated whenever go.mod/go.sum changes: run `nix build`,
-          # copy the "got: sha256-..." hash it reports, and paste it here.
-          vendorHash = "sha256-LlqzasfGBLoE36Jl7EygkL/0zzeTUJsEM3FB07jqtW8=";
+          # Must be regenerated whenever go.mod/go.sum changes: run
+          # `mise run vendor-hash` (nix in Docker) or `nix build`, and paste
+          # the hash it reports here.
+          vendorHash = "sha256-SPEeJY2y8/NBN02kf/Y5dNT8YS63GP+RxJ6dcCNPAWk=";
 
           subPackages = [ "cmd/tele" ];
 

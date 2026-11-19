@@ -27,13 +27,21 @@ run = "go test -v ./..."
 description = "Run golangci-lint"
 run = "golangci-lint run ./..."
 
+[tasks.lint-os]
+description = "Run golangci-lint for every other target OS (build-tagged files)"
+run = [
+  "GOOS=linux golangci-lint run ./...",
+  "GOOS=windows golangci-lint run ./...",
+  "GOOS=freebsd golangci-lint run ./...",
+]
+
 [tasks.vet]
 description = "Run go vet"
 run = "go vet ./..."
 
 [tasks.check]
-description = "Full check: vet + lint + test + vulnerabilities"
-run = ["go vet ./...", "golangci-lint run ./...", "go test ./...", "govulncheck ./..."]
+description = "Full check: vet + lint (every OS) + test + vulnerabilities"
+run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test ./...", "govulncheck ./..."]
 
 [tasks.vuln]
 description = "Report known vulnerabilities in the code the build calls"
@@ -42,6 +50,10 @@ run = "govulncheck ./..."
 [tasks.tidy]
 description = "Tidy go modules"
 run = "go mod tidy"
+
+[tasks.vendor-hash]
+description = "Print the vendorHash flake.nix needs (nix in Docker)"
+run = "bash scripts/vendor-hash.sh"
 
 [tasks.hooks]
 description = "Install git hooks via lefthook"

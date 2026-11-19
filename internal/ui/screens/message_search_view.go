@@ -7,7 +7,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mattn/go-runewidth"
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -62,8 +61,25 @@ func snippet(text, query string, width int, plain, mark lipgloss.Style) string {
 	runes := []rune(text)
 	marked := matches(runes, []rune(query))
 	cells := make([]int, len(runes))
-	for i, r := range runes {
-		cells[i] = runewidth.RuneWidth(r)
+	cStart := make([]int, len(runes))
+	cEnd := make([]int, len(runes))
+	ri := 0
+	for rem := text; rem != ""; {
+		cluster, cw := ansi.FirstGraphemeCluster(rem, ansi.GraphemeWidth)
+		if cluster == "" {
+			break
+		}
+		cr := []rune(cluster)
+		next := ri + len(cr)
+		if ri < len(cells) {
+			cells[ri] = cw
+		}
+		for k := ri; k < next && k < len(runes); k++ {
+			cStart[k] = ri
+			cEnd[k] = min(next, len(runes))
+		}
+		ri = next
+		rem = rem[len(cluster):]
 	}
 	span := func(from, to int) int {
 		n := 0
@@ -76,11 +92,17 @@ func snippet(text, query string, width int, plain, mark lipgloss.Style) string {
 	start, end := 0, len(runes)
 	if span(0, len(runes)) > width {
 		if first := firstMarked(marked); first >= 0 && span(0, matchEnd(marked, first)) > width-1 {
-			for start = first; start > 0 && span(start-1, first) <= width/3; start-- {
+			firstBoundary := cStart[first]
+			for start = firstBoundary; start > 0; {
+				prev := cStart[start-1]
+				if span(prev, firstBoundary) > width/3 {
+					break
+				}
+				start = prev
 			}
 			// The … stands for what was cut: a space after it says nothing.
-			for start < first && unicode.IsSpace(runes[start]) {
-				start++
+			for start < firstBoundary && unicode.IsSpace(runes[start]) {
+				start = cEnd[start]
 			}
 		}
 		room := width
@@ -89,7 +111,12 @@ func snippet(text, query string, width int, plain, mark lipgloss.Style) string {
 		}
 		if span(start, len(runes)) > room {
 			room-- // the trailing …
-			for end = start; end < len(runes) && span(start, end+1) <= room; end++ {
+			for end = start; end < len(runes); {
+				next := cEnd[end]
+				if span(start, next) > room {
+					break
+				}
+				end = next
 			}
 		}
 	}
@@ -192,9 +219,7 @@ func (m *MessageSearchModel) who(f project.FoundMessage, selected bool) string {
 func selectedInputLine(text string, inner int) string {
 	const prompt = "> "
 	budget := inner - lipgloss.Width(prompt)
-	if w := runewidth.StringWidth(text); w > budget {
-		text = runewidth.TruncateLeft(text, w-budget+1, "…")
-	}
+	text = truncateTail(text, budget)
 	line := theme.S().SearchPrompt.Render(prompt) + theme.S().SearchActiveRow.Render(text)
 	return line + theme.Pad(inner-lipgloss.Width(line))
 }

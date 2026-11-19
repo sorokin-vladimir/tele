@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
+	xansi "github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
@@ -74,7 +74,7 @@ func (c *ConfirmModal) View() string {
 
 	question := c.question
 	if lipgloss.Width(question) > innerW {
-		question = runewidth.Truncate(question, innerW, "…")
+		question = xansi.Truncate(question, innerW, "…")
 	}
 	// Centre the question in the box and paint the whole row with the surface.
 	left := (innerW - lipgloss.Width(question)) / 2

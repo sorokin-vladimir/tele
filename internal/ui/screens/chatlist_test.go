@@ -554,6 +554,21 @@ func TestChatList_JumpToEndAsksForTheWindowAroundIt(t *testing.T) {
 	assert.GreaterOrEqual(t, offset+limit, 200)
 }
 
+func TestChatList_VS16EmojiTitleWidthConsistent(t *testing.T) {
+	m := screens.NewChatListModel()
+	m.SetSize(22, 10)
+	setChats(m, []domain.Chat{
+		{ID: 1, Title: "Plain title here", UnreadCount: 2},
+		{ID: 2, Title: "⚙️⚙️⚙️ Long tool name", UnreadCount: 2},
+		{ID: 3, Title: "⚙️⚙️⚙️⚙️⚙️⚙️⚙️⚙️⚙️⚙️⚙️⚙️"},
+	})
+	lines := strings.Split(m.View(), "\n")
+	require.GreaterOrEqual(t, len(lines), 3)
+	w0 := lipgloss.Width(lines[0])
+	assert.Equal(t, w0, lipgloss.Width(lines[1]), "VS16 emoji title with badge must not overflow")
+	assert.Equal(t, w0, lipgloss.Width(lines[2]), "VS16 emoji title without badge must not overflow")
+}
+
 // rowsFor builds rows with ids first..last inclusive.
 func rowsFor(first, last int64) []project.ChatRow {
 	out := make([]project.ChatRow, 0, last-first+1)

@@ -10,7 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	runewidth "github.com/mattn/go-runewidth"
+	xansi "github.com/charmbracelet/x/ansi"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/markup"
@@ -460,14 +460,14 @@ func (c *Composer) chipLine(name, sizePart, suffix string) string {
 	const prefix = "📎 "
 	inner := c.width - 2
 	// Width left for the filename once the fixed parts (icon, size, toggle) are placed.
-	nameBudget := inner - runewidth.StringWidth(prefix) - runewidth.StringWidth(sizePart) - runewidth.StringWidth(suffix)
-	if nameBudget < runewidth.StringWidth(name) {
+	nameBudget := inner - xansi.StringWidth(prefix) - xansi.StringWidth(sizePart) - xansi.StringWidth(suffix)
+	if nameBudget < xansi.StringWidth(name) {
 		if nameBudget < 1 {
 			// Even an empty filename overflows (extremely narrow pane or a very
 			// long toggle): truncate the assembled line as a whole.
-			return theme.S().Body.Render(runewidth.Truncate(prefix+name+sizePart+suffix, max(inner, 0), "…"))
+			return theme.S().Body.Render(xansi.Truncate(prefix+name+sizePart+suffix, max(inner, 0), "…"))
 		}
-		name = runewidth.Truncate(name, nameBudget, "…")
+		name = xansi.Truncate(name, nameBudget, "…")
 	}
 	return theme.S().Body.Render(prefix + name + sizePart + suffix)
 }

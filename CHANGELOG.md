@@ -11,6 +11,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Rows and list titles carrying VS16 emoji sequences (`⚙️`, `✍️`, `❤️`) keep
+  their right borders aligned in Kitty and iTerm2 (#374).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

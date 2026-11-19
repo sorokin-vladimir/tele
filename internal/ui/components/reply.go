@@ -3,7 +3,7 @@ package components
 import (
 	"strings"
 
-	runewidth "github.com/mattn/go-runewidth"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
@@ -17,7 +17,7 @@ func BuildEditPreview(msg domain.Message) string {
 	if idx := strings.IndexByte(snippet, '\n'); idx >= 0 {
 		snippet = snippet[:idx]
 	}
-	snippet = runewidth.Truncate(snippet, 39, "…")
+	snippet = xansi.Truncate(snippet, 39, "…")
 	nameLine := quoteGlyph + theme.S().NameEditing.Render("Edit Message")
 	snippetLine := quoteGlyph + theme.S().Quote.Render(snippet)
 	return nameLine + "\n" + snippetLine
@@ -41,7 +41,7 @@ func BuildReplyPreview(msg domain.Message) string {
 	if idx := strings.IndexByte(snippet, '\n'); idx >= 0 {
 		snippet = snippet[:idx]
 	}
-	snippet = runewidth.Truncate(snippet, 39, "…")
+	snippet = xansi.Truncate(snippet, 39, "…")
 
 	nameLine := quoteGlyph + theme.S().NameIncoming.Render(name)
 	snippetLine := quoteGlyph + theme.S().Quote.Render(snippet)

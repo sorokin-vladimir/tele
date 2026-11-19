@@ -6,11 +6,11 @@ toolchain go1.26.11
 
 require (
 	charm.land/bubbles/v2 v2.1.0
-	charm.land/bubbletea/v2 v2.0.6
+	charm.land/bubbletea/v2 v2.1.2
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/atotto/clipboard v0.1.4
-	github.com/charmbracelet/ultraviolet v0.0.0-20260416155717-489999b90468
-	github.com/charmbracelet/x/ansi v0.11.7
+	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
+	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/ebitengine/oto/v3 v3.4.0
 	github.com/gabriel-vasile/mimetype v1.4.13
@@ -19,8 +19,7 @@ require (
 	github.com/gotd/td v0.161.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jfreymuth/pulse v0.1.1
-	github.com/lucasb-eyer/go-colorful v1.4.0
-	github.com/mattn/go-runewidth v0.0.23
+	github.com/lucasb-eyer/go-colorful v1.4.1
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pion/opus v0.0.0-20260601214817-71d58474cec8
 	github.com/spf13/cobra v1.10.2
@@ -73,6 +72,7 @@ require (
 	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/mattn/go-runewidth v0.0.30 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/ogen-go/ogen v1.23.0 // indirect
@@ -92,7 +92,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	github.com/xo/terminfo v1.0.0 // indirect
 	github.com/yuin/goldmark v1.8.4 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect

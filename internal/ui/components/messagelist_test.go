@@ -1,6 +1,7 @@
 package components_test
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
@@ -1854,4 +1857,67 @@ func TestSetOutbox_AStateChangeDoesNotYankTheViewport(t *testing.T) {
 	}})
 
 	assert.Equal(t, before, ml.View(), "a reader scrolled up must stay where they are")
+}
+
+func TestMessageList_VS16EmojiBubbleBordersAlignedAndSequentialInWcWidth(t *testing.T) {
+	now := time.Now()
+	ml := components.NewMessageList(12, 80)
+	ml.SetMessages([]domain.Message{
+		{
+			ID:     1,
+			ChatID: 1,
+			Text:   "• ⚙️ `run_command: test` (1.3s)\n• 📄 `read_file`",
+			Date:   now,
+		},
+		{
+			ID:           2,
+			ChatID:       1,
+			Text:         "ok",
+			ReplyToMsgID: 1,
+			Date:         now,
+		},
+	})
+	view := ml.View()
+	lines := strings.Split(view, "\n")
+
+	// Rows inside message 1's bubble (both run_command with ⚙️ and read_file
+	// with 📄) share the exact same GraphemeWidth.
+	var msg1Widths, msg2Widths []int
+	for _, l := range lines {
+		plain := stripANSI(l)
+		w := lipgloss.Width(strings.TrimRight(plain, " "))
+		switch {
+		case strings.Contains(plain, "▌"):
+			msg2Widths = append(msg2Widths, w)
+		case strings.Contains(plain, "ok"):
+			msg2Widths = append(msg2Widths, w)
+		case strings.Contains(plain, "run_command") || strings.Contains(plain, "read_file"):
+			msg1Widths = append(msg1Widths, w)
+		}
+	}
+	require.Len(t, msg1Widths, 2)
+	assert.Equal(t, msg1Widths[1], msg1Widths[0], "VS16 line width must match non-VS16 line")
+	require.GreaterOrEqual(t, len(msg2Widths), 2)
+	assert.Equal(t, msg2Widths[len(msg2Widths)-1], msg2Widths[0], "reply preview with VS16 must keep bubble right border aligned")
+
+	// Under ultraviolet WcWidth fallback (Kitty / iTerm2 rejecting Mode 2027),
+	// lines containing VS16 emojis must not jump mid-line via CUP/ECH back to a
+	// WcWidth column.
+	buf := uv.NewScreenBuffer(80, len(lines))
+	buf.Method = xansi.WcWidth
+	uv.NewStyledString(view).Draw(buf, uv.Rect(0, 0, 80, len(lines)))
+	var out bytes.Buffer
+	tr := uv.NewTerminalRenderer(&out, []string{"TERM=xterm-kitty"})
+	tr.Render(buf.RenderBuffer)
+	require.NoError(t, tr.Flush())
+	rendered := out.String()
+	// Find the chunk writing run_command up to its closing border │ and verify it
+	// contains no CSI cursor-position (H) or erase-character (X) jump in between.
+	idx := strings.Index(rendered, "run_command")
+	require.GreaterOrEqual(t, idx, 0)
+	tail := rendered[idx:]
+	eol := strings.Index(tail, "│")
+	require.Greater(t, eol, 0)
+	segment := tail[:eol]
+	assert.NotContains(t, segment, "X\x1b[", "VS16 row must repaint sequentially without ECH+CUP jump: %q", segment)
 }

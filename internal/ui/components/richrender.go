@@ -115,9 +115,9 @@ func richBlockLines(b *domain.RichBlock, w int, depth int, detailsExpanded bool)
 		if b.ChannelTitle == "" {
 			return nil
 		}
-		return []string{theme.S().BodyBold.Render(b.ChannelTitle)}
+		return wrapStyled(theme.S().BodyBold.Render(b.ChannelTitle), w)
 	case domain.RichUnsupported:
-		return []string{theme.S().OverlayHintDim.Render("[unsupported content]")}
+		return wrapStyled(theme.S().OverlayHintDim.Render("[unsupported content]"), w)
 
 	case domain.RichPhoto, domain.RichVideo, domain.RichAudio,
 		domain.RichMap, domain.RichEmbed, domain.RichEmbedPost:

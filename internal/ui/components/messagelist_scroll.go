@@ -152,9 +152,9 @@ func (ml *MessageList) ScrollUp() {
 }
 
 // scrollUpLine pans the viewport one line toward older messages.
-// When crossing a message boundary, small messages (h <= viewHeight) are entered at
-// lineOffset=h-2 so at least content+bottom are visible (never bottom-border-only).
-// Large messages are entered at their bottom portion (lineOffset=h-viewHeight).
+// When crossing a message boundary, the entering message starts at lineOffset=h-2
+// so at least content+bottom are visible (never bottom-border-only) while shifting
+// existing content down smoothly even for messages taller than viewHeight.
 func (ml *MessageList) scrollUpLine() {
 	if ml.lineOffset > 0 {
 		ml.lineOffset--
@@ -163,11 +163,11 @@ func (ml *MessageList) scrollUpLine() {
 	if ml.viewStart > 0 {
 		ml.viewStart--
 		h := ml.itemHeight(ml.viewStart)
-		if h > ml.viewHeight {
-			ml.lineOffset = h - ml.viewHeight
-		} else {
-			// Enter showing content+bottom border; lineOffset=h-1 (bottom-only) is skipped.
+		// Enter showing content+bottom border; lineOffset=h-1 (bottom-only) is skipped.
+		if h > 2 {
 			ml.lineOffset = h - 2
+		} else {
+			ml.lineOffset = 0
 		}
 	}
 }

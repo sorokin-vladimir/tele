@@ -1,10 +1,12 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/stretchr/testify/assert"
@@ -484,6 +486,180 @@ func TestFlattenRich_LinkTarget(t *testing.T) {
 	assert.Equal(t, "https://example.com/x", ents[0].URL)
 	assert.Equal(t, 4, ents[0].Offset)
 	assert.Equal(t, 4, ents[0].Length)
+}
+
+func TestRichItemHeight_AllBlockKindsAndWidthParity(t *testing.T) {
+	now := time.Now()
+	longToken := strings.Repeat("verylongunbreakableidentifier/", 4) + "end"
+	linkedText := domain.RichText{
+		Kind: domain.RichTextConcat,
+		Children: []domain.RichText{
+			para("см. "),
+			{Kind: domain.RichTextURL, URL: "https://example.com/very/long/url/with/query?foo=bar&baz=qux", Children: []domain.RichText{
+				{Kind: domain.RichTextBold, Children: []domain.RichText{para("длинная ссылка на документацию ⚙️ и ещё слова")}},
+			}},
+			para(" и "),
+			{Kind: domain.RichTextFixed, Children: []domain.RichText{para("inline_code_with_underscores_and_⚙️_icon")}},
+			para("\nвторой абзац с эмодзи ✅ и пробелами   "),
+		},
+	}
+
+	msgs := []domain.Message{
+		{ID: 1, Date: now, Text: "anchor"},
+		{
+			ID: 2, Date: now, ReplyToMsgID: 1, Forward: &domain.ForwardInfo{From: "Anton"},
+			SenderName: "Very Long Bot Display Name Here",
+			Reactions:  []domain.Reaction{{Emoji: "👍", Count: 5}, {Emoji: "⚙️", Count: 1}},
+			Rich: richMessageWith(
+				domain.RichBlock{Kind: domain.RichAuthorDate, Author: para("Автор Статьи"), Date: now.Unix()},
+				domain.RichBlock{Kind: domain.RichAuthorDate, Date: now.Unix()},
+				domain.RichBlock{Kind: domain.RichHeading, Level: 1, Text: para("Заголовок первого уровня ⚙️")},
+				domain.RichBlock{Kind: domain.RichSubtitle, Text: linkedText},
+				domain.RichBlock{Kind: domain.RichParagraph, Text: linkedText},
+				domain.RichBlock{Kind: domain.RichPreformatted, Text: para("func main() {\n\tif ok {\n\t\tfmt.Println(\"" + longToken + "\")\n\t}\n}")},
+				domain.RichBlock{Kind: domain.RichBlockquote, Caption: para("Источник"), Blocks: []domain.RichBlock{
+					{Kind: domain.RichParagraph, Text: linkedText},
+					{Kind: domain.RichBlockquote, Text: para("вложенная цитата: " + longToken)},
+				}},
+				domain.RichBlock{Kind: domain.RichPullquote, Text: para("Большая вынесенная цитата для проверки переноса"), Caption: para("Автор")},
+				domain.RichBlock{Kind: domain.RichList, Items: []domain.RichItem{
+					{Blocks: []domain.RichBlock{
+						{Kind: domain.RichParagraph, Text: linkedText},
+						{Kind: domain.RichDetails, Title: para("Вложенные детали"), Blocks: []domain.RichBlock{
+							{Kind: domain.RichPreformatted, Text: para("line1\n\tindented_line_longer_than_usual_buffer_width")},
+						}},
+					}},
+				}},
+				domain.RichBlock{Kind: domain.RichDetails, Title: para("Длинный заголовок спойлера который может переноситься"), Blocks: []domain.RichBlock{
+					{Kind: domain.RichParagraph, Text: para(strings.Repeat("слово ", 40))},
+				}},
+				domain.RichBlock{Kind: domain.RichTable, Bordered: true, Rows: [][]domain.RichCell{
+					{{Text: para("Col1"), Header: true}, {Text: para("Col2"), Header: true}, {Text: para("Col3"), Header: true}},
+					{{Text: para("⚙️ one two three four")}, {Text: para(longToken)}, {Text: linkedText}},
+				}},
+				domain.RichBlock{Kind: domain.RichRelatedArticles, Title: para("Связанные"), Articles: []domain.RichArticle{
+					{Title: "Очень длинный заголовок связанной статьи", URL: "https://example.com/article/1"},
+				}},
+				domain.RichBlock{Kind: domain.RichPhoto, Caption: linkedText},
+				domain.RichBlock{Kind: domain.RichCollage, Caption: para("альбом"), Blocks: []domain.RichBlock{
+					{Kind: domain.RichPhoto}, {Kind: domain.RichVideo},
+				}},
+				domain.RichBlock{Kind: domain.RichChannel, ChannelTitle: "Anton Channel"},
+				domain.RichBlock{Kind: domain.RichMath, Text: para("x^2 + y^2 = z^2")},
+				domain.RichBlock{Kind: domain.RichDivider},
+				domain.RichBlock{Kind: domain.RichFooter, Text: para("Подвал сообщения")},
+				domain.RichBlock{Kind: domain.RichUnsupported},
+			),
+		},
+		{ID: 3, Date: now, IsOut: true, Rich: richMessageWith(
+			domain.RichBlock{Kind: domain.RichParagraph, Text: para(strings.Repeat("строка ", 60))},
+		)},
+	}
+
+	for _, expanded := range []bool{false, true} {
+		for _, group := range []bool{false, true} {
+			for w := 24; w <= 160; w += 7 {
+				ml := NewMessageList(30, w)
+				ml.isGroup = group
+				ml.SetShowIndicator(true)
+				ml.SetDetailsExpanded(expanded)
+				ml.SetMessages(msgs)
+				for i := range ml.items {
+					est := ml.itemHeight(i)
+					lines := ml.renderItem(i, true)
+					if est != len(lines) {
+						t.Fatalf("expanded=%v group=%v w=%d item %d: itemHeight=%d rendered=%d", expanded, group, w, i, est, len(lines))
+					}
+					for li, line := range lines {
+						assert.NotContains(t, line, "\n", "expanded=%v group=%v w=%d item=%d line=%d has newline", expanded, group, w, i, li)
+						if w >= 40 {
+							assert.LessOrEqual(t, lipgloss.Width(line), w, "expanded=%v group=%v w=%d item=%d line=%d", expanded, group, w, i, li)
+							assert.LessOrEqual(t, xansi.StringWidth(line), w, "expanded=%v group=%v w=%d item=%d line=%d", expanded, group, w, i, li)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestRichMessage_ScrollUpBoundaryDoesNotJumpViewport(t *testing.T) {
+	now := time.Now()
+	var blocks []domain.RichBlock
+	for i := 0; i < 40; i++ {
+		blocks = append(blocks, domain.RichBlock{
+			Kind: domain.RichParagraph,
+			Text: para(strings.Repeat("текст ", 8)),
+		})
+	}
+	msgs := []domain.Message{
+		{ID: 1, Date: now, Rich: richMessageWith(blocks...)}, // tall rich message, h > viewHeight
+		{ID: 2, Date: now, Text: "TAIL-ONE"},
+	}
+	for id := 3; id <= 15; id++ {
+		msgs = append(msgs, domain.Message{ID: id, Date: now, Text: fmt.Sprintf("TAIL-%d", id)})
+	}
+	ml := NewMessageList(20, 80)
+	ml.SetMessages(msgs)
+
+	// Scroll up step by step until item 2 (msg 2 = TAIL-ONE) sits at row 0 of the viewport.
+	for ml.ViewStart() > 2 || (ml.ViewStart() == 2 && ml.LineOffset() > 0) {
+		ml.ScrollUp()
+	}
+	require.Equal(t, 2, ml.ViewStart())
+	require.Equal(t, 0, ml.LineOffset())
+	before := strings.Split(xansi.Strip(ml.View()), "\n")
+	require.Equal(t, 20, len(before))
+
+	// A single ScrollUp across the tall rich message boundary must only shift
+	// visible lines down smoothly by 2 rows (last content line + bottom border),
+	// leaving TAIL-ONE visible near the top rather than jumping an entire viewport
+	// height upward.
+	ml.ScrollUp()
+	assert.Equal(t, 1, ml.ViewStart())
+	assert.Equal(t, ml.itemHeight(1)-2, ml.LineOffset())
+	after := strings.Split(xansi.Strip(ml.View()), "\n")
+	require.Equal(t, 20, len(after))
+	assert.Equal(t, before[0], after[2], "existing viewport content shifts down smoothly by 2 lines")
+	assert.Contains(t, after[2], "╭")
+
+	// Scrolling back down one step reverses cleanly across the boundary.
+	ml.ScrollDown()
+	assert.Equal(t, 2, ml.ViewStart())
+	assert.Equal(t, 0, ml.LineOffset())
+}
+
+func TestRichMessage_PrependAndScrollUpSmoothly(t *testing.T) {
+	now := time.Now()
+	tail := make([]domain.Message, 0, 12)
+	for id := 10; id <= 21; id++ {
+		tail = append(tail, domain.Message{ID: id, Date: now, Text: fmt.Sprintf("NEW-%d", id)})
+	}
+	ml := NewMessageList(15, 80)
+	ml.SetMessages(tail)
+	// Scroll up so item 1 (msg 10 = NEW-10) is at the top edge.
+	for ml.ViewStart() > 1 || (ml.ViewStart() == 1 && ml.LineOffset() > 0) {
+		ml.ScrollUp()
+	}
+	before := strings.Split(xansi.Strip(ml.View()), "\n")
+	require.Contains(t, before[0], "╭")
+	require.Contains(t, before[1], "NEW-10")
+
+	var blocks []domain.RichBlock
+	for i := 0; i < 30; i++ {
+		blocks = append(blocks, domain.RichBlock{Kind: domain.RichParagraph, Text: para(strings.Repeat("слово ", 8))})
+	}
+	ml.PrependMessages([]domain.Message{
+		{ID: 5, Date: now, Rich: richMessageWith(blocks...)},
+	})
+	// Prepending older history keeps the current frame untouched.
+	assert.Equal(t, before, strings.Split(xansi.Strip(ml.View()), "\n"))
+
+	// Scrolling up into the newly prepended tall rich message reveals only its bottom edge.
+	ml.ScrollUp()
+	after := strings.Split(xansi.Strip(ml.View()), "\n")
+	assert.Equal(t, before[0], after[2])
+	assert.Equal(t, before[1], after[3])
 }
 
 func lipglossWidth(s string) int {

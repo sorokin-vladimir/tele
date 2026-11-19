@@ -30,7 +30,7 @@
           # Must be regenerated whenever go.mod/go.sum changes: run
           # `mise run vendor-hash` (nix in Docker) or `nix build`, and paste
           # the hash it reports here.
-          vendorHash = "sha256-OIUFBo/RTFMuNREsddR6Bk1IcvITmeLuHzN7A4DDOcQ=";
+          vendorHash = "sha256-rZQ4+aVu9nd4byTKyUwAR2nWkjluI8miBNpa9giTzVQ=";
 
           subPackages = [ "cmd/tele" ];
 

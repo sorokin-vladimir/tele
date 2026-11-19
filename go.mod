@@ -12,22 +12,22 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
 	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/ebitengine/oto/v3 v3.4.0
+	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/gabriel-vasile/mimetype v1.4.16
-	github.com/gen2brain/beeep v0.11.2
+	github.com/gen2brain/beeep v0.12.0
 	github.com/gotd/log/logzap v0.1.1
 	github.com/gotd/td v0.161.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/jfreymuth/pulse v0.1.1
+	github.com/jfreymuth/pulse v0.1.3
 	github.com/lucasb-eyer/go-colorful v1.4.1
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
-	github.com/pion/opus v0.0.0-20260601214817-71d58474cec8
+	github.com/pion/opus v0.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
-	golang.org/x/image v0.45.0
+	golang.org/x/image v0.48.0
 	golang.org/x/mod v0.43.0
 	golang.org/x/net v0.63.0
 	golang.org/x/sync v0.25.0
@@ -51,7 +51,7 @@ require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/ebitengine/purego v0.9.0 // indirect
+	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -68,7 +68,6 @@ require (
 	github.com/gotd/log v0.1.0 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jackmordaunt/icns/v3 v3.0.1 // indirect
 	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

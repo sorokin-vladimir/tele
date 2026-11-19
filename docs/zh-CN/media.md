@@ -38,6 +38,12 @@
 
 显示表演者、标题和时长。其他媒体类型显示为带标签的占位符。
 
+<a id="media-in-rich-messages"></a>
+## 富文本消息中的媒体
+
+[Rich 消息](https://core.telegram.org/constructor/message) 的各个块之间可以包含图片、视频、音频、地图或网页嵌入。
+它们会显示为带标签的占位符——`[photo]`、`[video]`、带 `embed:` 的 URL——而不是内联显示，说明文字位于其下：这些数据仍走经典媒体管线，尚未接入富文本块。
+
 <a id="sending-media"></a>
 ## 发送媒体
 

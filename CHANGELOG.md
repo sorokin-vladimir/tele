@@ -11,6 +11,14 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Rich messages render their structure instead of collapsing to plain text:
+  paragraphs, headings, subtitles and footers, bulleted and numbered lists,
+  block quotes and pull quotes, details, preformatted code, tables with bold
+  header cells and bordered grids, dividers, bylines, related-article
+  suggestions, channel references and media placeholders (#308).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

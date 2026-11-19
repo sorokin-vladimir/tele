@@ -11,6 +11,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Added
+
+- Private chats with forum-enabled bots (`BotForumView`) open their topic
+  list and route topic read and typing updates to the active topic (#371).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

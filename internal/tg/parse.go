@@ -305,6 +305,9 @@ func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 				out.TopicID = hdr.ReplyToMsgID
 				out.ReplyToMsgID = 0
 			}
+			if out.ReplyToMsgID == out.TopicID {
+				out.ReplyToMsgID = 0
+			}
 		}
 	}
 	// The two travel together and mean different things. edit_date is when the

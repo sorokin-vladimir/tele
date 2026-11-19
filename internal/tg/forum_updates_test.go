@@ -121,3 +121,27 @@ func TestDispatcher_APinChangeReadsTheFirstPageAgain(t *testing.T) {
 	all := topicsEvent(t, &tg.UpdatePinnedForumTopics{Peer: &tg.PeerChannel{ChannelID: 50}, Order: []int{12, 1}})
 	assert.True(t, all.TopicsPage)
 }
+
+func TestDispatcher_BotForumInboxReadTargetsTopic(t *testing.T) {
+	evt := topicsEventOn(t, &tg.UpdateReadHistoryInbox{
+		Peer:     &tg.PeerUser{UserID: 42},
+		MaxID:    80,
+		TopMsgID: 12,
+	}, false)
+
+	assert.Equal(t, store.EventTopicsChanged, evt.Kind)
+	assert.Equal(t, int64(42), evt.ChatID)
+	assert.Equal(t, []int{12}, evt.MsgIDs)
+}
+
+func TestDispatcher_BotForumTypingNamesTopic(t *testing.T) {
+	evt := topicsEventOn(t, &tg.UpdateUserTyping{
+		UserID:   42,
+		TopMsgID: 12,
+		Action:   &tg.SendMessageTypingAction{},
+	}, true)
+
+	assert.Equal(t, store.EventTyping, evt.Kind)
+	assert.Equal(t, int64(42), evt.ChatID)
+	assert.Equal(t, 12, evt.TopicID)
+}

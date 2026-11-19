@@ -52,6 +52,18 @@ func TestBuildUser_AResponseWithoutTheShortUserHasNoAvatar(t *testing.T) {
 	assert.Zero(t, got.AvatarID)
 }
 
+func TestBuildUser_MarksForumBot(t *testing.T) {
+	got := buildUser(42, fullUserResponse(&tg.User{
+		ID:           42,
+		FirstName:    "TopicBot",
+		Bot:          true,
+		BotForumView: true,
+	}))
+
+	assert.True(t, got.IsBot)
+	assert.True(t, got.IsForum)
+}
+
 // The full profile is how the owner learns the address of someone met in a
 // group, so that a first message to them can go out (#278).
 func TestUserPeer_TakesTheAccessHashFromTheShortUser(t *testing.T) {

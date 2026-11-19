@@ -84,6 +84,7 @@ type User struct {
 	// last-seen states is #127.
 	Online          bool
 	IsBot           bool
+	IsForum         bool
 	IsContact       bool
 	IsMutualContact bool
 	IsDeleted       bool
@@ -225,8 +226,8 @@ type Chat struct {
 	// IsArchived reports whether the chat lives in the built-in Archive
 	// folder (folder_id 1).
 	IsArchived bool
-	// IsForum reports a group with topics enabled: its messages are divided
-	// among topics and it has no history of its own (#275).
+	// IsForum reports a group or bot chat with topics enabled: its messages are
+	// divided among topics and it has no history of its own (#275, #371).
 	IsForum bool
 	// Draft is the unsent message draft synced with Telegram (#62). It is
 	// loaded from the dialog list and kept current via updateDraftMessage; it

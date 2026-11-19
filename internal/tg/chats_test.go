@@ -80,6 +80,18 @@ func TestConvertUser_Self(t *testing.T) {
 	assert.Equal(t, domain.PeerUser, chat.Peer.Type)
 }
 
+func TestConvertUser_BotForumView(t *testing.T) {
+	chat, ok := convertUser(&tg.User{
+		ID:           42,
+		FirstName:    "TopicBot",
+		Bot:          true,
+		BotForumView: true,
+	})
+	require.True(t, ok)
+	assert.True(t, chat.IsBot)
+	assert.True(t, chat.IsForum)
+}
+
 func TestParseDialogs_IncludesBots(t *testing.T) {
 	c := &GotdClient{}
 	bot := &tg.User{ID: 42, FirstName: "CoolBot", Bot: true, AccessHash: 1}

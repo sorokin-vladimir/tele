@@ -99,6 +99,15 @@ func TestConvertMessage_ReplyInsideATopic(t *testing.T) {
 	assert.Equal(t, 40, out.ReplyToMsgID)
 }
 
+func TestConvertMessage_ReplyToTopIDMatchingMsgIDClearsReply(t *testing.T) {
+	raw := &tg.Message{ID: 42, Date: 1700000000, Message: "topic msg",
+		ReplyTo: &tg.MessageReplyHeader{ForumTopic: true, ReplyToMsgID: 12, ReplyToTopID: 12}}
+	out, ok := convertMessage(raw, 5)
+	require.True(t, ok)
+	assert.Equal(t, 12, out.TopicID)
+	assert.Zero(t, out.ReplyToMsgID)
+}
+
 func TestConvertMessageGroupedID(t *testing.T) {
 	raw := &tg.Message{ID: 10, Message: "part", Date: 1700000000}
 	raw.SetGroupedID(9988776655)

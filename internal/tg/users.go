@@ -144,6 +144,7 @@ func buildUser(userID int64, full *tg.UsersUserFull) domain.User {
 		out.LastName = u.LastName
 		out.Online = isOnline
 		out.IsBot = u.Bot
+		out.IsForum = u.BotForumView
 		out.IsContact = u.Contact
 		out.IsMutualContact = u.MutualContact
 		out.IsDeleted = u.Deleted

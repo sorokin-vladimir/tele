@@ -25,8 +25,9 @@ type (
 	// to take a first message. Title is the name the overlay shows, so the chat
 	// pane has one to draw before its header lands.
 	ProfileOpenChatRequest struct {
-		UserID int64
-		Title  string
+		UserID  int64
+		Title   string
+		IsForum bool
 	}
 	// ProfileMuteRequest mutes or unmutes the dialog with the person. Only ever
 	// emitted when a dialog exists.
@@ -297,8 +298,10 @@ func (p *Profile) Update(msg tea.Msg) (*Profile, tea.Cmd) {
 func (p *Profile) execute(action keys.Action) (*Profile, tea.Cmd) {
 	switch action {
 	case keys.ActionOpenChat:
-		userID, title := p.user.ID, p.user.DisplayName()
-		return nil, func() tea.Msg { return ProfileOpenChatRequest{UserID: userID, Title: title} }
+		userID, title, forum := p.user.ID, p.user.DisplayName(), p.user.IsForum
+		return nil, func() tea.Msg {
+			return ProfileOpenChatRequest{UserID: userID, Title: title, IsForum: forum}
+		}
 	case keys.ActionMute, keys.ActionUnmute:
 		muted := action == keys.ActionMute
 		userID := p.user.ID

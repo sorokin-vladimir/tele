@@ -32,24 +32,10 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 | Workaround | Where | Issue | Retired by | Status (gotd v0.166.1) |
 |---|---|---|---|---|
-| Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1941](https://github.com/gotd/td/pull/1941), for [gotd/td#1852](https://github.com/gotd/td/issues/1852) | fixed in v0.164.0, tripwire removed; the workaround is to go |
 | Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1941](https://github.com/gotd/td/pull/1941), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | fixed in v0.164.0, tripwire removed; the workaround is to go |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | closed, but the tripwire still holds: the fix does not cover our case |
 | Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1968](https://github.com/gotd/td/pull/1968), for [gotd/td#1856](https://github.com/gotd/td/issues/1856) | issue open, but v0.165.0 corrects for the skew; tripwire removed, the workaround is to go |
 | Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
-
-### Channel difference cooldown stripped
-
-Telegram attaches a `timeout` to a channel difference: 300 seconds for a busy supergroup.
-gotd treats it as a ban on asking for that channel's difference again, and while the ban holds it discards every update the channel receives.
-A gap that opens inside the window freezes the chat for up to five minutes, and every catch-up arms the ban again.
-
-`channelDiffAPI` wraps the API the manager talks to and removes the `timeout` field from every `updates.getChannelDifference` response, so the manager closes a gap on its own 500 ms gap timer.
-`maxChannelDiffConcurrency` bounds how many channel differences run at once.
-It stays when the wrapper goes.
-
-- Tripwire: `TestStand_WithoutTheWrapperAChannelGapWaitsOutTheCooldown` fired on v0.166.1 and was removed.
-- On retirement: delete `channelDiffAPI`, its tests, the stand, and this entry; the manager takes the raw API again in `internal/tg/client.go`.
 
 ### Common-state difference delivered directly
 

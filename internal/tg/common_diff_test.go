@@ -12,6 +12,38 @@ import (
 	"go.uber.org/zap"
 )
 
+// fakeUpdatesAPI stands in for the raw client behind the updates manager. Only
+// the common-state difference call has behavior; the other two satisfy the
+// interface.
+type fakeUpdatesAPI struct {
+	// commonDiff answers the common-state difference call. Unset means an
+	// account with nothing pending.
+	commonDiff tg.UpdatesDifferenceClass
+	commonErr  error
+}
+
+func (f *fakeUpdatesAPI) UpdatesGetState(context.Context) (*tg.UpdatesState, error) {
+	return &tg.UpdatesState{}, nil
+}
+
+func (f *fakeUpdatesAPI) UpdatesGetDifference(
+	context.Context, *tg.UpdatesGetDifferenceRequest,
+) (tg.UpdatesDifferenceClass, error) {
+	if f.commonErr != nil {
+		return nil, f.commonErr
+	}
+	if f.commonDiff == nil {
+		return &tg.UpdatesDifferenceEmpty{}, nil
+	}
+	return f.commonDiff, nil
+}
+
+func (f *fakeUpdatesAPI) UpdatesGetChannelDifference(
+	context.Context, *tg.UpdatesGetChannelDifferenceRequest,
+) (tg.UpdatesChannelDifferenceClass, error) {
+	return &tg.UpdatesChannelDifferenceEmpty{}, nil
+}
+
 // captureHandler stands in for the dispatcher and records what it was handed.
 type captureHandler struct {
 	got []tg.UpdatesClass

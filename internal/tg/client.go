@@ -23,6 +23,17 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
+// maxChannelDiffConcurrency caps how many getChannelDifference calls the
+// updates manager keeps in flight across all channels; gotd's default is no
+// cap. Every tracked channel asks for its difference at startup and again on
+// every gap, and unbounded that is one burst per channel against a per-account
+// method rate limit (#266).
+//
+// Sized against the shape of a real account. A member of a few dozen channels
+// fires one call per channel at startup, and each takes roughly a second, so a
+// smaller cap would show up as startup latency while a larger one buys nothing.
+const maxChannelDiffConcurrency = 8
+
 // Endpoint is what a connection is made with that the process settles once,
 // when it starts: the app key, the session file and the route. Handed to each
 // connection rather than read from the config, because the config is what the
@@ -188,11 +199,6 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			c.log.Error("channel state could not be loaded; it will receive no updates this session",
 				zap.Int64("channel_id", channelID))
 		},
-		// channelDiffAPI below strips the server-side cooldown that used to space
-		// out getChannelDifference, so bound the calls in flight here instead
-		// (#266). Every tracked channel asks for its difference at startup and
-		// again on every gap; unbounded, that is one burst per channel against a
-		// per-account method rate limit.
 		MaxChannelDifferenceConcurrency: maxChannelDiffConcurrency,
 	}
 	// Persist channel access hashes so channels are re-registered at startup and
@@ -349,11 +355,10 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		c.api = tc.API()
 		c.mu.Unlock()
 
-		// Two wrappers over the same API, one per defect in the manager's gap
-		// handling: the channel difference carries a cooldown that must not be
-		// obeyed (#266), and a common difference carries updates the manager
-		// then drops (#267). Each dies on its own when its upstream fix ships.
-		diffAPI := newCommonDiffAPI(newChannelDiffAPI(tc.API(), c.log), dispatcher, c.log)
+		// A wrapper over the API for a defect in the manager's gap handling: a
+		// common difference carries updates the manager then drops (#267). It
+		// goes when its upstream fix ships.
+		diffAPI := newCommonDiffAPI(tc.API(), dispatcher, c.log)
 		return manager.Run(ctx, diffAPI, self.ID, updates.AuthOptions{
 			OnStart: func(ctx context.Context) {
 				c.log.Debug("updates manager started, signalling ready")

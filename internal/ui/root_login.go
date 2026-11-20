@@ -75,9 +75,6 @@ func (m RootModel) loginErrorText(cause, evidence string) string {
 // rendered on its own, so the centring pads between styled runs rather than
 // inside one.
 func (m RootModel) connectingText() string {
-	if m.clockSkew != 0 {
-		return m.clockSkewText()
-	}
 	body := theme.S().Body
 	if !m.login.Slow() {
 		return body.Render("connecting...")

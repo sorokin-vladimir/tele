@@ -7,7 +7,7 @@ import (
 // ProtocolVersion is the shape of what this binary says on the wire. It goes up
 // with any change the other side could misread. Two binaries with the same one
 // understand each other, whatever their own versions.
-const ProtocolVersion = 6
+const ProtocolVersion = 7
 
 // MethodHello is the first thing a client says, and the host's answer is its
 // own. Nothing else is said before it.

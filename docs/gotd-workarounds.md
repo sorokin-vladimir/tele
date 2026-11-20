@@ -21,7 +21,7 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 1. Check the upstream status of every entry below.
    An entry is retired only when its fix is in a release, not just merged.
-2. Diff `telegram/updates`, `mtproto/read.go` and `telegram/session.go` between the current and the new version.
+2. Diff `telegram/updates` and `telegram/session.go` between the current and the new version.
    If neither changed, no entry below changed either.
 3. Run the tripwire tests: `go test ./internal/tg/ -run 'TestStand_Without'`.
    Each one reproduces its defect against the real manager and asserts that the defect is still there.
@@ -33,7 +33,6 @@ Each workaround below closes one place where gotd lets an update fall through.
 | Workaround | Where | Issue | Retired by | Status (gotd v0.166.1) |
 |---|---|---|---|---|
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | closed, but the tripwire still holds: the fix does not cover our case |
-| Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1968](https://github.com/gotd/td/pull/1968), for [gotd/td#1856](https://github.com/gotd/td/issues/1856) | issue open, but v0.165.0 corrects for the skew; tripwire removed, the workaround is to go |
 | Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
 
 ### Outbox reads taken off the wire
@@ -54,28 +53,9 @@ If it is, dropping the receipt is correct and this workaround stays on our side 
 - On retirement: remove the extraction from `outboxHook`.
   Keep the hook itself if the arrival log is still wanted.
 
-### Clock skew read from the log
-
-This one is not in the updates manager but in the connection underneath it.
-gotd checks the time in the id of every message it receives against the local clock, and drops the message if it is more than 300 seconds old or 30 seconds early.
-It keeps no difference between the local clock and Telegram's, which the protocol asks a client to do, so a clock that is off by more than that drops everything Telegram sends.
-Nothing is answered, no error is raised, and the connection looks alive.
-A clock only 30 seconds behind is enough.
-
-The only trace is a Warn entry per dropped message, `Ignoring rejected message`, whose error names the id of the message.
-`watchClockSkew` wraps the logger handed to gotd, reads the server's time out of that id and reports the skew, so the app can say what is wrong instead of hanging.
-A successful reply or an arriving update ends it.
-
-This depends on the wording of a log entry, which gotd may change in any release without notice, so the tripwire checks the wording against gotd itself.
-
-- Tripwire: `TestStand_WithoutCalibrationASkewedClockHangs` fired on v0.166.1 and was removed: gotd connected despite a clock ten minutes ahead, and wrote no entry to read.
-  v0.165.0 keeps the difference between the clocks, as TDLib does (gotd/td#1968), although gotd/td#1856 is still open.
-- On retirement: if gotd corrects for the skew, delete `clock_skew.go`, its tests, the stand and this entry, and the app no longer needs to say anything.
-  If gotd instead reports the skew as an error, read it from there and drop the log watch.
-
 ### Saved DC addresses handed to the client
 
-This one is not in the updates manager either, but in how gotd restores a session.
+This one is not in the updates manager but in how gotd restores a session.
 Every time the client connects, gotd writes the config Telegram sent into the session file, data-centre addresses included.
 When it restores the session at the next start, it reads the data centre, the key and the salt back, but not the config, so it dials the static list compiled into gotd (`telegram/dcs/prod.go`).
 That list can name addresses Telegram no longer serves, or that a network cannot reach.

@@ -63,9 +63,6 @@ type GotdClient struct {
 	// fetches so a live update that omits the sender's entity still resolves the
 	// author instead of rendering "?" (#161).
 	senderNames *nameCache
-	// skew watches for a local clock too far off for gotd to accept what
-	// Telegram sends (#277).
-	skew *clockSkew
 	// throttle is every call's one budget to Telegram (#212).
 	throttle *throttle
 	// gotd is the client of the current connection, nil before the first.
@@ -83,11 +80,6 @@ type GotdClient struct {
 	// listens.
 	onLink func(up bool)
 }
-
-// SetOnClockSkew installs the function told about clock skew: the skew when it
-// is found or moves, positive when the local clock is ahead, and zero when
-// messages get through again. It must not block. Set before Connect.
-func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
 
 // ServerTimeOffset is Telegram's clock minus the local one, as gotd keeps it:
 // zero until a connection has heard from the server. gotd saves it in the
@@ -128,7 +120,6 @@ func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.Stat
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
 		senderNames:  newNameCache(),
-		skew:         newClockSkew(),
 		throttle:     newThrottle(time.Now, sleepCtx),
 	}
 }
@@ -234,12 +225,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	// wire message and emit the event immediately, then hand the update on to the
 	// manager as usual.
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
-	// Every update that arrives is a message the clock check let through, so it
-	// ends a clock skew (#277).
-	//
 	// A scanned login token is reported by an update that comes before the
 	// login ends, so it is caught on the way in (#330).
-	arrivals := watchLoginToken(c.skew.arrivals(hook), af.TokenAccepted)
+	arrivals := watchLoginToken(hook, af.TokenAccepted)
 
 	// resync forces a full catch-up (getDifference) on every reconnect after the
 	// first, so state missed during OS sleep/suspend is reconciled immediately on
@@ -306,9 +294,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		Resolver: c.endpoint.Resolver,
 		// The "v" field carries the application version on every line, so gotd's
 		// own stamp of the same name is dropped and reported once above instead.
-		// The clock-skew watch reads the entries gotd writes for the messages it
-		// drops, the only place a skewed clock shows (#277).
-		Logger: logzap.New(watchClockSkew(withoutField(c.log, "v"), c.skew)),
+		Logger: logzap.New(withoutField(c.log, "v")),
 		// Names this app and this machine in Telegram's active-sessions list;
 		// without it gotd reports the Go toolchain and its own version (#200).
 		Device: deviceConfig(version.Version, os.Hostname),

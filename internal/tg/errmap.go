@@ -97,11 +97,6 @@ func (c *GotdClient) errorMiddleware() telegram.Middleware {
 	return telegram.MiddlewareFunc(func(next gotdtg.Invoker) telegram.InvokeFunc {
 		return func(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
 			err := next.Invoke(ctx, input, output)
-			if err == nil {
-				// A reply came back, so the clock check let it through: whatever
-				// skew there was is over (#277).
-				c.skew.passed()
-			}
 			return c.mapError(opName(input), err)
 		}
 	})

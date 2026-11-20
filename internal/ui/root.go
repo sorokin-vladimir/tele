@@ -121,9 +121,6 @@ type RootModel struct {
 	// logPath is where this run's log is written, named on the login screen
 	// when something goes wrong there. Empty in tests.
 	logPath string
-	// clockSkew is how far the local clock is from Telegram's, zero when it is
-	// close enough to be accepted (#277).
-	clockSkew time.Duration
 	// throttleUntil is when the flood wait somebody's call ran into is over,
 	// and throttleTicking whether its countdown is running (#212).
 	throttleUntil   time.Time

@@ -33,6 +33,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   shows how far the clock is off (#352).
 - An app key Telegram refuses outright ends the connection with "app key
   blocked" on the login screen, instead of connecting forever (#352).
+- A call the host answered just before it went away, as a service
+  restarting or a tele quitting does, could still report a network error:
+  the answer and the end of the connection arrived together, and the end
+  sometimes won. `tele send` could say it failed after the message was
+  sent.
 
 ## [2.1.3] - 2026-11-13
 

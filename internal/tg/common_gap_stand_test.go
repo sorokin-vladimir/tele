@@ -3,7 +3,6 @@ package tg
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -209,30 +208,4 @@ func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
 		"the text must come from the catch-up the gap asked for, not the one at startup")
 	assert.False(t, st.Messages(domain.HistoryKey{ChatID: standChatID})[0].ShowsEdited(),
 		"and a bot's rewrite still carries no edited label")
-}
-
-// The same stand with the manager talking straight to the API, which is what
-// gotd does on its own. It reproduces the defect: the recovered edit goes back
-// through the sequence the gap is stuck in, the position then jumps past it,
-// and the message keeps the text it had before the gap.
-//
-// When this test starts failing, gotd/td#1854 has landed: delete the wrapper,
-// this test, and the entry both have in docs/gotd-workarounds.md (#270).
-func TestStand_WithoutTheWrapperTheFinalTextIsLost(t *testing.T) {
-	manager, api, st := stand(t, false)
-	api.arm()
-
-	streamWithAGap(t, manager)
-
-	require.Eventually(t, func() bool {
-		return slices.Contains(api.askedFrom(), standStartTS+1)
-	}, 5*time.Second, 20*time.Millisecond, "the gap was never chased")
-	// Long enough for the catch-up to finish and for anything it recovered to
-	// have been applied.
-	time.Sleep(time.Second)
-
-	// Frozen at the last edit that arrived before the gap, which is the symptom
-	// the issue was reported with.
-	assert.Equal(t, "th", storedText(st),
-		"upstream has fixed the gap handling; the wrapper and this test can go")
 }

@@ -30,12 +30,12 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 ## Workarounds
 
-| Workaround | Where | Issue | Retired by | Status (gotd v0.163.0) |
+| Workaround | Where | Issue | Retired by | Status (gotd v0.166.1) |
 |---|---|---|---|---|
-| Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1866](https://github.com/gotd/td/pull/1866), for [gotd/td#1852](https://github.com/gotd/td/issues/1852) | PR open, not merged |
-| Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1854](https://github.com/gotd/td/pull/1854), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | PR open, not merged |
-| Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | open, and the fix may not cover our case |
-| Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1856](https://github.com/gotd/td/issues/1856) | open, no fix yet |
+| Channel difference cooldown stripped | `internal/tg/channel_diff.go` | [#266](https://github.com/sorokin-vladimir/tele/issues/266) | [gotd/td#1941](https://github.com/gotd/td/pull/1941), for [gotd/td#1852](https://github.com/gotd/td/issues/1852) | fixed in v0.164.0, tripwire removed; the workaround is to go |
+| Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1941](https://github.com/gotd/td/pull/1941), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | fixed in v0.164.0, tripwire removed; the workaround is to go |
+| Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | closed, but the tripwire still holds: the fix does not cover our case |
+| Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1968](https://github.com/gotd/td/pull/1968), for [gotd/td#1856](https://github.com/gotd/td/issues/1856) | issue open, but v0.165.0 corrects for the skew; tripwire removed, the workaround is to go |
 | Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
 
 ### Channel difference cooldown stripped
@@ -48,7 +48,7 @@ A gap that opens inside the window freezes the chat for up to five minutes, and 
 `maxChannelDiffConcurrency` bounds how many channel differences run at once.
 It stays when the wrapper goes.
 
-- Tripwire: `TestStand_WithoutTheWrapperAChannelGapWaitsOutTheCooldown` (`internal/tg/channel_gap_stand_test.go`)
+- Tripwire: `TestStand_WithoutTheWrapperAChannelGapWaitsOutTheCooldown` fired on v0.166.1 and was removed.
 - On retirement: delete `channelDiffAPI`, its tests, the stand, and this entry; the manager takes the raw API again in `internal/tg/client.go`.
 
 ### Common-state difference delivered directly
@@ -60,7 +60,7 @@ Telegram also condenses a difference: a message edited thirty times comes back a
 `commonDiffAPI` wraps the API the manager talks to and hands the updates in a recovered difference to the dispatcher itself, before returning the difference to the manager unchanged.
 The manager's own copy then arrives second and changes nothing.
 
-- Tripwire: `TestStand_WithoutTheWrapperTheFinalTextIsLost` (`internal/tg/common_gap_stand_test.go`)
+- Tripwire: `TestStand_WithoutTheWrapperTheFinalTextIsLost` fired on v0.166.1 and was removed.
 - On retirement: delete `commonDiffAPI`, its tests, the stand, and this entry.
 
 ### Outbox reads taken off the wire
@@ -72,10 +72,10 @@ Our messages then stay unread on screen.
 `outboxHook` sits between the raw connection and the manager, and takes these two updates out of every envelope before the manager sees it.
 It also logs the type of every arriving update, which is the only record of what the server actually pushed.
 
-This is the same buffer-discard mechanism as the entry above, reported upstream as gotd/td#1853, which gotd/td#1854 is meant to fix.
-The fix dispatches the updates a difference replays, and that may not be enough here: the tripwire below drops a receipt the difference never mentions at all.
-We asked upstream which of the two it is ([comment](https://github.com/gotd/td/issues/1853#issuecomment-5750104496)).
-If a difference is authoritative for its whole range, dropping the receipt is correct and this workaround stays on our side regardless of the fix.
+This is the same buffer-discard mechanism as the entry above, reported upstream as gotd/td#1853.
+gotd/td#1941 closed it in v0.164.0 by dispatching the updates a difference replays, and that is not enough here: the tripwire below drops a receipt the difference never mentions at all, and it still holds on v0.166.1.
+We asked upstream whether a difference is authoritative for its whole range ([comment](https://github.com/gotd/td/issues/1853#issuecomment-5750104496)) and got no answer.
+If it is, dropping the receipt is correct and this workaround stays on our side for good.
 
 - Tripwire: `TestStand_WithoutTheHookAnOutboxReadBehindAGapIsLost` (`internal/tg/outbox_gap_stand_test.go`)
 - On retirement: remove the extraction from `outboxHook`.
@@ -95,8 +95,8 @@ A successful reply or an arriving update ends it.
 
 This depends on the wording of a log entry, which gotd may change in any release without notice, so the tripwire checks the wording against gotd itself.
 
-- Tripwire: `TestStand_WithoutCalibrationASkewedClockHangs` (`internal/tg/clock_skew_stand_test.go`).
-  It fails if gotd connects despite the skew (the defect is fixed) or if the entry can no longer be read (the watch has gone blind).
+- Tripwire: `TestStand_WithoutCalibrationASkewedClockHangs` fired on v0.166.1 and was removed: gotd connected despite a clock ten minutes ahead, and wrote no entry to read.
+  v0.165.0 keeps the difference between the clocks, as TDLib does (gotd/td#1968), although gotd/td#1856 is still open.
 - On retirement: if gotd corrects for the skew, delete `clock_skew.go`, its tests, the stand and this entry, and the app no longer needs to say anything.
   If gotd instead reports the skew as an error, read it from there and drop the log watch.
 

@@ -44,8 +44,9 @@ func newTestSkew(r *skewReports) *clockSkew {
 
 // logRejected writes the entry gotd writes when it drops a message whose id
 // is outside its window, for a message the server created at serverTime. The
-// text is gotd's (mtproto/read.go, v0.161.0); the stand in
-// clock_skew_stand_test.go checks it against gotd itself.
+// text is gotd's (mtproto/read.go, v0.161.0). gotd v0.166.1 corrects for the
+// skew and no longer writes it; the watch goes with the clock skew section of
+// docs/gotd-workarounds.md.
 func logRejected(log *zap.Logger, serverTime time.Time, how string) {
 	id := proto.NewMessageID(serverTime, proto.MessageFromServer)
 	err := fmt.Errorf("bad message id %d: created too far in %s: message rejected", int64(id), how)

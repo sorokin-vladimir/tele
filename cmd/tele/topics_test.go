@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
@@ -71,7 +73,7 @@ func TestTopics_ListsAForumsTopics(t *testing.T) {
 	}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "@gophers", topicsQuery{}); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, nil, "@gophers", topicsQuery{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,7 +93,7 @@ func TestTopics_CutsALongTitle(t *testing.T) {
 	acc.topics = map[int64][]project.TopicRow{300: {{ID: 17, Title: "Releases and everything around them", Unread: 4}}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{nameWidth: 8}); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, nil, "300", topicsQuery{nameWidth: 8}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +109,7 @@ func TestTopics_LimitKeepsTheFirst(t *testing.T) {
 	acc.topics = map[int64][]project.TopicRow{300: {{ID: 1, Title: "General"}, {ID: 17, Title: "Releases"}, {ID: 23, Title: "Old"}}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{limit: 2}); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, nil, "300", topicsQuery{limit: 2}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,7 +124,7 @@ func TestTopics_PrintsJSONLines(t *testing.T) {
 	acc.topics = map[int64][]project.TopicRow{300: {{ID: 17, Title: "Releases", Unread: 4, Muted: true, Closed: true}}}
 	var out bytes.Buffer
 
-	if err := listTopics(shortCtx(t), acc, &out, "300", topicsQuery{asJSON: true}); err != nil {
+	if err := listTopics(shortCtx(t), acc, &out, nil, "300", topicsQuery{asJSON: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,11 +141,111 @@ func TestTopics_AChatThatIsNotAForumExitsFive(t *testing.T) {
 	acc.byName = map[core.ChatName]project.ChatRow{{Username: "bob"}: {ID: 5, Title: "Bob"}}
 	var out bytes.Buffer
 
-	err := listTopics(shortCtx(t), acc, &out, "@bob", topicsQuery{})
+	err := listTopics(shortCtx(t), acc, &out, nil, "@bob", topicsQuery{})
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != notFoundCode {
 		t.Fatalf("got %v, want exit %d", err, notFoundCode)
 	}
 	assertSays(t, code.msg, "Bob", "not a forum")
+}
+
+// cli.list_limit bounds how many rows tele topics prints as text when no --limit
+// is given, and sends a note to stderr when cut (#329).
+func TestTopics_ListLimitTruncatesTextOutput(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	var rows []project.TopicRow
+	for i := 1; i <= 25; i++ {
+		rows = append(rows, project.TopicRow{ID: i, Title: fmt.Sprintf("Topic %d", i)})
+	}
+	acc.topics = map[int64][]project.TopicRow{300: rows}
+	var out, errOut bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, &errOut, "300", topicsQuery{listLimit: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 20 {
+		t.Errorf("printed %d rows, want 20", len(lines))
+	}
+	wantNote := "20 of 25 topics; --all for the rest\n"
+	if errOut.String() != wantNote {
+		t.Errorf("stderr %q, want %q", errOut.String(), wantNote)
+	}
+}
+
+// --all lifts cli.list_limit for one run and sends nothing to stderr (#329).
+func TestTopics_AllLiftsListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	var rows []project.TopicRow
+	for i := 1; i <= 25; i++ {
+		rows = append(rows, project.TopicRow{ID: i, Title: fmt.Sprintf("Topic %d", i)})
+	}
+	acc.topics = map[int64][]project.TopicRow{300: rows}
+	var out, errOut bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, &errOut, "300", topicsQuery{listLimit: 20, all: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 25 {
+		t.Errorf("printed %d rows, want 25", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// --limit overrides cli.list_limit. When it cuts the list, stderr notes it (#329).
+func TestTopics_LimitOverridesListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	var rows []project.TopicRow
+	for i := 1; i <= 25; i++ {
+		rows = append(rows, project.TopicRow{ID: i, Title: fmt.Sprintf("Topic %d", i)})
+	}
+	acc.topics = map[int64][]project.TopicRow{300: rows}
+	var out, errOut bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, &errOut, "300", topicsQuery{listLimit: 20, limit: 5}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 {
+		t.Errorf("printed %d rows, want 5", len(lines))
+	}
+	wantNote := "5 of 25 topics; --all for the rest\n"
+	if errOut.String() != wantNote {
+		t.Errorf("stderr %q, want %q", errOut.String(), wantNote)
+	}
+}
+
+// --json ignores cli.list_limit and prints every row unless an explicit --limit
+// was given (#329).
+func TestTopics_JSONIgnoresListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	var rows []project.TopicRow
+	for i := 1; i <= 25; i++ {
+		rows = append(rows, project.TopicRow{ID: i, Title: fmt.Sprintf("Topic %d", i)})
+	}
+	acc.topics = map[int64][]project.TopicRow{300: rows}
+	var out, errOut bytes.Buffer
+
+	if err := listTopics(shortCtx(t), acc, &out, &errOut, "300", topicsQuery{listLimit: 20, asJSON: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 25 {
+		t.Errorf("printed %d rows, want 25", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
 }

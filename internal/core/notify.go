@@ -128,7 +128,7 @@ func trigger(evt store.Event, preview bool) (chatID int64, at time.Time, body st
 		return evt.Message.ChatID, evt.Message.Date, body, true
 	case store.EventReactionsUpdate:
 		// A peer reacted to one of our messages in a group or channel.
-		if !evt.ReactionsUnread {
+		if evt.ReactionsUnread == nil || !*evt.ReactionsUnread {
 			return 0, time.Time{}, "", false
 		}
 		return evt.ChatID, evt.ReactionDate, reactionBody(evt.ReactionEmoji), true

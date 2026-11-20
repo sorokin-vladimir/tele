@@ -61,6 +61,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Fixed
 
+- A reaction read on another client clears the unread reaction marker from
+  the chat list (#340).
 - Reactions such as the red heart, the writing hand, the dove and the
   shrugging man are drawn as emoji, not as text symbols, and picking one
   again takes it back, also on messages stored by an earlier version (#294).

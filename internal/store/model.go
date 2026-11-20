@@ -50,9 +50,11 @@ type Event struct {
 	MsgID     int
 	MsgIDs    []int
 	Reactions []domain.Reaction
-	// ReactionsUnread reports that an EventReactionsUpdate carries at least one
-	// unread recent reaction (from UpdateMessageReactions).
-	ReactionsUnread bool
+	// ReactionsUnread reports whether an EventReactionsUpdate carries unread
+	// recent reactions. nil means the update carried no recent reactions list
+	// (e.g. min set or chat where recent list is not shown), leaving the unread
+	// state unchanged.
+	ReactionsUnread *bool
 	// ReactionEmoji is the emoji of the newest unread reaction (for notifications);
 	// empty for a custom-emoji reaction. ReactionDate is when that reaction was
 	// added, used to suppress stale catch-up reactions after an idle reconnect.
@@ -69,4 +71,9 @@ type Event struct {
 	// TopicID names the forum topic a draft or typing event is about, 0 when it
 	// is about the chat itself (#275).
 	TopicID int
+}
+
+// Bool returns a pointer to the given bool value.
+func Bool(b bool) *bool {
+	return &b
 }

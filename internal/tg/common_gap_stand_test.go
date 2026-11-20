@@ -27,6 +27,12 @@ import (
 // It exists because this class of defect is invisible from the inside. The
 // account's position ends up exactly where the server says it should, every
 // counter agrees, and the only thing that is wrong is the text on screen.
+//
+// tele used to deliver the updates of a recovered difference itself, because
+// gotd fed them back through the sequence the gap was stuck in and then
+// discarded them as outdated. gotd v0.164.0 applies them directly
+// (gotd/td#1853), so the manager now talks to the API straight, and this stand
+// holds that behaviour against any later gotd. The outbox stand reuses its API.
 const (
 	standChatID  = int64(10)
 	standMsgID   = 5
@@ -108,10 +114,15 @@ func standEdit(pts int, text string) *tg.Updates {
 	}
 }
 
+func editUpdate(msgID, pts int, text string) *tg.UpdateEditMessage {
+	msg := &tg.Message{ID: msgID, Message: text, PeerID: &tg.PeerUser{UserID: 10}}
+	msg.FromID = &tg.PeerUser{UserID: 10}
+	return &tg.UpdateEditMessage{Message: msg, Pts: pts, PtsCount: 1}
+}
+
 // stand wires the real manager to the real dispatcher and store, with the API
-// faked at the wire. withWrapper says whether the manager talks to the API
-// through the recovery wrapper or straight to it.
-func stand(t *testing.T, withWrapper bool) (*updates.Manager, *standAPI, store.Store) {
+// faked at the wire.
+func stand(t *testing.T) (*updates.Manager, *standAPI, store.Store) {
 	t.Helper()
 
 	events := make(chan store.Event, 256)
@@ -149,15 +160,10 @@ func stand(t *testing.T, withWrapper bool) (*updates.Manager, *standAPI, store.S
 		State: tg.UpdatesState{Pts: standEndPts, Date: int(time.Now().Unix())},
 	}}
 
-	var raw updates.API = api
-	if withWrapper {
-		raw = newCommonDiffAPI(api, dispatcher, zap.NewNop())
-	}
-
 	manager := updates.New(updates.Config{Handler: dispatcher})
 	started := make(chan struct{})
 	go func() {
-		_ = manager.Run(ctx, raw, 1, updates.AuthOptions{
+		_ = manager.Run(ctx, api, 1, updates.AuthOptions{
 			OnStart: func(context.Context) { close(started) },
 		})
 	}()
@@ -194,7 +200,7 @@ func storedText(st store.Store) string {
 }
 
 func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
-	manager, api, st := stand(t, true)
+	manager, api, st := stand(t)
 	api.arm()
 
 	streamWithAGap(t, manager)

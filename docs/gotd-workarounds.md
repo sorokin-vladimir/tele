@@ -32,22 +32,9 @@ Each workaround below closes one place where gotd lets an update fall through.
 
 | Workaround | Where | Issue | Retired by | Status (gotd v0.166.1) |
 |---|---|---|---|---|
-| Common-state difference delivered directly | `internal/tg/common_diff.go` | [#267](https://github.com/sorokin-vladimir/tele/issues/267) | [gotd/td#1941](https://github.com/gotd/td/pull/1941), for [gotd/td#1853](https://github.com/gotd/td/issues/1853) | fixed in v0.164.0, tripwire removed; the workaround is to go |
 | Outbox reads taken off the wire | `internal/tg/outbox_hook.go` | [#68](https://github.com/sorokin-vladimir/tele/issues/68) | [gotd/td#1853](https://github.com/gotd/td/issues/1853) | closed, but the tripwire still holds: the fix does not cover our case |
 | Clock skew read from the log | `internal/tg/clock_skew.go` | [#277](https://github.com/sorokin-vladimir/tele/issues/277) | [gotd/td#1968](https://github.com/gotd/td/pull/1968), for [gotd/td#1856](https://github.com/gotd/td/issues/1856) | issue open, but v0.165.0 corrects for the skew; tripwire removed, the workaround is to go |
 | Saved DC addresses handed to the client | `internal/tg/session.go` | [#312](https://github.com/sorokin-vladimir/tele/issues/312) | [gotd/td#1871](https://github.com/gotd/td/issues/1871) | open, no fix yet |
-
-### Common-state difference delivered directly
-
-When a gap opens in the account's common update sequence, the manager applies the recovered difference through its own sequence and then jumps the position to where the difference ends.
-Anything still buffered behind the gap is now behind the position and gets discarded as outdated.
-Telegram also condenses a difference: a message edited thirty times comes back as one edit, so losing it freezes the message at whatever it said before the gap.
-
-`commonDiffAPI` wraps the API the manager talks to and hands the updates in a recovered difference to the dispatcher itself, before returning the difference to the manager unchanged.
-The manager's own copy then arrives second and changes nothing.
-
-- Tripwire: `TestStand_WithoutTheWrapperTheFinalTextIsLost` fired on v0.166.1 and was removed.
-- On retirement: delete `commonDiffAPI`, its tests, the stand, and this entry.
 
 ### Outbox reads taken off the wire
 
@@ -58,8 +45,8 @@ Our messages then stay unread on screen.
 `outboxHook` sits between the raw connection and the manager, and takes these two updates out of every envelope before the manager sees it.
 It also logs the type of every arriving update, which is the only record of what the server actually pushed.
 
-This is the same buffer-discard mechanism as the entry above, reported upstream as gotd/td#1853.
-gotd/td#1941 closed it in v0.164.0 by dispatching the updates a difference replays, and that is not enough here: the tripwire below drops a receipt the difference never mentions at all, and it still holds on v0.166.1.
+The mechanism was reported upstream as gotd/td#1853: when a gap opens in the common sequence, the manager discards whatever is buffered behind it once the catch-up moves the position on.
+gotd/td#1941 closed it in v0.164.0 by applying the updates a difference replays directly, and that is not enough here: the tripwire below drops a receipt the difference never mentions at all, and it still holds on v0.166.1.
 We asked upstream whether a difference is authoritative for its whole range ([comment](https://github.com/gotd/td/issues/1853#issuecomment-5750104496)) and got no answer.
 If it is, dropping the receipt is correct and this workaround stays on our side for good.
 

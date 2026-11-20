@@ -355,11 +355,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		c.api = tc.API()
 		c.mu.Unlock()
 
-		// A wrapper over the API for a defect in the manager's gap handling: a
-		// common difference carries updates the manager then drops (#267). It
-		// goes when its upstream fix ships.
-		diffAPI := newCommonDiffAPI(tc.API(), dispatcher, c.log)
-		return manager.Run(ctx, diffAPI, self.ID, updates.AuthOptions{
+		return manager.Run(ctx, tc.API(), self.ID, updates.AuthOptions{
 			OnStart: func(ctx context.Context) {
 				c.log.Debug("updates manager started, signalling ready")
 				close(readyCh)

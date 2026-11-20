@@ -53,6 +53,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the answer and the end of the connection arrived together, and the end
   sometimes won. `tele send` could say it failed after the message was
   sent.
+- A notice that asks a question, such as the offer to keep `tele` running as a
+  service, is answered by `н` and `т` on the Russian layout, as by `y` and
+  `n` (#357).
 
 ## [2.1.3] - 2026-11-13
 

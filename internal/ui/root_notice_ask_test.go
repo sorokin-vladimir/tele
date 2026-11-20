@@ -80,6 +80,33 @@ func TestNoticeAsk_NoAndEscAnswerNo(t *testing.T) {
 	}
 }
 
+// On the Russian layout the y and n keys type н and т: they answer the same (#357).
+func TestNoticeAsk_RussianLayoutAnswers(t *testing.T) {
+	yes := 0
+	seen := notices.NewMemorySeen()
+	m := NewRootModel(false).WithNotices([]notices.Notice{askingNotice(&yes)}, seen)
+	m.width, m.height = 100, 30
+
+	m, cmd := pressKey(t, m, tea.KeyPressMsg{Code: 'н', Text: "н"})
+	runCmd(cmd)
+
+	assert.Equal(t, 1, yes, "н answers yes")
+	assert.True(t, seen.IsSeen("asks"))
+	assert.NotContains(t, xansi.Strip(m.View().Content), "Install it?")
+
+	yes = 0
+	seen = notices.NewMemorySeen()
+	m = NewRootModel(false).WithNotices([]notices.Notice{askingNotice(&yes)}, seen)
+	m.width, m.height = 100, 30
+
+	m, cmd = pressKey(t, m, tea.KeyPressMsg{Code: 'т', Text: "т"})
+	runCmd(cmd)
+
+	assert.Zero(t, yes, "т answers no")
+	assert.True(t, seen.IsSeen("asks"), "a no is an answer too")
+	assert.NotContains(t, xansi.Strip(m.View().Content), "Install it?")
+}
+
 // A key typed out of habit, Enter after the login above all, must not answer
 // a question that is asked only once.
 func TestNoticeAsk_OtherKeysDoNotAnswer(t *testing.T) {

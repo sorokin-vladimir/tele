@@ -27,7 +27,7 @@ func (m RootModel) isLoginQuit(msg tea.KeyPressMsg) bool {
 	if !msg.Mod.Contains(tea.ModCtrl) && !msg.Mod.Contains(tea.ModAlt) {
 		return false
 	}
-	return m.keyMap.Resolve(keys.ContextGlobal, msg.String()) == keys.ActionQuit
+	return m.keyMap.Resolve(keys.ContextGlobal, keys.NormalizeKey(msg.String())) == keys.ActionQuit
 }
 
 // loginQuitKey is the quit binding to name on the login screen: one that works

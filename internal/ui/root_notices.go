@@ -7,6 +7,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/notices"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 )
 
 // noticeTickMsg advances the dismissal countdown once per second.
@@ -96,13 +97,15 @@ func (m RootModel) dismissNotice() RootModel {
 // handleNoticeAnswer consumes a key press while a notice that asks is up. Only
 // y, n and Esc answer it, and an answer dismisses it either way; every other
 // key is swallowed, since a question asked once must not be answered by a key
-// pressed out of habit. The bool reports whether the head of the queue asks.
+// pressed out of habit. The key goes through keys.NormalizeKey first, so н and т
+// on the Russian layout answer as y and n do. The bool reports whether the head
+// of the queue asks.
 func (m RootModel) handleNoticeAnswer(msg tea.KeyPressMsg) (RootModel, tea.Cmd, bool) {
 	if !m.noticeActive() || !m.noticeQueue[0].Asks() {
 		return m, nil, false
 	}
 	var cmd tea.Cmd
-	switch msg.String() {
+	switch keys.NormalizeKey(msg.String()) {
 	case "y":
 		ctx, yes := m.ctx, m.noticeQueue[0].Yes
 		// What the yes came to is said as a toast, a failure as an error.

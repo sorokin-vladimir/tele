@@ -104,3 +104,12 @@ func TestLogin_QuitReboundToModifierKeyQuits(t *testing.T) {
 
 	assert.True(t, quits(cmd))
 }
+
+// On the Russian layout ctrl+q types ctrl+й: it quits from the login screen too (#357).
+func TestLogin_QuitOnRussianLayoutQuits(t *testing.T) {
+	m := withLoginStep(t, newLoginRoot(), screens.AuthRequestMsg{Step: project.LoginPhone})
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'й', Mod: tea.ModCtrl})
+
+	assert.True(t, quits(cmd))
+}

@@ -290,7 +290,7 @@ func (c *GotdClient) parseDialogs(result tg.MessagesDialogsClass) []domain.Chat 
 		if !converted {
 			continue
 		}
-		chat.IsMuted = isMuted(dlg)
+		chat.IsMuted = isMuted(dlg, c.telegramNow())
 		// Derive archived state from the dialog's own folder, not from which
 		// folder we queried: messages.getDialogs(folder_id=1) also returns the
 		// main folder's pinned dialogs, which must not be marked archived.
@@ -398,13 +398,15 @@ func convertChannel(ch *tg.Channel) (domain.Chat, bool) {
 	}, true
 }
 
-func isMuted(d *tg.Dialog) bool {
-	return mutedFromSettings(d.NotifySettings)
+func isMuted(d *tg.Dialog, telegramNow time.Time) bool {
+	return mutedFromSettings(d.NotifySettings, telegramNow)
 }
 
 // mutedFromSettings reports whether the given notify settings mean the peer is
-// currently muted. Shared by initial dialog parsing and live UpdateNotifySettings.
-func mutedFromSettings(s tg.PeerNotifySettings) bool {
+// muted at telegramNow, the time by Telegram's clock: mute_until is a date
+// Telegram stamped. Shared by initial dialog parsing and live
+// UpdateNotifySettings.
+func mutedFromSettings(s tg.PeerNotifySettings, telegramNow time.Time) bool {
 	muteUntil, hasMute := s.GetMuteUntil()
 	if !hasMute {
 		return false
@@ -413,5 +415,5 @@ func mutedFromSettings(s tg.PeerNotifySettings) bool {
 	if muteUntil == mutedIndefinitely {
 		return true
 	}
-	return muteUntil > int(time.Now().Unix())
+	return int64(muteUntil) > telegramNow.Unix()
 }

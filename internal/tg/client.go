@@ -68,6 +68,8 @@ type GotdClient struct {
 	skew *clockSkew
 	// throttle is every call's one budget to Telegram (#212).
 	throttle *throttle
+	// gotd is the client of the current connection, nil before the first.
+	gotd atomic.Pointer[telegram.Client]
 	// loggedOut ends the connection as a log out: the person's, or a key
 	// Telegram invalidated (#254, #297).
 	loggedOut loggedOut
@@ -86,6 +88,22 @@ type GotdClient struct {
 // is found or moves, positive when the local clock is ahead, and zero when
 // messages get through again. It must not block. Set before Connect.
 func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
+
+// ServerTimeOffset is Telegram's clock minus the local one, as gotd keeps it:
+// zero until a connection has heard from the server. gotd saves it in the
+// session, so after a restart it is known as soon as the session is read.
+func (c *GotdClient) ServerTimeOffset() time.Duration {
+	if tc := c.gotd.Load(); tc != nil {
+		return tc.ServerTimeOffset()
+	}
+	return 0
+}
+
+// telegramNow is the time by Telegram's clock, for judging a date Telegram
+// stamped.
+func (c *GotdClient) telegramNow() time.Time {
+	return time.Now().Add(c.ServerTimeOffset())
+}
 
 // SetOnLink installs the function told whether the link to Telegram is up, on
 // every change. It must not block. Set before Connect.
@@ -152,7 +170,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			return true
 		}
 		return false
-	}, c.senderNames)
+	}, c.senderNames, c.telegramNow)
 
 	// updates.New does not return an error — confirmed via go doc.
 	updCfg := updates.Config{
@@ -322,6 +340,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			c.throttle.middleware(), c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle),
 		},
 	})
+	c.gotd.Store(tc)
 
 	// The connection runs under its own context so a log out - the person's,
 	// or a key Telegram dropped - can end it from wherever it is noticed, and

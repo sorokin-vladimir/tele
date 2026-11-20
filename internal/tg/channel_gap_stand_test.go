@@ -118,7 +118,7 @@ func chanStand(t *testing.T) (*updates.Manager, *chanStandAPI, store.Store) {
 	droppable := make(chan store.Event, 64)
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, events, droppable, zap.NewNop(),
-		func(int) bool { return false }, newNameCache())
+		func(int) bool { return false }, newNameCache(), time.Now)
 
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: chanStandID, Peer: domain.Peer{

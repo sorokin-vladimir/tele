@@ -80,6 +80,11 @@ func openAccount(d accountDeps) (*account, error) {
 	if skewed, ok := conn.(interface{ SetOnClockSkew(func(time.Duration)) }); ok {
 		skewed.SetOnClockSkew(owner.SetClockSkew)
 	}
+	// The owner judges Telegram's dates by Telegram's clock, which the
+	// connection knows and the local one may not.
+	if clocked, ok := conn.(interface{ ServerTimeOffset() time.Duration }); ok {
+		owner.SetTelegramOffset(clocked.ServerTimeOffset)
+	}
 	// Whether the link is up is the host's to say to whoever asks it (#208).
 	if linked, ok := conn.(interface{ SetOnLink(func(bool)) }); ok {
 		linked.SetOnLink(owner.SetLink)

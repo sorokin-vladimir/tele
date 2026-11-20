@@ -257,7 +257,7 @@ func setupDispatcher(
 			ChatID:          chatID,
 			MsgID:           upd.MsgID,
 			Reactions:       reactions,
-			ReactionsUnread: reactionsHaveUnread(upd.Reactions),
+			ReactionsUnread: reactionsUnread(upd.Reactions),
 			ReactionEmoji:   emoji,
 			ReactionDate:    date,
 		}:

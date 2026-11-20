@@ -86,7 +86,7 @@ func TestDecideNotification_AReactionInAForumIsItsMessagesTopics(t *testing.T) {
 	st.SetTopicsPage(forumChat, []domain.Topic{{ChatID: forumChat, ID: 12, Title: "Releases"}})
 	st.AppendMessage(domain.Message{ID: 40, ChatID: forumChat, TopicID: 12, IsOut: true, Date: now})
 	evt := store.Event{Kind: store.EventReactionsUpdate, ChatID: forumChat, MsgID: 40,
-		ReactionsUnread: true, ReactionEmoji: "👍", ReactionDate: now.Add(-time.Second)}
+		ReactionsUnread: store.Bool(true), ReactionEmoji: "👍", ReactionDate: now.Add(-time.Second)}
 
 	_, onScreen := decideNotification(st, evt, showing(domain.HistoryKey{ChatID: forumChat, TopicID: 12}), true, now)
 	n, ok := decideNotification(st, evt, showing(), true, now)

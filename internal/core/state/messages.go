@@ -106,17 +106,21 @@ func (s *State) ApplyEditRestore(msg domain.Message) (Change, bool) {
 // ApplyReactions records the current reaction set for a message and tracks
 // whether the chat's unread-reaction count moved. via names where the set came
 // from, for the reaction trace (#248).
-func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread bool, via string) (Change, bool) {
+//
+// An optimistic write or rollback never changes unread state: our own reaction
+// does not clear or set unread marks (#340). When unread is nil (e.g. a reactions
+// update with no recent list), the unread state is left unchanged.
+func (s *State) ApplyReactions(chatID int64, msgID int, r []domain.Reaction, unread *bool, via string) (Change, bool) {
 	s.st.UpdateMessageReactions(chatID, msgID, r, via)
 	changed := false
-	if unread {
-		changed = s.st.ApplyUnreadReaction(chatID, msgID, true)
+	if unread != nil && via != "optimistic" && via != "rollback" {
+		changed = s.st.ApplyUnreadReaction(chatID, msgID, *unread)
 	}
 	c := Change{
 		Kind:                  ChangeMessageReactions,
 		ChatID:                chatID,
 		MsgID:                 msgID,
-		ReactionsUnread:       unread,
+		ReactionsUnread:       unread != nil && *unread,
 		UnreadReactionChanged: changed,
 	}
 	s.commit(c)

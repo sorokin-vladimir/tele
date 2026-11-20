@@ -27,6 +27,43 @@ func TestReactionsHaveUnread(t *testing.T) {
 	assert.False(t, reactionsHaveUnread(tg.MessageReactions{}))
 }
 
+func TestReactionsUnread(t *testing.T) {
+	// Recent reactions present, none unread -> false
+	none := tg.MessageReactions{
+		RecentReactions: []tg.MessagePeerReaction{
+			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+		},
+	}
+	res := reactionsUnread(none)
+	require.NotNil(t, res)
+	assert.False(t, *res)
+
+	// Recent reactions present, some unread -> true
+	some := tg.MessageReactions{
+		RecentReactions: []tg.MessagePeerReaction{
+			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+			{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
+		},
+	}
+	res = reactionsUnread(some)
+	require.NotNil(t, res)
+	assert.True(t, *res)
+
+	// No recent reactions list -> nil
+	assert.Nil(t, reactionsUnread(tg.MessageReactions{}))
+	assert.Nil(t, reactionsUnread(tg.MessageReactions{RecentReactions: nil}))
+	assert.Nil(t, reactionsUnread(tg.MessageReactions{RecentReactions: []tg.MessagePeerReaction{}}))
+
+	// Min set with recent reactions -> nil
+	minSet := tg.MessageReactions{
+		Min: true,
+		RecentReactions: []tg.MessagePeerReaction{
+			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+		},
+	}
+	assert.Nil(t, reactionsUnread(minSet))
+}
+
 // A message without a reactions field says nothing about reactions and one
 // with an empty field says there are none; an edit applies only the second
 // (#248), so the two must stay apart: nil and an empty set.

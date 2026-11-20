@@ -1,6 +1,6 @@
 # 媒体
 
-> 本文译自 [media.md](../media.md)，对应提交 `a8ea9ea`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [media.md](../media.md)，对应提交 `a720306`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 `tele` 在聊天中直接显示什么、自己播放什么、交给外部程序处理什么。相关设置都位于 `photos:` 下，见 [configuration.md](configuration.md#photos)。
 
@@ -37,6 +37,12 @@
 ## 音频（音乐）
 
 显示表演者、标题和时长。其他媒体类型显示为带标签的占位符。
+
+<a id="media-in-rich-messages"></a>
+## 富文本消息中的媒体
+
+[Rich 消息](https://core.telegram.org/constructor/message) 的各个块之间可以包含图片、视频、音频、地图或网页嵌入。
+它们会显示为带标签的占位符——`[photo]`、`[video]`、带 `embed:` 的 URL——而不是内联显示，说明文字位于其下：这些数据仍走经典媒体管线，尚未接入富文本块。
 
 <a id="sending-media"></a>
 ## 发送媒体

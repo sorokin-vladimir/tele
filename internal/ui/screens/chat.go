@@ -13,6 +13,7 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
 	"github.com/sorokin-vladimir/tele/internal/ui/layout"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -132,7 +133,7 @@ func (m *ChatModel) newLine() string {
 		label += " · " + key
 	}
 	label += " "
-	return theme.PadTo(lipgloss.Width(label), m.width) + theme.S().UnreadSeparator.Render(label)
+	return theme.PadTo(textwidth.Width(label), m.width) + theme.S().UnreadSeparator.Render(label)
 }
 
 func NewChatModel(width, height int) *ChatModel {

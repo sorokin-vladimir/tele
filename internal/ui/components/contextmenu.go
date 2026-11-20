@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -414,13 +415,13 @@ func (cm *ContextMenu) View() string {
 	// compute inner width: max of content width+padding and hint minimum
 	innerW := 0
 	for _, r := range rows {
-		if w := lipgloss.Width(r); w > innerW {
+		if w := textwidth.Width(r); w > innerW {
 			innerW = w
 		}
 	}
 	innerW++ // right padding
 	// RenderBox needs fillW>=2, so innerW must be >= hintW+2 (one border char each side)
-	if hintW := lipgloss.Width(" " + hint + " "); hintW+2 > innerW {
+	if hintW := textwidth.Width(" " + hint + " "); hintW+2 > innerW {
 		innerW = hintW + 2
 	}
 

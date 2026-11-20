@@ -4,10 +4,10 @@ import (
 	"strings"
 	"unicode"
 
-	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	kitty "github.com/charmbracelet/x/ansi/kitty"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -72,13 +72,13 @@ func stampOverlay(baseLines, overlayLines []string, top, left int) {
 		bLine := baseLines[row]
 		// The gap between the end of the base line and the overlay is canvas,
 		// not absence: a stamped overlay must not tear a hole to its left.
-		bLine += theme.PadTo(lipgloss.Width(bLine), left)
-		mLineW := lipgloss.Width(mLine)
+		bLine += theme.PadTo(textwidth.Width(bLine), left)
+		mLineW := textwidth.Width(mLine)
 		right := left + mLineW
-		prefix := xansi.Truncate(bLine, left, "")
+		prefix := textwidth.Truncate(bLine, left, "")
 		suffix := ""
-		if lipgloss.Width(bLine) > right {
-			suffix = xansi.TruncateLeft(bLine, right, "")
+		if textwidth.Width(bLine) > right {
+			suffix = textwidth.TruncateLeft(bLine, right, "")
 		}
 		baseLines[row] = prefix + mLine + suffix
 	}
@@ -99,11 +99,11 @@ func stampBoxOverlay(base string, boxLines []string, top, left, boxW, h int) str
 			continue
 		}
 		b := baseLines[row]
-		prefix := xansi.Truncate(b, left, "")
-		prefix += theme.PadTo(lipgloss.Width(prefix), left)
+		prefix := textwidth.Truncate(b, left, "")
+		prefix += theme.PadTo(textwidth.Width(prefix), left)
 		suffix := ""
-		if lipgloss.Width(b) > left+boxW {
-			suffix = xansi.TruncateLeft(b, left+boxW, "")
+		if textwidth.Width(b) > left+boxW {
+			suffix = textwidth.TruncateLeft(b, left+boxW, "")
 		}
 		baseLines[row] = prefix + bl + suffix
 	}
@@ -118,7 +118,7 @@ func overlayCenter(base, overlay string, w, h int) string {
 	overlayH := len(overlayLines)
 	overlayW := 0
 	for _, l := range overlayLines {
-		if ww := lipgloss.Width(l); ww > overlayW {
+		if ww := textwidth.Width(l); ww > overlayW {
 			overlayW = ww
 		}
 	}
@@ -158,7 +158,7 @@ func measureBox(s string) (w, h int) {
 	lines := strings.Split(s, "\n")
 	h = len(lines)
 	for _, l := range lines {
-		if ww := lipgloss.Width(l); ww > w {
+		if ww := textwidth.Width(l); ww > w {
 			w = ww
 		}
 	}
@@ -202,7 +202,7 @@ func overlayBottomRight(base, overlay string, w, h, bottomOffset int) string {
 	overlayH := len(overlayLines)
 	overlayW := 0
 	for _, l := range overlayLines {
-		if ww := lipgloss.Width(l); ww > overlayW {
+		if ww := textwidth.Width(l); ww > overlayW {
 			overlayW = ww
 		}
 	}

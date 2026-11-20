@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 	kitty "github.com/charmbracelet/x/ansi/kitty"
+	runewidth "github.com/mattn/go-runewidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 	"github.com/stretchr/testify/assert"
@@ -161,4 +162,14 @@ func TestOverlayBottomRight_SingleLine(t *testing.T) {
 	// overlayH=1, top = 5-1-1 = 3; overlayW=3, left = 10-3-2 = 5
 	assert.Equal(t, 5, len(lines))
 	assert.Contains(t, lines[3], "XYZ")
+}
+
+// A VS16 glyph before the overlay is one cell wide, so the overlay must still
+// start on the column asked for. Slicing by the Unicode rule left it one short.
+func TestStampOverlay_KeepsItsColumnAfterVS16(t *testing.T) {
+	base := []string{"✍️abc"}
+	stampOverlay(base, []string{"XXXX"}, 0, 3)
+	i := strings.Index(base[0], "XXXX")
+	assert.NotEqual(t, -1, i)
+	assert.Equal(t, 3, runewidth.StringWidth(base[0][:i]))
 }

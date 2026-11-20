@@ -40,6 +40,11 @@ This needs `ffmpeg`, see below.
 Performer, title and duration.
 Other media types show a labelled placeholder.
 
+## Media in rich messages
+
+A [rich message](https://core.telegram.org/constructor/message) can carry a photo, video, audio, map or web embed between its blocks.
+Those render as a labelled placeholder - `[photo]`, `[video]`, an `embed:` URL - rather than inline, with their caption beneath: the bytes arrive through the classic media pipeline, which is not wired into rich blocks yet.
+
 ## Sending media
 
 Attach an existing file from disk with `u` (photos, videos, voice notes, music, documents) and confirm the send-as type before sending.

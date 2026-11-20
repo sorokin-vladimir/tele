@@ -8,6 +8,7 @@ import (
 	runewidth "github.com/mattn/go-runewidth"
 
 	"github.com/sorokin-vladimir/tele/internal/ui/keys"
+	"github.com/sorokin-vladimir/tele/internal/ui/textwidth"
 	"github.com/sorokin-vladimir/tele/internal/ui/theme"
 )
 
@@ -58,7 +59,7 @@ func (c *ConfirmModal) Update(msg tea.KeyPressMsg) (*ConfirmModal, ConfirmResult
 }
 
 func (c *ConfirmModal) View() string {
-	innerW := lipgloss.Width(c.question) + 4
+	innerW := textwidth.Width(c.question) + 4
 	if innerW < 20 {
 		innerW = 20
 	}
@@ -73,14 +74,14 @@ func (c *ConfirmModal) View() string {
 	}
 
 	question := c.question
-	if lipgloss.Width(question) > innerW {
+	if textwidth.Width(question) > innerW {
 		question = runewidth.Truncate(question, innerW, "…")
 	}
 	// Centre the question in the box and paint the whole row with the surface.
-	left := (innerW - lipgloss.Width(question)) / 2
+	left := (innerW - textwidth.Width(question)) / 2
 	content := theme.S().HelpBg.Render(theme.Pad(left)) +
 		theme.S().HelpDesc.Render(question) +
-		theme.S().HelpBg.Width(innerW-left-lipgloss.Width(question)).Render("")
+		theme.S().HelpBg.Width(innerW-left-textwidth.Width(question)).Render("")
 
 	hint := OverlayHint([][2]string{{"y", "quit"}, {"n", "cancel"}}, theme.T().SurfaceHelp)
 	box := RenderBox(content, theme.S().HelpTitle.Render(c.title), "", hint, "",

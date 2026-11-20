@@ -369,7 +369,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	})
 	// A check still asking the main data centre ends with the connection.
 	c.recheck.wait()
-	return c.loggedOut.outcome(err)
+	return c.loggedOut.outcome(c.runEnded(err))
 }
 
 func (c *GotdClient) Updates() <-chan store.Event {

@@ -17,6 +17,19 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
+// runEnded names what the connection's run ended with when Telegram refused
+// to set the connection up: gotd stops on a refusal that no retry can change,
+// an app key Telegram will not take among them, and carries the refusal in a
+// ConfigError. It is named like any other answer of Telegram's, so the person
+// is told the key is blocked. Any other end is passed on as it came.
+func (c *GotdClient) runEnded(err error) error {
+	var refused *telegram.ConfigError
+	if errors.As(err, &refused) {
+		return c.mapError("initConnection", err)
+	}
+	return err
+}
+
 // mapError converts any error leaving this package into a domain error. It is
 // called once per RPC by the error middleware, so no method has to remember to
 // wrap its own result.
@@ -75,14 +88,15 @@ func (c *GotdClient) mapError(op string, err error) error {
 		return &telerr.Error{Kind: telerr.Network, Op: op, Detail: ne.Error(), Transient: true, Cause: err}
 	}
 
-	// gotd's own transport failures. Neither is a tgerr and neither satisfies
-	// net.Error, so both used to land in Internal — which is terminal, so an
+	// gotd's own transport failure. It is no tgerr and does not satisfy
+	// net.Error, so it used to land in Internal — which is terminal, so an
 	// offline send was given up on instead of waited out (#193).
 	//
-	// RetryLimitReachedErr is gotd saying the server never acknowledged the
-	// request. The request may well have arrived: repeating it is safe only
-	// because the caller keeps its random_id, which is what the outbox is for.
-	if errors.Is(err, &rpc.RetryLimitReachedErr{}) || errors.Is(err, rpc.ErrEngineClosed) {
+	// A request the server does not acknowledge is no failure any more: gotd
+	// stops resending it and waits for the answer for as long as the caller's
+	// context and the connection last, as TDLib does. A dead connection closes
+	// the engine, which is this error.
+	if errors.Is(err, rpc.ErrEngineClosed) {
 		return &telerr.Error{Kind: telerr.Network, Op: op, Detail: err.Error(), Transient: true, Cause: err}
 	}
 

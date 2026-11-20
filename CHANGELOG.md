@@ -11,6 +11,29 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Changed
+
+- tele now runs on gotd v0.166.1, the library it talks to Telegram with.
+  Recovering a gap in a busy supergroup, and the updates of a missed
+  stretch, are gotd's own work now, so tele no longer carries its own
+  workarounds for them (#352).
+- A window and a service from before this release speak different versions
+  of their protocol, so the newer one restarts the service, as it does after
+  any upgrade (#352).
+- On macOS, a desktop notification the terminal does not draw itself (one
+  from the service, or from a terminal without notifications) is posted by
+  tele's own process and shows as coming from Terminal. It used to go
+  through `terminal-notifier` or `osascript`.
+
+### Fixed
+
+- A local clock minutes off no longer stops tele: it connects, and new
+  messages still notify, because their age, the end of a mute and the life
+  of a QR code are measured by Telegram's clock. The status bar no longer
+  shows how far the clock is off (#352).
+- An app key Telegram refuses outright ends the connection with "app key
+  blocked" on the login screen, instead of connecting forever (#352).
+
 ## [2.1.3] - 2026-11-13
 
 ### Added

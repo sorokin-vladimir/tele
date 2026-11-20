@@ -180,6 +180,12 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// difference and never will be: recovering them is the application's
 		// job, and the manager documents that it is not doing it. Left to the
 		// default this is a log line and a hole in the chat (#262).
+		//
+		// gotd also offers OnChannelGap, called right after this with the
+		// positions and the latest messages of the channel. Neither is needed:
+		// the gap is placed from what the store holds, and the repair fetches
+		// the latest messages itself, so taking them here would only be a
+		// second way of writing the tail beside the repair.
 		OnChannelTooLong: func(channelID int64) {
 			c.log.Warn("channel fell too far behind; recording a gap", zap.Int64("channel_id", channelID))
 			// mustDeliver rather than droppable, and for both reasons: a

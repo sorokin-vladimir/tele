@@ -323,6 +323,8 @@ func (m *ChatModel) MediaBoxForID(id int64, imgW, imgH int) (int, int) {
 func (m *ChatModel) PhotoViewHeight() int         { return m.msgList.ViewHeight() }
 func (m *ChatModel) SetMaxMediaPx(px int)         { m.msgList.SetMaxMediaPx(px) }
 func (m *ChatModel) MaxMediaPx() int              { return m.msgList.MaxMediaPx() }
+func (m *ChatModel) SetDateFormat(layout string)  { m.msgList.SetDateFormat(layout) }
+func (m *ChatModel) DateFormat() string           { return m.msgList.DateFormat() }
 func (m *ChatModel) SetImageMode(mode media.Mode) { m.msgList.SetImageMode(mode) }
 func (m *ChatModel) SetOutboxReadMaxID(id int)    { m.msgList.SetOutboxReadMaxID(id) }
 func (m *ChatModel) SetInboxReadMaxID(id int)     { m.msgList.SetInboxReadMaxID(id) }

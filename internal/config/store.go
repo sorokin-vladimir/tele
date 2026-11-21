@@ -146,6 +146,14 @@ func (s *Store) Set(key string, v any) error {
 	if err := e.Validate(v); err != nil {
 		return fmt.Errorf("%s: %w", key, err)
 	}
+	// A check beyond the widget's shape, where one is declared, judged before
+	// the write the way the proxy section is: a value the config would repair
+	// on load must not reach the file from here either (ADR 0008).
+	if check, ok := keyChecks[key]; ok {
+		if err := check(v); err != nil {
+			return fmt.Errorf("%s: %w", key, err)
+		}
+	}
 	// A proxy value is judged before it is written rather than after. The file
 	// is written first and read back second, so a value the config will not
 	// load would already be in the file by the time anybody found out - and the

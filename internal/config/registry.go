@@ -155,6 +155,15 @@ var registry = []settings.Entry{
 		Applies: settings.Immediate,
 	},
 	{
+		Key:     "ui.date_format",
+		Process: settings.Client,
+		Group:   "ui",
+		Label:   "Date format",
+		Help:    "The Go time layout the timestamp on each message is drawn with: 15:04 for a 24-hour clock, 3:04pm for a 12-hour one. A layout the app cannot parse is refused with a warning and the default is used. What is already on screen keeps the layout it was drawn with; the next message drawn uses the new one (#238).",
+		Widget:  settings.Text,
+		Applies: settings.NextUse,
+	},
+	{
 		// Last of the ui keys, where every template tele has ever written puts
 		// it, so the overlay and the file read in the same order.
 		Key:     "ui.theme",
@@ -325,11 +334,6 @@ type excluded struct {
 
 var exclusions = []excluded{
 	{
-		Key: "ui.date_format",
-		Reason: "Read by nothing: the key is parsed into Config and dropped, and message timestamps use a hardcoded layout. " +
-			"Declaring it would put a knob on screen that turns nothing. Implemented by #238, and this exclusion goes when it is.",
-	},
-	{
 		Key: "keybindings",
 		Reason: "Open by construction - the entries are whatever the user wrote - so there is no fixed list to declare. " +
 			"Rebinding is also a different interaction from every widget here: capture a chord, report a collision, show the default it overrides. " +
@@ -364,6 +368,13 @@ func repairIllegal(v *viper.Viper) []Warning {
 			continue
 		}
 		err := e.Validate(v.Get(e.Key))
+		if err == nil {
+			// A check beyond the widget's shape, where one is declared: a Go
+			// time layout is free text the Text widget cannot judge.
+			if check, ok := keyChecks[e.Key]; ok {
+				err = check(v.Get(e.Key))
+			}
+		}
 		if err == nil {
 			continue
 		}

@@ -36,6 +36,33 @@ func TestStore_SetWritesTheFileAndSwapsTheConfig(t *testing.T) {
 	assert.Contains(t, string(raw), "history_limit: 120", "and the file")
 }
 
+// A layout the app cannot use is refused before it reaches the file, exactly
+// as Load would repair it afterwards: the overlay and a hand edit are judged
+// by the same rule (#238).
+func TestStore_SetRefusesAnUnusableDateFormat(t *testing.T) {
+	s, _ := storeAt(t, "")
+
+	assert.Error(t, s.Set("ui.date_format", ""))
+	assert.Error(t, s.Set("ui.date_format", 1504))
+	assert.Error(t, s.Set("ui.date_format", "100%"))
+	assert.Equal(t, "15:04", s.Current().UI.DateFormat, "nothing was written, so the default stands")
+}
+
+func TestStore_SetAcceptsADateFormatLayout(t *testing.T) {
+	s, path := storeAt(t, "")
+
+	require.NoError(t, s.Set("ui.date_format", "02.01.2006 15:04"))
+
+	assert.Equal(t, "02.01.2006 15:04", s.Current().UI.DateFormat, "the running config")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "date_format:", "the key is in the file")
+	assert.Contains(t, string(raw), "02.01.2006 15:04", "the layout is in the file")
+	v, status := s.Value("ui.date_format")
+	assert.Equal(t, settings.Saved, status)
+	assert.Equal(t, "02.01.2006 15:04", v)
+}
+
 // The criterion the whole design rests on. It holds structurally rather than by
 // agreement: both paths end in the same read of the same file, so there is no
 // second way for them to disagree.
@@ -98,7 +125,6 @@ func TestStore_SetRefusesAReadOnlySettingAndSaysWhereItLives(t *testing.T) {
 func TestStore_SetRefusesAKeyThatIsNotASetting(t *testing.T) {
 	s, _ := storeAt(t, "")
 
-	assert.Error(t, s.Set("ui.date_format", "15:04"), "excluded, not declared: #238")
 	assert.Error(t, s.Set("ui.nonsense", 1))
 }
 

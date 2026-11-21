@@ -92,6 +92,14 @@ func TestTakesHold_photos_max_long_side_px(t *testing.T) {
 		func(m RootModel) any { return m.chat.MaxMediaPx() }, 1234)
 }
 
+// Next-use, not immediate: what is already on screen keeps the layout it was
+// drawn with, and the next draw uses the new one. What is observed here is
+// what the list draws with, not what the config holds (#238).
+func TestTakesHold_ui_date_format(t *testing.T) {
+	takesHoldOnReload(t, "ui.date_format", "02.01.2006 15:04",
+		func(m RootModel) any { return m.chat.DateFormat() }, "02.01.2006 15:04")
+}
+
 // mediaOwner refuses every download and remembers which were asked for.
 type mediaOwner struct {
 	Owner

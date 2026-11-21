@@ -42,6 +42,12 @@ ui:
   # without asking.
   confirm_quit: false
 
+  # The Go time layout the timestamp on each message is drawn with: 15:04 is
+  # the 24-hour clock, 3:04pm the 12-hour one. What is already on screen keeps
+  # the layout it was drawn with; the next message drawn uses the new one. A
+  # layout tele cannot parse is refused with a warning and the default used.
+  # date_format: "15:04"
+
   # Themes. Leaving this out gives the built-in tele-dark and tele-light,
   # switched by the terminal background. Name one theme to use it whatever the
   # background is, or fill the slots one at a time. Eight ported palettes ship

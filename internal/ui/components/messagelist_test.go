@@ -772,6 +772,47 @@ func TestMessageList_DateSeparator_PreviousYearWithYear(t *testing.T) {
 	assert.Contains(t, view, "March 7, 2025")
 }
 
+// The timestamp on a message is drawn with ui.date_format, which defaults to
+// the 24-hour clock (#238).
+func TestMessageList_TimestampUsesDefaultLayout(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	date := time.Date(2026, 5, 18, 9, 5, 0, 0, time.UTC)
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: date}})
+
+	view := stripANSI(ml.View())
+
+	assert.Contains(t, view, "09:05")
+	assert.Equal(t, components.DefaultDateFormat, ml.DateFormat())
+}
+
+// A configured layout is what the timestamp is drawn with.
+func TestMessageList_TimestampUsesConfiguredDateFormat(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	date := time.Date(2026, 5, 18, 9, 5, 0, 0, time.UTC)
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: date}})
+	ml.SetDateFormat("02.01.2006")
+
+	view := stripANSI(ml.View())
+
+	assert.Contains(t, view, "18.05.2026")
+	assert.NotContains(t, view, "09:05")
+}
+
+// Next-use: what was drawn keeps the layout it was drawn with, and the new
+// layout is what the next draw uses (#238).
+func TestMessageList_DateFormatAppliesToTheNextDraw(t *testing.T) {
+	ml := components.NewMessageList(20, 80)
+	date := time.Date(2026, 5, 18, 9, 5, 0, 0, time.UTC)
+	ml.SetMessages([]domain.Message{{ID: 1, ChatID: 1, Text: "hi", Date: date}})
+	assert.Contains(t, stripANSI(ml.View()), "09:05", "drawn under the default layout")
+
+	ml.SetDateFormat("02.01.2006")
+	view := stripANSI(ml.View())
+
+	assert.Contains(t, view, "18.05.2026", "the next draw uses the new layout")
+	assert.NotContains(t, view, "09:05")
+}
+
 func TestMessageList_ReactionsRenderedOnBottomBorder(t *testing.T) {
 	ml := components.NewMessageList(20, 80)
 	now := time.Now()

@@ -1,6 +1,8 @@
 package components
 
 import (
+	"time"
+
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/ui/imagecache"
 	"github.com/sorokin-vladimir/tele/internal/ui/media"
@@ -21,6 +23,7 @@ type MessageList struct {
 	renderer        media.Renderer
 	maxMediaPx      int        // photos.max_long_side_px; 0 => media package default
 	imageMode       media.Mode // inline-image backend; static stickers render in Kitty only
+	dateFormat      string     // ui.date_format; empty => DefaultDateFormat (#238)
 
 	// Voice playback state: the document being played, its progress (0..1) and
 	// current position in seconds. playingVoiceID == 0 means nothing is playing.
@@ -117,6 +120,12 @@ func (ml *MessageList) overlayLabelFor(msg domain.Message) string {
 // shared root cache is injected via SetKnownImages (which replaces it).
 const defaultImageCacheCap = 256
 
+// DefaultDateFormat is the layout a message timestamp is drawn with when
+// ui.date_format names none. It matches the config default of the same name
+// (internal/config); the UI keeps its own copy because components do not import
+// the config package (#238).
+const DefaultDateFormat = "15:04"
+
 // uploadProgress is one queued send's last reported advance.
 type uploadProgress struct {
 	// part is the 1-based file being uploaded now; zero before the start.
@@ -131,7 +140,36 @@ func NewMessageList(height, width int) *MessageList {
 		viewWidth:  width,
 		imageCache: imagecache.New(defaultImageCacheCap),
 		renderer:   media.NewBlockRenderer(),
+		dateFormat: DefaultDateFormat,
 	}
+}
+
+// SetDateFormat sets the Go time layout message timestamps are drawn with
+// (ui.date_format). Next-use: what is already on screen keeps the layout it
+// was drawn with, and the next draw uses the new one. The timestamp's width
+// feeds the bubble's minimum width, so memoized heights are dropped on a
+// change. An empty layout falls back to DefaultDateFormat.
+func (ml *MessageList) SetDateFormat(layout string) {
+	if layout == "" {
+		layout = DefaultDateFormat
+	}
+	if layout != ml.dateFormat {
+		ml.invalidateHeights()
+		ml.dateFormat = layout
+	}
+}
+
+// DateFormat is the layout message timestamps are currently drawn with.
+func (ml *MessageList) DateFormat() string {
+	if ml.dateFormat == "" {
+		return DefaultDateFormat
+	}
+	return ml.dateFormat
+}
+
+// formatTimestamp renders a message's timestamp with the configured layout.
+func (ml *MessageList) formatTimestamp(t time.Time) string {
+	return t.Format(ml.DateFormat())
 }
 
 // SetRenderer swaps the active image renderer (block-art or Kitty).

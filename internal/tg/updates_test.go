@@ -20,7 +20,7 @@ func newTestDispatcher(t *testing.T, suppress func(int) bool) (*tg.UpdateDispatc
 	mustDeliver := make(chan store.Event, 4)
 	droppable := make(chan store.Event, 4)
 	d := tg.NewUpdateDispatcher()
-	setupDispatcher(&d, mustDeliver, droppable, zap.NewNop(), suppress, newNameCache())
+	setupDispatcher(&d, mustDeliver, droppable, zap.NewNop(), suppress, newNameCache(), time.Now)
 	return &d, mustDeliver, droppable
 }
 

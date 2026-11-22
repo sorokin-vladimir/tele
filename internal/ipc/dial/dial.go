@@ -504,16 +504,30 @@ func (a *Attachment) roundTrip(ctx context.Context, method string, params json.R
 	}
 	select {
 	case f := <-answer:
-		if f.Error != nil {
-			return nil, f.Error
-		}
-		return f.Result, nil
+		return answered(f)
 	case <-ctx.Done():
 		_ = l.enc.Encode(wire.Cancel(id))
 		return nil, ctx.Err()
 	case <-l.lost:
+		// The reader hands an answer over before it finds the connection
+		// ended, so one that came is waiting by now. A host that answers and
+		// then goes - a service asked to restart - leaves both ready at once,
+		// and select picks either: the answer is what happened.
+		select {
+		case f := <-answer:
+			return answered(f)
+		default:
+		}
 		return nil, l.why
 	}
+}
+
+// answered is what a call's answer says: its result, or the error it carries.
+func answered(f wire.Frame) (json.RawMessage, error) {
+	if f.Error != nil {
+		return nil, f.Error
+	}
+	return f.Result, nil
 }
 
 // askHost makes a call about the host and decodes its answer.

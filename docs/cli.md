@@ -57,11 +57,19 @@ Keeping a program away from those is the job of file permissions or a sandbox.
    A short form exists only for what is typed by hand: `-c` for `--config`, `-h` for `--help`, `-e` for `--debug`.
 4. A flag that does something hard to undo has no short form.
 5. Machine output is `--json`, in every command that has any.
-6. The same meaning has the same name in every command, such as `--limit`.
+6. The same meaning has the same name in every command, such as `--limit` and `--all`.
 7. A chat is named the same way in every command.
 8. An action is a command; a flag only shapes one.
    That is why it is `tele version` and `tele theme check`, not `--version` and `--theme-check`.
    Those two flags, and `--theme-dump`, still answer for the package managers that run them, but are not offered.
+
+## Default list limit
+
+`tele chats` and `tele topics` print at most `cli.list_limit` rows (20 by default; 0 for all) when no `--limit` is specified.
+`--limit N` overrides the setting.
+`--all` prints the entire list for one run; `--all` and `--limit` are mutually exclusive.
+When text output is cut short, a note is sent to stderr (`20 of 143 chats; --all for the rest`).
+`--json` always prints the full list unless an explicit `--limit` is given.
 
 ## Exit codes
 

@@ -55,9 +55,12 @@ type Owner struct {
 	// health is how the connection is doing, for whoever asks the host.
 	health health
 	// now is the owner's clock.
-	now      func() time.Time
-	readyCh  chan struct{}
-	onAuthFn func(userID int64, username string)
+	now func() time.Time
+	// telegramOffset is how far Telegram's clock is from now, nil while
+	// nobody has said (see SetTelegramOffset).
+	telegramOffset func() time.Duration
+	readyCh        chan struct{}
+	onAuthFn       func(userID int64, username string)
 	// selfName is the logged-in user's username, once known: a log out names
 	// whose account it ends (#297).
 	selfName atomic.Pointer[string]

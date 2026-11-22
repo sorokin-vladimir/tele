@@ -3,7 +3,6 @@ package project_test
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +36,7 @@ func TestRegistry_AnAccountSaysWhatChangedWhole(t *testing.T) {
 	g.Refresh()
 	assert.Empty(t, rec.take(), "nothing changed")
 
-	r.account = project.AccountContents{Phase: project.AccountLoggingIn, ClockSkew: time.Minute,
+	r.account = project.AccountContents{Phase: project.AccountLoggingIn,
 		Login: project.LoginStep{Kind: project.LoginCode, Seq: 1}}
 	g.Refresh()
 	got := rec.take()

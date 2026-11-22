@@ -265,11 +265,9 @@ func listLines(b *domain.RichBlock, w int) []string {
 	}
 	for i := range b.Items {
 		if b.Kind == domain.RichOrderedList {
-			n := start
+			n := start + i
 			if b.Reversed {
 				n = start - i
-			} else {
-				n = start + i
 			}
 			markers[i] = fmt.Sprintf("%d. ", n)
 		} else {

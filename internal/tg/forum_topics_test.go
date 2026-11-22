@@ -3,6 +3,7 @@ package tg
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/gotd/td/tg"
 	"github.com/stretchr/testify/assert"
@@ -56,7 +57,7 @@ func TestParseForumTopics_Mute(t *testing.T) {
 		&tg.ForumTopic{ID: 14},
 	}}
 
-	page := parseForumTopics(res, 50)
+	page := parseForumTopics(res, 50, time.Now())
 
 	require.Len(t, page.Topics, 3)
 	assert.Equal(t, domain.TopicMuted, page.Topics[0].Mute)
@@ -85,7 +86,7 @@ func TestParseForumTopics(t *testing.T) {
 		Users: []tg.UserClass{&tg.User{ID: 7, FirstName: "Alice"}},
 	}
 
-	page := parseForumTopics(res, 50)
+	page := parseForumTopics(res, 50, time.Now())
 
 	require.Len(t, page.Topics, 2)
 	rel := page.Topics[0]

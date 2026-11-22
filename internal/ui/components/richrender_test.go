@@ -164,10 +164,9 @@ func TestRichMessageLines_RowHeaderBold(t *testing.T) {
 	rows := richMessageLines(r, 60)
 	require.Len(t, rows, 2)
 	for _, row := range rows {
-		first, second := row, row
 		// Split the row at the two-space gap between the unbordered columns and
 		// check each side independently: only the flagged first column is bold.
-		first, second = splitRowColumns(row)
+		first, second := splitRowColumns(row)
 		assert.Contains(t, first, "\x1b[1m", "the flagged column header is bold")
 		assert.NotContains(t, second, "\x1b[1m", "an unflagged cell stays in the body style")
 	}

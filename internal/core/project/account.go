@@ -74,9 +74,6 @@ type AccountContents struct {
 	// Ended is what the connection ended with, nil while it runs. A domain
 	// error, since it crosses to a client as a value (#309).
 	Ended *telerr.Error
-	// ClockSkew is how far the local clock is from Telegram's, when it is far
-	// enough that messages between them are refused; zero otherwise (#277).
-	ClockSkew time.Duration
 	// LoggedInUser is who the account is logged in as, zero until Telegram
 	// has said (#208).
 	LoggedInUser LoggedInUser
@@ -118,7 +115,7 @@ func BuildAccount(r Reader) AccountContents { return r.Account() }
 // compared by what a client is told of them, which leaves out the cause that
 // never crosses to one.
 func sameAccount(a, b AccountContents) bool {
-	if a.Phase != b.Phase || a.Login != b.Login || a.LoginFailed != b.LoginFailed || a.ClockSkew != b.ClockSkew ||
+	if a.Phase != b.Phase || a.Login != b.Login || a.LoginFailed != b.LoginFailed ||
 		a.LoggedInUser != b.LoggedInUser || a.HistoryPage != b.HistoryPage {
 		return false
 	}

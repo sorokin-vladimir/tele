@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -88,7 +87,7 @@ func (o *Owner) handleEvent(evt store.Event) {
 	}
 
 	focused := o.focus.showing
-	now := time.Now()
+	now := o.telegramNow()
 	// One snapshot for the decision and both gates: a reload between two reads
 	// would deliver a body rendered under one config to a sink chosen under
 	// another.

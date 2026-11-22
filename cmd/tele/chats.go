@@ -96,10 +96,10 @@ func effectiveListLimit(limit int, all, asJSON bool, defaultLimit int) int {
 }
 
 // listLimit refuses a --limit below 1 as a mistake in the command line. Left
-// out, it lists everything.
+// out, cli.list_limit holds; --all lifts it.
 func listLimit(cmd *cobra.Command, n int) error {
 	if cmd.Flags().Changed("limit") && n < 1 {
-		return &exitCode{code: usageCode, msg: "--limit is 1 or more; leave it out for all of them."}
+		return &exitCode{code: usageCode, msg: "--limit is 1 or more; --all prints them all."}
 	}
 	return nil
 }
@@ -137,7 +137,7 @@ func listChats(ctx context.Context, acc accountSurface, out, errOut io.Writer, q
 		return err
 	}
 	if errOut != nil && len(rows) < total {
-		fmt.Fprintf(errOut, "%d of %d chats; --all for the rest\n", len(rows), total)
+		_, _ = fmt.Fprintf(errOut, "%d of %d chats; --all for the rest\n", len(rows), total)
 	}
 	return nil
 }

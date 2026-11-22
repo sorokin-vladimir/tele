@@ -84,7 +84,7 @@ func listTopics(ctx context.Context, acc accountSurface, out, errOut io.Writer, 
 		return err
 	}
 	if errOut != nil && len(topics) < total {
-		fmt.Fprintf(errOut, "%d of %d topics; --all for the rest\n", len(topics), total)
+		_, _ = fmt.Fprintf(errOut, "%d of %d topics; --all for the rest\n", len(topics), total)
 	}
 	return nil
 }

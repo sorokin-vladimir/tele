@@ -208,7 +208,7 @@ func (ml *MessageList) measureBubbleWithStatus(msg domain.Message, statusOverrid
 	}
 	// The spaces framing the stamp sit on the bubble's bottom border, between
 	// runs that each end in a reset, so they carry the canvas themselves.
-	tsStr := theme.Pad(1) + editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr + theme.Pad(1)
+	tsStr := theme.Pad(1) + editMark + theme.S().Timestamp.Render(ml.formatTimestamp(msg.Date)) + statusStr + theme.Pad(1)
 	tsW := lipgloss.Width(tsStr)
 	if innerW < tsW {
 		innerW = tsW
@@ -517,7 +517,7 @@ func (ml *MessageList) renderBareMedia(msg domain.Message, selected bool) []stri
 		// glyph carries both the canvas and a colour the theme owns.
 		editMark = theme.S().Timestamp.Render("edited · ")
 	}
-	tsStr := editMark + theme.S().Timestamp.Render(msg.Date.Format("15:04")) + statusStr
+	tsStr := editMark + theme.S().Timestamp.Render(ml.formatTimestamp(msg.Date)) + statusStr
 	reactStr := strings.TrimSpace(buildReactStr(msg.Reactions))
 
 	// Block width: widest of the art, the meta line, and (in groups) the name.

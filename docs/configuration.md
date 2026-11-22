@@ -46,6 +46,9 @@ What either finds wrong is said in the same notice, and one that will not take i
 ui:
   history_limit: 50 # messages fetched per chat on open
   confirm_quit: false # ask before q/ctrl+c/ctrl+q closes tele
+  # date_format: "15:04" # Go time layout for the timestamp on each message;
+  # what is already on screen keeps the layout it was drawn with, the next
+  # message uses the new one; an unparseable layout warns and falls back
   # theme: # omit for the built-in tele-dark / tele-light
   #   dark: my-dark # ~/.config/tele/themes/my-dark.yml
   #   light: my-light

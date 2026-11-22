@@ -11,9 +11,9 @@ import (
 // SetDefault calls, because repair needs to read a default back after the file
 // has been loaded over it.
 //
-// ui.date_format is deliberately absent: nothing reads it, so a default for it
-// would be a promise the app does not keep. See #238 and the registry
-// exclusions.
+// ui.date_format defaults to the 24-hour clock the message list has always
+// drawn (#238); a layout the app cannot parse is repaired to this same value
+// with a warning, which is why the default lives here and not only in the UI.
 func defaultValues() map[string]any {
 	return map[string]any{
 		// auto is the file saying nothing about the route, which is not the
@@ -24,6 +24,7 @@ func defaultValues() map[string]any {
 		// one.
 		"proxy.type":                 proxy.TypeAuto,
 		"proxy.port":                 0,
+		"ui.date_format":             DefaultDateFormat,
 		"ui.history_limit":           50,
 		"ui.confirm_quit":            false,
 		"ui.notifications.desktop":   true,

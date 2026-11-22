@@ -63,6 +63,38 @@ func TestLoad_WrongTypeIsRepairedAndReported(t *testing.T) {
 	assert.Contains(t, cfg.Warnings[0].Text, "ui.notifications.preview")
 }
 
+// A layout the app cannot use is repaired to the default layout and reported,
+// the way any other illegal value is: one wrong key must not keep anyone out of
+// their messages, and the person who wrote it must be told (#238).
+func TestLoad_UnusableDateFormatIsRepairedAndReported(t *testing.T) {
+	cases := []struct {
+		name, value string
+	}{
+		{"not a string", "1504"},
+		{"empty", `""`},
+		{"a layout that does not round-trip", `"100%"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := loadWith(t, "ui:\n  date_format: "+c.value+"\n")
+
+			assert.Equal(t, "15:04", cfg.UI.DateFormat, "falls back to the default layout")
+			require.Len(t, cfg.Warnings, 1, warningTexts(cfg))
+			assert.Contains(t, cfg.Warnings[0].Text, "ui.date_format")
+			assert.Contains(t, cfg.Warnings[0].Text, "15:04")
+			assert.Equal(t, settings.Client, cfg.Warnings[0].Process, "the window reads this key")
+		})
+	}
+}
+
+// A layout the app can use is kept exactly as written, and says nothing.
+func TestLoad_DateFormatLayoutIsKeptAsWritten(t *testing.T) {
+	cfg := loadWith(t, "ui:\n  date_format: \"02.01.2006 15:04\"\n")
+
+	assert.Equal(t, "02.01.2006 15:04", cfg.UI.DateFormat)
+	assert.Empty(t, cfg.Warnings, warningTexts(cfg))
+}
+
 // Repair touches the key that is wrong and nothing else. A file with one bad
 // value is not a file to be reset.
 func TestLoad_RepairLeavesTheRestOfTheFileAlone(t *testing.T) {
@@ -109,8 +141,11 @@ func TestSetting_LooksUpByKey(t *testing.T) {
 	assert.Equal(t, settings.Bytes, e.Widget)
 	assert.Equal(t, settings.Startup, e.Applies, "the cache takes its bound when it is opened")
 
-	_, ok = config.Setting("ui.date_format")
-	assert.False(t, ok, "excluded, not declared: #238")
+	e, ok = config.Setting("ui.date_format")
+	require.True(t, ok, "declared since #238: the message list reads it")
+	assert.Equal(t, settings.Text, e.Widget)
+	assert.Equal(t, settings.NextUse, e.Applies, "what is drawn keeps the layout it was drawn with")
+	assert.Equal(t, settings.Client, e.Process)
 }
 
 func TestSettings_AreReturnedAsACopy(t *testing.T) {

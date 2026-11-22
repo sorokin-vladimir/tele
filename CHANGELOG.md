@@ -53,6 +53,9 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the answer and the end of the connection arrived together, and the end
   sometimes won. `tele send` could say it failed after the message was
   sent.
+- The timestamp on each message in a chat is drawn with the `ui.date_format`
+  layout instead of a hardcoded one; an unparseable layout warns at load and
+  falls back to `15:04` (#238).
 
 ## [2.1.3] - 2026-11-13
 

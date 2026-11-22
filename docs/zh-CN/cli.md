@@ -49,9 +49,18 @@
 3. 长参数使用两个短横线，如 `--name`。只有需要手动输入的参数才有短形式：`-c` 对应 `--config`，`-h` 对应 `--help`，`-e` 对应 `--debug`。
 4. 执行难以撤销操作的参数没有短形式。
 5. 面向程序的输出一律用 `--json`，只要命令有这种输出。
-6. 同一含义在所有命令中使用同一名称，例如 `--limit`。
+6. 同一含义在所有命令中使用同一名称，例如 `--limit` 和 `--all`。
 7. 所有命令以相同方式指定聊天。
 8. 动作是命令，参数只用来调整命令。所以是 `tele version` 和 `tele theme check`，而不是 `--version` 和 `--theme-check`。这两个参数以及 `--theme-dump` 仍然有效，供调用它们的包管理器使用，但不在帮助中列出。
+
+<a id="default-list-limit"></a>
+## 默认列表限制
+
+未指定 `--limit` 时，`tele chats` 和 `tele topics` 输出不超过 `cli.list_limit` 行文本（默认 20；0 为全部）。
+`--limit N` 覆盖该设置。
+`--all` 在单次运行中取消该限制；`--all` 和 `--limit` 互斥。
+当文本输出被截断时，stderr 会显示提示（`20 of 143 chats; --all for the rest`）。
+除非显式指定 `--limit`，否则 `--json` 始终输出完整列表。
 
 <a id="exit-codes"></a>
 ## 退出码

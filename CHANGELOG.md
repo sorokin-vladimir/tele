@@ -53,6 +53,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   the answer and the end of the connection arrived together, and the end
   sometimes won. `tele send` could say it failed after the message was
   sent.
+- A chat whose newest message was deleted while it was open, with nothing
+  unread, lost its oldest loaded message each time a new one arrived (#387).
 
 ## [2.1.3] - 2026-11-13
 

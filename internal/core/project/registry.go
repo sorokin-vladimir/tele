@@ -198,10 +198,13 @@ func (g *Registry) rebuild(id SubID) []Delta {
 		// Pin a first-unread window to the message it actually opened on. The
 		// anchor is otherwise a function of the read pointer, which moves as the
 		// user reads: the window would walk forward and drop the messages above
-		// out from under them. Pinning happens on the first rebuild that resolves
+		// out from under them. The window pins on the first rebuild that resolves
 		// an anchor, so a window opened before its history arrived pins once the
-		// backfill lands.
-		if w.Anchor.Kind == AnchorFirstUnread && w.Anchor.MsgID == 0 && next.AnchorMsgID != 0 {
+		// backfill lands. It pins again when the pinned message is deleted: the
+		// anchor then resolves afresh, to the newest message when nothing is
+		// unread, and without a new pin every arrival would move it and push the
+		// oldest messages out of the window.
+		if w.Anchor.Kind == AnchorFirstUnread && next.AnchorMsgID != 0 && next.AnchorMsgID != w.Anchor.MsgID {
 			w.Anchor.MsgID = next.AnchorMsgID
 			s.window = w
 		}

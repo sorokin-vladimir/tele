@@ -2,12 +2,19 @@ package components
 
 import "github.com/sorokin-vladimir/tele/internal/domain"
 
+// visualSelection is the Visual mode selection of a message list: a range being
+// stretched from anchorID to the cursor, plus the messages marked one by one.
+// anchorID 0 means no range is being stretched, so the selection is only the
+// marked messages.
 type visualSelection struct {
 	on       bool
 	anchorID int
 	marked   map[int]struct{}
 }
 
+// StartVisualRange enters Visual mode with a range anchored at the focused
+// message. It reports false, without entering the mode, when no message is
+// focused.
 func (ml *MessageList) StartVisualRange() bool {
 	id := ml.cursorMessageID()
 	if id == 0 {
@@ -17,6 +24,8 @@ func (ml *MessageList) StartVisualRange() bool {
 	return true
 }
 
+// StartVisualMark enters Visual mode with only the focused message marked. It
+// reports false, without entering the mode, when no message is focused.
 func (ml *MessageList) StartVisualMark() bool {
 	i := ml.cursorMessageIndex()
 	if i < 0 {
@@ -27,6 +36,9 @@ func (ml *MessageList) StartVisualMark() bool {
 	return true
 }
 
+// FixOrStartVisualRange is V inside Visual mode: it marks every message of the
+// range being stretched, or starts a new range at the focused message when none
+// is.
 func (ml *MessageList) FixOrStartVisualRange() {
 	if !ml.visual.on {
 		return
@@ -38,6 +50,9 @@ func (ml *MessageList) FixOrStartVisualRange() {
 	ml.visual.anchorID = ml.cursorMessageID()
 }
 
+// FixRangeOrToggleMark is m inside Visual mode: it marks every message of the
+// range being stretched, the focused one included, or marks or unmarks the
+// focused message when no range is.
 func (ml *MessageList) FixRangeOrToggleMark() {
 	if !ml.visual.on {
 		return
@@ -57,10 +72,14 @@ func (ml *MessageList) FixRangeOrToggleMark() {
 	ml.markItem(i)
 }
 
+// ClearVisual leaves Visual mode and drops the selection.
 func (ml *MessageList) ClearVisual() { ml.visual = visualSelection{} }
 
+// InVisual reports whether the list is in Visual mode.
 func (ml *MessageList) InVisual() bool { return ml.visual.on }
 
+// VisualSelection returns the selected messages oldest first, with every
+// message of a selected album.
 func (ml *MessageList) VisualSelection() []domain.Message {
 	var out []domain.Message
 	for _, i := range ml.selectedItemIndices() {
@@ -69,6 +88,8 @@ func (ml *MessageList) VisualSelection() []domain.Message {
 	return out
 }
 
+// VisualHasGaps reports whether a message between the oldest and the newest
+// selected ones is left out of the selection.
 func (ml *MessageList) VisualHasGaps() bool {
 	selected := ml.selectedItemIndices()
 	if len(selected) == 0 {
@@ -83,6 +104,7 @@ func (ml *MessageList) VisualHasGaps() bool {
 	return messagesBetween != len(selected)
 }
 
+// CursorToOldest moves the cursor to the oldest loaded message.
 func (ml *MessageList) CursorToOldest() {
 	for i := range ml.items {
 		if ml.selectable(i) {

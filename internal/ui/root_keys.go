@@ -247,7 +247,7 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, mentionCmd, m.markReadCmd())
 	}
 
-	if m.vimState.Mode == keys.ModeVisual && keyStr == "ctrl+c" {
+	if m.vimState.Mode == keys.ModeVisual && m.isModifiedQuit(msg) {
 		m.matcher.Reset()
 		m.endVisual()
 		return m, nil

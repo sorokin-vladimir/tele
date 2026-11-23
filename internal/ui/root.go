@@ -853,7 +853,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return next, nil
 		}
 		if m.screen == ScreenLogin {
-			if m.isLoginQuit(msg) {
+			if m.isModifiedQuit(msg) {
 				return m, tea.Quit
 			}
 			if next, cmd, handled := m.handleBannedKey(msg); handled {

@@ -243,6 +243,50 @@ func TestVisual_CtrlCLeavesTheModeWithoutQuitting(t *testing.T) {
 	assert.False(t, m.Chat().InVisual())
 }
 
+func TestVisual_CtrlCOnTheRussianLayoutLeavesTheMode(t *testing.T) {
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m, "V", "k")
+
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: 'с', Mod: tea.ModCtrl})
+	m = nm.(ui.RootModel)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, keys.ModeNormal, m.VimMode())
+	assert.False(t, m.Chat().InVisual())
+}
+
+func TestVisual_QuitReboundToAModifierKeyLeavesTheMode(t *testing.T) {
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"global": {"quit": {"alt+x"}},
+	})
+	require.Empty(t, warns)
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m.WithKeyMap(km), "V", "k")
+
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModAlt})
+	m = nm.(ui.RootModel)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, keys.ModeNormal, m.VimMode())
+	assert.False(t, m.Chat().InVisual())
+}
+
+func TestVisual_QuitReboundToABareKeyDoesNothing(t *testing.T) {
+	km, warns := keys.MergeOverrides(keys.DefaultKeyMap(), map[string]map[string][]string{
+		"global": {"quit": {"x"}},
+	})
+	require.Empty(t, warns)
+	m, _ := visualRoot(t, visualMessages(3)...)
+	m = pressKeys(m.WithKeyMap(km), "V", "k")
+
+	nm, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = nm.(ui.RootModel)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, keys.ModeVisual, m.VimMode())
+	assert.Len(t, m.Chat().VisualSelection(), 2)
+}
+
 func TestVisual_CtrlCAfterAChordPrefixLeavesTheMode(t *testing.T) {
 	m, _ := visualRoot(t, visualMessages(3)...)
 	m = pressKeys(m, "V", "k", "g")

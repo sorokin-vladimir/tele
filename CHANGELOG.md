@@ -18,6 +18,46 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
   text, oldest first, and `Y` copies them with times and names the way
   `tele show` prints them. `Space` opens a menu with the same copies, and
   `Esc` or `Ctrl+C` leaves (#361).
+- `cli.list_limit` sets how many rows `tele chats` and `tele topics` print as
+  text when no `--limit` is given (20 by default; 0 prints them all). `--all`
+  lifts it for one run. When the list is cut short, a note on stderr says so
+  (#329).
+- Rich messages render their structure instead of collapsing to their plain
+  text: paragraphs, headings, subtitles and footers, bulleted and numbered
+  lists, block quotes and pull quotes, details, preformatted code, tables with
+  bold header cells and bordered grids, dividers, bylines, related-article
+  suggestions and channel references. A media block inside a rich message - a
+  photo, video, audio, map or embed - shows as a labelled placeholder, since
+  its bytes still come through the classic media pipeline, and details always
+  render expanded, as a terminal has no collapse control (#308).
+
+### Changed
+
+- tele now runs on gotd v0.166.1, the library it talks to Telegram with.
+  Recovering a gap in a busy supergroup, and the updates of a missed
+  stretch, are gotd's own work now, so tele no longer carries its own
+  workarounds for them (#352).
+- A window and a service from before this release speak different versions
+  of their protocol, so the newer one restarts the service, as it does after
+  any upgrade (#352).
+- On macOS, a desktop notification the terminal does not draw itself (one
+  from the service, or from a terminal without notifications) is posted by
+  tele's own process and shows as coming from Terminal. It used to go
+  through `terminal-notifier` or `osascript`.
+
+### Fixed
+
+- A local clock minutes off no longer stops tele: it connects, and new
+  messages still notify, because their age, the end of a mute and the life
+  of a QR code are measured by Telegram's clock. The status bar no longer
+  shows how far the clock is off (#352).
+- An app key Telegram refuses outright ends the connection with "app key
+  blocked" on the login screen, instead of connecting forever (#352).
+- A call the host answered just before it went away, as a service
+  restarting or a tele quitting does, could still report a network error:
+  the answer and the end of the connection arrived together, and the end
+  sometimes won. `tele send` could say it failed after the message was
+  sent.
 
 ## [2.1.3] - 2026-11-13
 

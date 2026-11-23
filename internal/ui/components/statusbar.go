@@ -30,15 +30,12 @@ type StatusBar struct {
 	attachStaged bool
 	pickerOpen   bool
 	version      string // build version shown at the right edge, "" hides it
-	// clockSkew says the clock is too far off for Telegram (#277). It is apart
-	// from status because status is cleared on every key press, and this lasts
-	// until the skew is over.
-	clockSkew string
-	// throttle says Telegram asked to wait, and how long is left (#212); it
-	// lasts until the wait is over, as clockSkew does.
+	// throttle says Telegram asked to wait, and how long is left (#212). It is
+	// apart from status because status is cleared on every key press, and this
+	// lasts until the wait is over.
 	throttle string
 	// hostAway says the window's host is away and being waited for (#210),
-	// and lasts until it is back, as clockSkew does.
+	// and lasts until it is back, as throttle does.
 	hostAway      string
 	visualHasGaps bool
 }
@@ -61,10 +58,7 @@ func (sb *StatusBar) SetVersion(v string)      { sb.version = v }
 
 func (sb *StatusBar) SetVisualHasGaps(v bool) { sb.visualHasGaps = v }
 
-// SetClockSkew shows s right after the mode label until it is set to "".
-func (sb *StatusBar) SetClockSkew(s string) { sb.clockSkew = s }
-
-// SetThrottle shows s after the clock until it is set to "".
+// SetThrottle shows s after the host's absence until it is set to "".
 func (sb *StatusBar) SetThrottle(s string) { sb.throttle = s }
 
 // SetHostAway shows s right after the mode label until it is set to "".
@@ -131,9 +125,6 @@ func (sb *StatusBar) View() string {
 	// against the canvas, and the bar is a surface of its own.
 	if sb.hostAway != "" {
 		segs = append(segs, theme.S().Bar.Render(sb.hostAway))
-	}
-	if sb.clockSkew != "" {
-		segs = append(segs, theme.S().Bar.Render(sb.clockSkew))
 	}
 	if sb.throttle != "" {
 		segs = append(segs, theme.S().Bar.Render(sb.throttle))

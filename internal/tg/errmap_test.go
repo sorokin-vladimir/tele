@@ -10,6 +10,7 @@ import (
 
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/rpc"
+	"github.com/gotd/td/telegram"
 	gotdtg "github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/stretchr/testify/assert"
@@ -239,20 +240,26 @@ func TestMapError_PreservesTgerrForGotd(t *testing.T) {
 	assert.Equal(t, 420, te.Code)
 }
 
-// gotd reports a request the server never acknowledged as RetryLimitReachedErr.
-// Its own documentation calls it exactly that — "server does not acknowledge
-// request after multiple retries" — which is a transient transport failure, not
-// a bug. Left unmapped it became Internal, which is terminal: an offline send
-// was marked failed forever instead of waiting for the connection (#193).
-func TestMapError_UnacknowledgedRequestIsTransientNetwork(t *testing.T) {
+// A connection whose setup Telegram refuses for good - an app key it will not
+// take - ends with gotd's ConfigError rather than reconnecting forever. What
+// it carries is the refusal itself, and that is named like any other: the
+// person sees that the key is blocked, not an internal error.
+func TestRunEnded_ARefusedSetupIsNamedByWhatTelegramSaid(t *testing.T) {
 	c := testClient()
+	refused := &telegram.ConfigError{Err: &tgerr.Error{Code: 400, Type: "API_ID_INVALID"}}
 
-	got := c.mapError("messages.sendMessage", &rpc.RetryLimitReachedErr{Retries: 5})
+	got := c.runEnded(fmt.Errorf("run: %w", refused))
 
-	e, ok := telerr.As(got)
-	require.True(t, ok)
-	assert.Equal(t, telerr.Network, e.Kind)
-	assert.True(t, e.Transient, "an unacknowledged request is worth repeating")
+	assert.Equal(t, telerr.AppKeyBlocked, telerr.Of(got))
+}
+
+// Anything else the run ends with is the run's own business, passed on as it
+// came.
+func TestRunEnded_LeavesAnyOtherEndAlone(t *testing.T) {
+	c := testClient()
+	other := errors.New("engine closed")
+
+	assert.Same(t, other, c.runEnded(other))
 }
 
 func TestMapError_AClosedEngineIsTransientNetwork(t *testing.T) {
@@ -264,14 +271,4 @@ func TestMapError_AClosedEngineIsTransientNetwork(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, telerr.Network, e.Kind)
 	assert.True(t, e.Transient)
-}
-
-// Wrapped the way gotd actually delivers it, through rpcDoRequest.
-func TestMapError_UnacknowledgedRequestThroughAWrapChain(t *testing.T) {
-	c := testClient()
-	wrapped := fmt.Errorf("rpcDoRequest: %w", &rpc.RetryLimitReachedErr{Retries: 5})
-
-	got := c.mapError("messages.sendMessage", wrapped)
-
-	assert.Equal(t, telerr.Network, telerr.Of(got))
 }

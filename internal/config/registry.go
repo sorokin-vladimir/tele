@@ -304,6 +304,17 @@ var registry = []settings.Entry{
 		Max:     60,
 	},
 	{
+		Key:     "cli.list_limit",
+		Process: settings.Client,
+		Group:   "cli",
+		Label:   "List limit",
+		Help:    "How many rows tele chats and tele topics print as text when no --limit is given. 0 prints them all. Does not affect --json or tele show.",
+		Widget:  settings.Number,
+		Applies: settings.NextUse,
+		Unit:    "rows",
+		Min:     0,
+	},
+	{
 		Key:     "cli.account_commands",
 		Process: settings.Host,
 		Group:   "cli",

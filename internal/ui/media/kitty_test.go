@@ -201,7 +201,7 @@ func TestKittyStore_TransmitSeqIsWhatTheKittyPackageWrites(t *testing.T) {
 	var want strings.Builder
 	require.NoError(t, kitty.EncodeGraphics(&want, img, &kitty.Options{
 		Action: kitty.TransmitAndPut, ID: 7, Format: kitty.PNG, Transmission: kitty.Direct,
-		Chunk: true, VirtualPlacement: true, Columns: 40, Rows: 20, Quite: 2,
+		Chunk: true, VirtualPlacement: true, Columns: 40, Rows: 20, Quiet: 2,
 	}))
 	require.Equal(t, want.String(), seq)
 }

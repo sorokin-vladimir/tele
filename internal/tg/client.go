@@ -23,6 +23,17 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/version"
 )
 
+// maxChannelDiffConcurrency caps how many getChannelDifference calls the
+// updates manager keeps in flight across all channels; gotd's default is no
+// cap. Every tracked channel asks for its difference at startup and again on
+// every gap, and unbounded that is one burst per channel against a per-account
+// method rate limit (#266).
+//
+// Sized against the shape of a real account. A member of a few dozen channels
+// fires one call per channel at startup, and each takes roughly a second, so a
+// smaller cap would show up as startup latency while a larger one buys nothing.
+const maxChannelDiffConcurrency = 8
+
 // Endpoint is what a connection is made with that the process settles once,
 // when it starts: the app key, the session file and the route. Handed to each
 // connection rather than read from the config, because the config is what the
@@ -52,11 +63,10 @@ type GotdClient struct {
 	// fetches so a live update that omits the sender's entity still resolves the
 	// author instead of rendering "?" (#161).
 	senderNames *nameCache
-	// skew watches for a local clock too far off for gotd to accept what
-	// Telegram sends (#277).
-	skew *clockSkew
 	// throttle is every call's one budget to Telegram (#212).
 	throttle *throttle
+	// gotd is the client of the current connection, nil before the first.
+	gotd atomic.Pointer[telegram.Client]
 	// loggedOut ends the connection as a log out: the person's, or a key
 	// Telegram invalidated (#254, #297).
 	loggedOut loggedOut
@@ -71,10 +81,21 @@ type GotdClient struct {
 	onLink func(up bool)
 }
 
-// SetOnClockSkew installs the function told about clock skew: the skew when it
-// is found or moves, positive when the local clock is ahead, and zero when
-// messages get through again. It must not block. Set before Connect.
-func (c *GotdClient) SetOnClockSkew(report func(time.Duration)) { c.skew.SetReport(report) }
+// ServerTimeOffset is Telegram's clock minus the local one, as gotd keeps it:
+// zero until a connection has heard from the server. gotd saves it in the
+// session, so after a restart it is known as soon as the session is read.
+func (c *GotdClient) ServerTimeOffset() time.Duration {
+	if tc := c.gotd.Load(); tc != nil {
+		return tc.ServerTimeOffset()
+	}
+	return 0
+}
+
+// telegramNow is the time by Telegram's clock, for judging a date Telegram
+// stamped.
+func (c *GotdClient) telegramNow() time.Time {
+	return time.Now().Add(c.ServerTimeOffset())
+}
 
 // SetOnLink installs the function told whether the link to Telegram is up, on
 // every change. It must not block. Set before Connect.
@@ -99,7 +120,6 @@ func NewGotdClient(log *zap.Logger, endpoint Endpoint, stateStorage updates.Stat
 		suppressIDs:  make(map[int]struct{}),
 		stateStorage: stateStorage,
 		senderNames:  newNameCache(),
-		skew:         newClockSkew(),
 		throttle:     newThrottle(time.Now, sleepCtx),
 	}
 }
@@ -141,7 +161,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			return true
 		}
 		return false
-	}, c.senderNames)
+	}, c.senderNames, c.telegramNow)
 
 	// updates.New does not return an error — confirmed via go doc.
 	updCfg := updates.Config{
@@ -160,6 +180,12 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		// difference and never will be: recovering them is the application's
 		// job, and the manager documents that it is not doing it. Left to the
 		// default this is a log line and a hole in the chat (#262).
+		//
+		// gotd also offers OnChannelGap, called right after this with the
+		// positions and the latest messages of the channel. Neither is needed:
+		// the gap is placed from what the store holds, and the repair fetches
+		// the latest messages itself, so taking them here would only be a
+		// second way of writing the tail beside the repair.
 		OnChannelTooLong: func(channelID int64) {
 			c.log.Warn("channel fell too far behind; recording a gap", zap.Int64("channel_id", channelID))
 			// mustDeliver rather than droppable, and for both reasons: a
@@ -188,11 +214,6 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			c.log.Error("channel state could not be loaded; it will receive no updates this session",
 				zap.Int64("channel_id", channelID))
 		},
-		// channelDiffAPI below strips the server-side cooldown that used to space
-		// out getChannelDifference, so bound the calls in flight here instead
-		// (#266). Every tracked channel asks for its difference at startup and
-		// again on every gap; unbounded, that is one burst per channel against a
-		// per-account method rate limit.
 		MaxChannelDifferenceConcurrency: maxChannelDiffConcurrency,
 	}
 	// Persist channel access hashes so channels are re-registered at startup and
@@ -210,12 +231,9 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	// wire message and emit the event immediately, then hand the update on to the
 	// manager as usual.
 	hook := newOutboxHook(manager, c.mustDeliver, c.log)
-	// Every update that arrives is a message the clock check let through, so it
-	// ends a clock skew (#277).
-	//
 	// A scanned login token is reported by an update that comes before the
 	// login ends, so it is caught on the way in (#330).
-	arrivals := watchLoginToken(c.skew.arrivals(hook), af.TokenAccepted)
+	arrivals := watchLoginToken(hook, af.TokenAccepted)
 
 	// resync forces a full catch-up (getDifference) on every reconnect after the
 	// first, so state missed during OS sleep/suspend is reconciled immediately on
@@ -282,9 +300,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		Resolver: c.endpoint.Resolver,
 		// The "v" field carries the application version on every line, so gotd's
 		// own stamp of the same name is dropped and reported once above instead.
-		// The clock-skew watch reads the entries gotd writes for the messages it
-		// drops, the only place a skewed clock shows (#277).
-		Logger: logzap.New(watchClockSkew(withoutField(c.log, "v"), c.skew)),
+		Logger: logzap.New(withoutField(c.log, "v")),
 		// Names this app and this machine in Telegram's active-sessions list;
 		// without it gotd reports the Go toolchain and its own version (#200).
 		Device: deviceConfig(version.Version, os.Hostname),
@@ -316,6 +332,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 			c.throttle.middleware(), c.errorMiddleware(), updhook.UpdateHook(arrivals.Handle),
 		},
 	})
+	c.gotd.Store(tc)
 
 	// The connection runs under its own context so a log out - the person's,
 	// or a key Telegram dropped - can end it from wherever it is noticed, and
@@ -349,12 +366,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 		c.api = tc.API()
 		c.mu.Unlock()
 
-		// Two wrappers over the same API, one per defect in the manager's gap
-		// handling: the channel difference carries a cooldown that must not be
-		// obeyed (#266), and a common difference carries updates the manager
-		// then drops (#267). Each dies on its own when its upstream fix ships.
-		diffAPI := newCommonDiffAPI(newChannelDiffAPI(tc.API(), c.log), dispatcher, c.log)
-		return manager.Run(ctx, diffAPI, self.ID, updates.AuthOptions{
+		return manager.Run(ctx, tc.API(), self.ID, updates.AuthOptions{
 			OnStart: func(ctx context.Context) {
 				c.log.Debug("updates manager started, signalling ready")
 				close(readyCh)
@@ -363,7 +375,7 @@ func (c *GotdClient) Connect(ctx context.Context, af *AuthFlow, readyCh chan<- s
 	})
 	// A check still asking the main data centre ends with the connection.
 	c.recheck.wait()
-	return c.loggedOut.outcome(err)
+	return c.loggedOut.outcome(c.runEnded(err))
 }
 
 func (c *GotdClient) Updates() <-chan store.Event {

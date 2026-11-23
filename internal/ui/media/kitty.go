@@ -175,7 +175,7 @@ func DeleteSeq(id uint32) string {
 		Delete:          kitty.DeleteID,
 		DeleteResources: true,
 		ID:              int(id),
-		Quite:           2,
+		Quiet:           2,
 	}
 	return ansi.KittyGraphics(nil, opts.Options()...)
 }
@@ -258,7 +258,7 @@ func TransmitFrameSeq(id uint32, img image.Image, cols, rows int) (string, error
 		if first {
 			keys = o.Options()
 		} else {
-			keys = []string{fmt.Sprintf("q=%d", o.Quite)}
+			keys = []string{fmt.Sprintf("q=%d", o.Quiet)}
 		}
 		switch {
 		case first && last: // one chunk carries no m=
@@ -289,7 +289,7 @@ func transmitOptions(id uint32, cols, rows int) *kitty.Options {
 		VirtualPlacement: true,
 		Columns:          cols,
 		Rows:             rows,
-		Quite:            2,
+		Quiet:            2,
 	}
 }
 

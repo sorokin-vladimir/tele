@@ -3,6 +3,7 @@ package tg
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -17,7 +18,10 @@ type gotdLogin struct {
 	*auth.Client
 	qr  qrlogin.QR
 	api *tg.Client
+	tc  *telegram.Client
 }
+
+func (g gotdLogin) ServerTimeOffset() time.Duration { return g.tc.ServerTimeOffset() }
 
 func newGotdLogin(tc *telegram.Client, appID int, appHash string, log *zap.Logger) gotdLogin {
 	// The QR helper is built here rather than taken from tc.QR(), so a move to
@@ -30,6 +34,7 @@ func newGotdLogin(tc *telegram.Client, appID int, appHash string, log *zap.Logge
 		Client: tc.Auth(),
 		qr:     qrlogin.NewQR(tc.API(), appID, appHash, qrlogin.Options{Migrate: migrate}),
 		api:    tc.API(),
+		tc:     tc,
 	}
 }
 

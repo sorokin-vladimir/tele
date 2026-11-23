@@ -57,6 +57,31 @@ func TestSQLite_AppendMessage_PersistsSurvivesReopen(t *testing.T) {
 	assert.Equal(t, "appended", got[0].Text)
 }
 
+func TestSQLite_MessageWithRich_PersistsSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	rich := &domain.RichMessage{Blocks: []domain.RichBlock{
+		{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+		{Kind: domain.RichTable, Bordered: true, Rows: [][]domain.RichCell{
+			{{Text: domain.RichText{Kind: domain.RichTextPlain, Text: "Name"}}},
+		}},
+	}}
+
+	s := openStore(t, path)
+	s.SetChat(domain.Chat{ID: 11, Peer: domain.Peer{ID: 11, Type: domain.PeerUser}})
+	s.SetMessages(11, []domain.Message{{
+		ID: 5, ChatID: 11, Text: "fallback", Date: time.Unix(3000, 0), Rich: rich,
+	}})
+	require.NoError(t, s.Close())
+
+	s2 := openStore(t, path)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(domain.HistoryKey{ChatID: 11})
+	got := s2.Messages(domain.HistoryKey{ChatID: 11})
+
+	require.Len(t, got, 1)
+	assert.Equal(t, rich, got[0].Rich, "the structured blocks survive a save and a load")
+}
+
 func TestSQLite_CapTrim_DeletesOldestOnDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 
@@ -313,3 +338,30 @@ func TestSQLite_AppendMessage_SameIDAdoptsTheNewerCopy(t *testing.T) {
 // message stopped being a guess. Nothing renames anything since #195: the owner
 // records the message under its real id, and the duplicate this guarded against
 // is now covered by AppendMessage being idempotent (see the test above).
+
+func TestSQLite_MergedPages_KeepRich(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	rich := func(text string) *domain.RichMessage {
+		return &domain.RichMessage{Blocks: []domain.RichBlock{
+			{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: text}},
+		}}
+	}
+	msg := func(id int) domain.Message {
+		return domain.Message{ID: id, ChatID: 13, Text: "text", Date: time.Unix(int64(id), 0), Rich: rich("block")}
+	}
+
+	s := openStore(t, path)
+	defer func() { _ = s.Close() }()
+	s.SetChat(domain.Chat{ID: 13, Peer: domain.Peer{ID: 13, Type: domain.PeerUser}})
+	h := domain.HistoryKey{ChatID: 13}
+
+	s.MergeAround(h, []domain.Message{msg(10)})
+	s.MergeNewer(h, 10, []domain.Message{msg(11)})
+	s.MergeOlder(h, 10, []domain.Message{msg(9)})
+
+	got := s.Messages(h)
+	require.Len(t, got, 3)
+	for _, m := range got {
+		assert.NotNil(t, m.Rich, "message %d keeps its rich blocks through the merge", m.ID)
+	}
+}

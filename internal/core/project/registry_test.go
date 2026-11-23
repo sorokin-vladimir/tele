@@ -303,6 +303,34 @@ func TestRegistry_PinnedAnchorFallsBackWhenItsMessageIsGone(t *testing.T) {
 	assert.Empty(t, rec.take(), "the window settles instead of rebuilding itself every time")
 }
 
+func TestRegistry_AWindowWhosePinnedAnchorIsDeletedKeepsItsOldestMessagesAsMessagesArrive(t *testing.T) {
+	chat := domain.Chat{ID: 1, ReadInboxMaxID: 10}
+	all := msgs(10)
+	r := readerWith(chat, all)
+	g, rec := newRegistry(r)
+	id := subscribe(g, project.HistoryWindow{
+		ChatID: 1, Anchor: project.Anchor{Kind: project.AnchorFirstUnread}, Before: 3,
+	})
+	rec.take()
+
+	r.msgs[1] = append([]domain.Message{}, all[:9]...)
+	g.Refresh()
+	rec.take()
+	w, _ := g.Window(id)
+	assert.Equal(t, 9, w.(project.HistoryWindow).Anchor.MsgID, "the window pins the message it fell back to")
+
+	arrival := domain.Message{ID: 11, ChatID: 1, Date: all[8].Date.Add(time.Minute)}
+	r.msgs[1] = append(append([]domain.Message{}, all[:9]...), arrival)
+	g.Refresh()
+
+	got := rec.take()
+	require.NotEmpty(t, got)
+	for _, d := range got {
+		assert.NotEqual(t, project.HistoryRemove, d.History.Kind, "an arrival must not push the oldest messages out of the window")
+		assert.NotEqual(t, project.HistoryReset, d.History.Kind)
+	}
+}
+
 // Every delta is stated against the one before it, so a client that receives
 // two in the opposite order draws something the owner never had. Two goroutines
 // changing state close together must not be able to swap their deltas on the

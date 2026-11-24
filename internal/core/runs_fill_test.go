@@ -192,6 +192,28 @@ func TestFill_ScrollingUpAFarRunGrowsItDownwards(t *testing.T) {
 	assert.Equal(t, 471, runIDs(s)[0][0], "twenty older than the page around 500, which began at 491")
 }
 
+// A window moved while its subscription's fetch is still in flight is filled
+// once that fetch ends: the move found the guard taken, and nothing else would
+// ask again until the person scrolls once more.
+func TestFill_AWindowMovedMidFetchIsFilledAfterIt(t *testing.T) {
+	o, _, tg := historyOwner(t, msgRange(1, 1020), msgRange(1001, 1020))
+	cl, sub, w := openAt(t, o, 500, 5, 5)
+	a := o.attached()[0]
+	key := subKey{client: a.id, sub: sub}
+	require.Eventually(t, func() bool { return o.beginFetch(key) }, 2*time.Second, time.Millisecond,
+		"the jump's fetch never let go of the guard")
+
+	w.Before += 20
+	cl.MoveWindow(sub, w)
+	// The move's fetch runs in the background: let it meet the taken guard
+	// before the guard is let go.
+	o.work.Wait()
+	o.endFetch(a, sub)
+
+	waitWindow(t, cl, 480)
+	assert.Equal(t, []string{"around", "older"}, tg.calls())
+}
+
 // Scrolling up the tail run fetches what is older than the tail run, even
 // with a run far back stored below it.
 func TestFill_ScrollingUpTheTailRunIgnoresARunFarBack(t *testing.T) {

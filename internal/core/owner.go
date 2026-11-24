@@ -84,6 +84,10 @@ type Owner struct {
 	// named by its client too: two clients choose their ids apart.
 	fetchMu  sync.Mutex
 	fetching map[subKey]bool
+	// fetchAgain marks a subscription whose window asked for a fetch while
+	// one was in flight: the guard turned it away, so the fetch in flight
+	// looks at the window again once it ends.
+	fetchAgain map[subKey]bool
 	// repairing guards one in-flight gap repair per chat. A repair belongs to
 	// the chat rather than to a window: it is started by opening one, and also
 	// by Telegram saying a channel fell behind while nobody was looking at it.
@@ -144,6 +148,7 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		now:           time.Now,
 		readyCh:       make(chan struct{}),
 		fetching:      make(map[subKey]bool),
+		fetchAgain:    make(map[subKey]bool),
 		repairing:     make(map[int64]bool),
 		reading:       make(map[int]readHold),
 		focus:         newFocusRegistry(),

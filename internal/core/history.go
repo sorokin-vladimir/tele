@@ -24,7 +24,7 @@ func (o *Owner) fill(ctx context.Context, a *seat, id project.SubID, w project.H
 	if !o.beginFetch(key) {
 		return
 	}
-	defer o.endFetch(key)
+	defer o.endFetch(a, id)
 
 	o.forwardFill(ctx, w.ChatID)
 	// Re-read the window: the repair may have filled it, and asking again costs
@@ -377,16 +377,29 @@ func (o *Owner) beginFetch(key subKey) bool {
 	o.fetchMu.Lock()
 	defer o.fetchMu.Unlock()
 	if o.fetching[key] {
+		o.fetchAgain[key] = true
 		return false
 	}
 	o.fetching[key] = true
 	return true
 }
 
-func (o *Owner) endFetch(key subKey) {
+// endFetch lets go of a subscription's fetch guard. A window that asked for a
+// fetch meanwhile was turned away and will not ask again until the person
+// scrolls once more, so its window as it stands now is checked again here.
+func (o *Owner) endFetch(a *seat, id project.SubID) {
+	key := subKey{client: a.id, sub: id}
 	o.fetchMu.Lock()
-	defer o.fetchMu.Unlock()
+	again := o.fetchAgain[key]
+	delete(o.fetchAgain, key)
 	delete(o.fetching, key)
+	o.fetchMu.Unlock()
+	if !again {
+		return
+	}
+	if w, ok := a.registry.HistoryWindows()[id]; ok {
+		o.maybeFetch(a, id, w)
+	}
 }
 
 func (o *Owner) beginRepair(chatID int64) bool {

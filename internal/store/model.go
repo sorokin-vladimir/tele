@@ -72,8 +72,3 @@ type Event struct {
 	// is about the chat itself (#275).
 	TopicID int
 }
-
-// Bool returns a pointer to the given bool value.
-func Bool(b bool) *bool {
-	return &b
-}

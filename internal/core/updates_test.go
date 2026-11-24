@@ -284,7 +284,7 @@ func TestNotify_GroupReactionFeedsBothSinks(t *testing.T) {
 
 	o.handleEvent(store.Event{
 		Kind: store.EventReactionsUpdate, ChatID: 2, MsgID: 10,
-		ReactionsUnread: store.Bool(true), ReactionEmoji: "❤", ReactionDate: time.Now(),
+		ReactionsUnread: new(true), ReactionEmoji: "❤", ReactionDate: time.Now(),
 	})
 
 	evs := queued(c)

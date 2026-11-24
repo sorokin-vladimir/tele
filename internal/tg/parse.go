@@ -356,17 +356,19 @@ func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 // the reactions set carries no recent reactions list (a min set or a chat where
 // recent reactions are not shown), so the read state cannot be determined.
 func reactionsUnread(mr tg.MessageReactions) *bool {
-	if mr.Min || len(mr.RecentReactions) == 0 {
+	if mr.Min {
 		return nil
 	}
-	for _, r := range mr.RecentReactions {
+	recent, ok := mr.GetRecentReactions()
+	if !ok {
+		return nil
+	}
+	for _, r := range recent {
 		if r.Unread {
-			t := true
-			return &t
+			return new(true)
 		}
 	}
-	f := false
-	return &f
+	return new(false)
 }
 
 // reactionsHaveUnread reports whether any recent reaction on the message is

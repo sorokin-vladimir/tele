@@ -9,19 +9,17 @@ import (
 )
 
 func TestReactionsHaveUnread(t *testing.T) {
-	none := tg.MessageReactions{
-		RecentReactions: []tg.MessagePeerReaction{
-			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
-		},
-	}
+	var none tg.MessageReactions
+	none.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+	})
 	assert.False(t, reactionsHaveUnread(none))
 
-	some := tg.MessageReactions{
-		RecentReactions: []tg.MessagePeerReaction{
-			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
-			{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
-		},
-	}
+	var some tg.MessageReactions
+	some.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+		{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
+	})
 	assert.True(t, reactionsHaveUnread(some))
 
 	assert.False(t, reactionsHaveUnread(tg.MessageReactions{}))
@@ -29,38 +27,40 @@ func TestReactionsHaveUnread(t *testing.T) {
 
 func TestReactionsUnread(t *testing.T) {
 	// Recent reactions present, none unread -> false
-	none := tg.MessageReactions{
-		RecentReactions: []tg.MessagePeerReaction{
-			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
-		},
-	}
+	var none tg.MessageReactions
+	none.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+	})
 	res := reactionsUnread(none)
 	require.NotNil(t, res)
 	assert.False(t, *res)
 
+	// Recent reactions present and empty -> false
+	var empty tg.MessageReactions
+	empty.SetRecentReactions([]tg.MessagePeerReaction{})
+	res = reactionsUnread(empty)
+	require.NotNil(t, res)
+	assert.False(t, *res)
+
 	// Recent reactions present, some unread -> true
-	some := tg.MessageReactions{
-		RecentReactions: []tg.MessagePeerReaction{
-			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
-			{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
-		},
-	}
+	var some tg.MessageReactions
+	some.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+		{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
+	})
 	res = reactionsUnread(some)
 	require.NotNil(t, res)
 	assert.True(t, *res)
 
-	// No recent reactions list -> nil
+	// No recent reactions list (absent) -> nil
 	assert.Nil(t, reactionsUnread(tg.MessageReactions{}))
-	assert.Nil(t, reactionsUnread(tg.MessageReactions{RecentReactions: nil}))
-	assert.Nil(t, reactionsUnread(tg.MessageReactions{RecentReactions: []tg.MessagePeerReaction{}}))
 
 	// Min set with recent reactions -> nil
-	minSet := tg.MessageReactions{
-		Min: true,
-		RecentReactions: []tg.MessagePeerReaction{
-			{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
-		},
-	}
+	var minSet tg.MessageReactions
+	minSet.Min = true
+	minSet.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: false, Reaction: &tg.ReactionEmoji{Emoticon: "👍"}},
+	})
 	assert.Nil(t, reactionsUnread(minSet))
 }
 
@@ -81,16 +81,16 @@ func TestConvertMessage_AbsentReactionsAreNotAnEmptySet(t *testing.T) {
 }
 
 func TestConvertMessage_HasUnreadReactions(t *testing.T) {
+	var reactions tg.MessageReactions
+	reactions.Results = []tg.ReactionCount{
+		{Reaction: &tg.ReactionEmoji{Emoticon: "❤"}, Count: 1},
+	}
+	reactions.SetRecentReactions([]tg.MessagePeerReaction{
+		{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
+	})
 	raw := &tg.Message{
 		ID: 5, Date: 1700000000, Out: true, Message: "hi",
-		Reactions: tg.MessageReactions{
-			Results: []tg.ReactionCount{
-				{Reaction: &tg.ReactionEmoji{Emoticon: "❤"}, Count: 1},
-			},
-			RecentReactions: []tg.MessagePeerReaction{
-				{Unread: true, Reaction: &tg.ReactionEmoji{Emoticon: "❤"}},
-			},
-		},
+		Reactions: reactions,
 	}
 	msg, ok := convertMessage(raw, 10)
 	require.True(t, ok)

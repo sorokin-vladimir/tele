@@ -21,7 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Full history: the secret scan reads every commit, not just the tag's.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
@@ -60,6 +63,9 @@ jobs:
 
       - name: actions
         run: mise run actions
+
+      - name: secrets
+        run: mise run secrets
 
   # Verify the cgo-free static build and tests on the other target OSes. Audio
   # output is platform-specific (oto on macOS/Windows, PulseAudio on Linux), so

@@ -13,3 +13,16 @@ description = "Telegram api_hash"
 regex = '''(?i)(?:api_?hash|TG_API_HASH|buildAPIHash)\W{0,8}([0-9a-f]{32})\b'''
 secretGroup = 1
 keywords = ["api_hash", "apihash", "tg_api_hash", "buildapihash"]
+
+# Placeholders used by tests and by the documented config examples. Listed by
+# value rather than by path, so a real secret in the same files still fails.
+[[allowlists]]
+description = "known placeholders"
+regexTarget = "secret"
+regexes = [
+  '''^hunter2$''',
+  '''^secret$''',
+  '''^\+1555\d{7}$''',
+  '''^ee0123456789abcdef0123456789abcdef6578616d706c652e636f6d$''',
+  '''^AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=$''',
+]

@@ -21,3 +21,6 @@ pre-commit:
     shellcheck:
       glob: "*.sh"
       run: shellcheck {staged_files}
+    actions:
+      glob: ".github/**/*.{yml,yaml}"
+      run: jactionlint

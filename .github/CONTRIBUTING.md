@@ -114,7 +114,7 @@ Unrelated fixes found on the way go in their own pull requests, however small.
 Run the full check before you push; the git hooks run it too:
 
 ```sh
-mise run check      # go vet, golangci-lint (for every OS), go test, govulncheck, shellcheck
+mise run check      # go vet, golangci-lint (for every OS), go test, govulncheck, shellcheck, jactionlint
 ```
 
 GitHub does not run the workflows on pull requests from forks, so the maintainer runs the checks on your branch by hand.

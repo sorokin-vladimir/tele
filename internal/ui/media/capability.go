@@ -63,7 +63,7 @@ func iterm2Version(getenv func(string) string) string {
 
 // atLeastVersion reports whether the dotted version names a release at or
 // after want. Trailing junk ends a field, so a "3.7.0beta10" prerelease counts
-// as its release, and missing fields read as zero. An unparseable or empty
+// as its release, and missing fields read as zero. An unparsable or empty
 // version is not enough.
 //
 // iTerm2 is version-gated (3.7.0) rather than named outright: it has drawn

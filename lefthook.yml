@@ -27,5 +27,7 @@ pre-commit:
     renovate:
       glob: ".github/renovate.json"
       run: mise run renovate-check
+    typos:
+      run: typos --force-exclude {staged_files}
     secrets:
       run: betterleaks git --pre-commit --staged --no-banner --redact --verbose -c .betterleaks.toml .

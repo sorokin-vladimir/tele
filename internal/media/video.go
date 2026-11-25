@@ -48,7 +48,7 @@ func ProbeVideo(ctx context.Context, path string) (VideoMeta, error) {
 }
 
 // parseFFprobeOutput reads ffprobe's "key=value" default output. Unknown or
-// unparseable lines are ignored; duration is truncated to whole seconds.
+// unparsable lines are ignored; duration is truncated to whole seconds.
 func parseFFprobeOutput(out string) VideoMeta {
 	var m VideoMeta
 	for _, line := range strings.Split(out, "\n") {

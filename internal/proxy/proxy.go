@@ -244,7 +244,7 @@ func envProxy() (string, bool) {
 }
 
 // envProxyURL is ALL_PROXY when it names a proxy x/net/proxy will actually
-// dial through, and nil otherwise - unset, unparseable, or a scheme that
+// dial through, and nil otherwise - unset, unparsable, or a scheme that
 // package refuses, which in practice means anything but socks5. All three end
 // the same way there: the dialer falls back to a direct connection and says
 // nothing. Asking the same question here is what lets tele say the answer out

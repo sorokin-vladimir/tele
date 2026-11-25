@@ -73,7 +73,7 @@ func writePID(f *os.File) {
 }
 
 // readPID reads a pid previously written by writePID. Returns 0 when the file
-// is empty or holds anything unparseable, so a corrupted lock file degrades to
+// is empty or holds anything unparsable, so a corrupted lock file degrades to
 // a message without a pid rather than to a failure.
 func readPID(f *os.File) int {
 	buf := make([]byte, 32)

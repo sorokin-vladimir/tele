@@ -98,14 +98,14 @@ func Audit(t Theme) []Finding {
 			// worth the panic rather than the shrug.
 			panic("theme: no token named " + name + "; update foregroundTokens")
 		}
-		if fnd, ok := judge(TokenKey(name), f.Interface().(color.Color), t.Background); ok {
-			out = append(out, fnd)
+		if finding, ok := judge(TokenKey(name), f.Interface().(color.Color), t.Background); ok {
+			out = append(out, finding)
 		}
 	}
 	for i, c := range t.SenderPalette {
-		if fnd, ok := judge(fmt.Sprintf("sender_palette[%d]", i), c, t.Background); ok {
-			fnd.Palette = true
-			out = append(out, fnd)
+		if finding, ok := judge(fmt.Sprintf("sender_palette[%d]", i), c, t.Background); ok {
+			finding.Palette = true
+			out = append(out, finding)
 		}
 	}
 

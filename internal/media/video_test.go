@@ -28,7 +28,7 @@ func TestParseFFprobeOutput_PartialAndJunk(t *testing.T) {
 	meta := parseFFprobeOutput(out)
 	assert.Equal(t, 640, meta.Width)
 	assert.Equal(t, 480, meta.Height)
-	assert.Equal(t, 0, meta.Duration, "unparseable duration stays zero")
+	assert.Equal(t, 0, meta.Duration, "unparsable duration stays zero")
 }
 
 // TestProbeAndThumbnail_WithFFmpeg is an integration check that runs only when

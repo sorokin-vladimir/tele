@@ -11,6 +11,10 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+### Fixed
+
+- Message metadata stays within the bubble width, keeps reaction counts whole, and measures upload and album heights correctly (#334).
+
 ## [2.1.4] - 2026-11-25
 
 ### Added

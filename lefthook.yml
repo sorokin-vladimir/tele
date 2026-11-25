@@ -24,5 +24,8 @@ pre-commit:
     actions:
       glob: ".github/**/*.{yml,yaml}"
       run: jactionlint
+    renovate:
+      glob: ".github/renovate.json"
+      run: mise run renovate-check
     secrets:
       run: betterleaks git --pre-commit --staged --no-banner --redact --verbose -c .betterleaks.toml .

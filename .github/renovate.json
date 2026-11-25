@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["github-actions", "mise", "gomod"],
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "Go modules stay manual: every go.sum change needs a new vendorHash in flake.nix, and gotd is pinned behind workarounds.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["require", "indirect", "replace", "golang"],
+      "enabled": false
+    },
+    {
+      "description": "The toolchain in go.mod builds the releases, mise.toml the local runs: move them together.",
+      "matchDepNames": ["go"],
+      "groupName": "Go toolchain"
+    }
+  ]
+}

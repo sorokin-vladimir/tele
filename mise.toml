@@ -63,6 +63,10 @@ run = "jactionlint"
 description = "Scan the git history for secrets (values redacted)"
 run = "betterleaks git --no-banner --redact --verbose -c .betterleaks.toml ."
 
+[tasks.renovate-check]
+description = "Validate .github/renovate.json (needs node)"
+run = "npx --yes --package renovate@44.262.2 -- renovate-config-validator --strict"
+
 [tasks.tidy]
 description = "Tidy go modules"
 run = "go mod tidy"

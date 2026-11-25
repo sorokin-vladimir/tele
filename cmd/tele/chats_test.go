@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,14 @@ type fakeAccount struct {
 	historyAsked []historyAsk
 	markedRead   []historyAsk
 	markErr      error
+	// aroundErr is what HistoryAround answers with besides history;
+	// aroundAsked is what it was asked.
+	aroundErr   error
+	aroundAsked []historyAsk
+	// found is what SearchMessages answers with; searched is what it was
+	// asked.
+	found    []project.FoundMessage
+	searched []searchAsk
 	// sent is every send queued; outcomes are what AwaitSend answers, in
 	// turn, and awaited how long it was asked to wait each time.
 	sent     []core.SendRequest
@@ -141,7 +150,7 @@ func TestAwaitReady_AHostGoneExitsThree(t *testing.T) {
 // (#181).
 func TestAwaitReady_CommandsTurnedOffExitSeven(t *testing.T) {
 	acc := newFakeAccount()
-	acc.stream <- core.HostFailure{Err: &telerr.Error{Kind: telerr.CommandsOff}}
+	acc.stream <- core.HostFailure{Err: &telerr.Error{Kind: telerr.CommandsOff, Op: "Subscribe"}}
 
 	_, err := awaitReady(shortCtx(t), acc)
 
@@ -150,6 +159,39 @@ func TestAwaitReady_CommandsTurnedOffExitSeven(t *testing.T) {
 		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
 	}
 	assertSays(t, code.msg, "cli.account_commands")
+}
+
+// A refused read can only mean commands may do nothing: the refusal says the
+// setting is none and what to set it to (#181).
+func TestCommandsOff_ARefusedReadSaysNoneAndHowToAllow(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff, Op: "Subscribe"}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands is none")
+	assertSays(t, code.msg, "set cli.account_commands to read")
+}
+
+// A refused write means commands may only read: the refusal says so, and how
+// to let them write.
+func TestCommandsOff_ARefusedWriteSaysReadAndHowToAllow(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff, Op: "Send"}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands is read")
+	assertSays(t, code.msg, "set cli.account_commands to all")
+}
+
+// A refusal naming no call, as from a host that does not say it, still names
+// the setting and where to change it.
+func TestCommandsOff_ARefusalWithNoCallNamesTheSetting(t *testing.T) {
+	var code *exitCode
+	if !errors.As(commandsOff(&telerr.Error{Kind: telerr.CommandsOff}), &code) {
+		t.Fatal("not an exit code")
+	}
+	assertSays(t, code.msg, "cli.account_commands")
+	assertSays(t, code.msg, "Settings")
 }
 
 // A call refused the same way exits 7 too, whichever call it was.
@@ -161,7 +203,7 @@ func TestCommandsOff_ARefusedCallExitsSeven(t *testing.T) {
 		t.Fatalf("got %v, want exit %d", err, commandsOffCode)
 	}
 	other := errors.New("something else")
-	if commandsOff(other) != other {
+	if commandsOff(other) != other { //nolint:errorlint // the very same error must come back, not one wrapping it
 		t.Error("another error was taken for a refusal")
 	}
 }
@@ -214,7 +256,7 @@ func TestChats_ListsTheMainListWithBadges(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,7 +284,7 @@ func TestChats_CutsALongTitle(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{nameWidth: 10}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{nameWidth: 10}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +308,7 @@ func TestChats_ShowsTheUsername(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{nameWidth: 10}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{nameWidth: 10}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -291,7 +333,7 @@ func TestChats_LimitKeepsTheFirstOfWhatIsLeft(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{unread: true, limit: 2}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{unread: true, limit: 2}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -313,7 +355,7 @@ func TestChats_PrintsJSONLines(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{asJSON: true}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{asJSON: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -340,7 +382,7 @@ func TestChats_ListsTheFolderAskedFor(t *testing.T) {
 		acc.chats = []project.ChatRow{{ID: 7, Title: "Team"}}
 		var out bytes.Buffer
 
-		if err := listChats(shortCtx(t), acc, &out, c.q); err != nil {
+		if err := listChats(shortCtx(t), acc, &out, nil, c.q); err != nil {
 			t.Fatal(err)
 		}
 
@@ -360,7 +402,7 @@ func TestChats_AFolderThatIsNotThereIsSaid(t *testing.T) {
 	acc.folders = []domain.FolderFilter{{ID: 0, Title: "All Chats"}, {ID: 3, Title: "Work"}, {ID: 4, Title: "Family"}}
 	var out bytes.Buffer
 
-	err := listChats(shortCtx(t), acc, &out, chatsQuery{folder: 9})
+	err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{folder: 9})
 
 	var code *exitCode
 	if !errors.As(err, &code) || code.code != notFoundCode {
@@ -385,7 +427,7 @@ func TestChats_UnreadKeepsTheChatsWithUnread(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := listChats(shortCtx(t), acc, &out, chatsQuery{unread: true, asJSON: true}); err != nil {
+	if err := listChats(shortCtx(t), acc, &out, nil, chatsQuery{unread: true, asJSON: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -396,5 +438,205 @@ func TestChats_UnreadKeepsTheChatsWithUnread(t *testing.T) {
 	want := []string{`{"id":2`, `{"id":3`, `{"id":4`}
 	if strings.Join(ids, " ") != strings.Join(want, " ") {
 		t.Errorf("listed %v, want %v", ids, want)
+	}
+}
+
+// cli.list_limit bounds how many rows tele chats prints as text when no --limit
+// is given, and sends a note to stderr when cut (#329).
+func TestChats_ListLimitTruncatesTextOutput(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 20 {
+		t.Errorf("printed %d rows, want 20", len(lines))
+	}
+	wantNote := "20 of 25 chats; --all for the rest\n"
+	if errOut.String() != wantNote {
+		t.Errorf("stderr %q, want %q", errOut.String(), wantNote)
+	}
+}
+
+// --all lifts cli.list_limit for one run and sends nothing to stderr (#329).
+func TestChats_AllLiftsListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20, all: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 25 {
+		t.Errorf("printed %d rows, want 25", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// --limit overrides cli.list_limit. When it cuts the list, stderr notes it
+// (#329).
+func TestChats_LimitOverridesListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20, limit: 5}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 {
+		t.Errorf("printed %d rows, want 5", len(lines))
+	}
+	wantNote := "5 of 25 chats; --all for the rest\n"
+	if errOut.String() != wantNote {
+		t.Errorf("stderr %q, want %q", errOut.String(), wantNote)
+	}
+}
+
+// A cli.list_limit of 0 prints all rows without a stderr note (#329).
+func TestChats_ListLimitZeroPrintsAll(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 25 {
+		t.Errorf("printed %d rows, want 25", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// When the list was not cut short, stderr stays empty (#329).
+func TestChats_ListLimitNotExceededDoesNotPrintStderr(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 5; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 {
+		t.Errorf("printed %d rows, want 5", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// --json ignores cli.list_limit and prints every row unless an explicit --limit
+// was given (#329).
+func TestChats_JSONIgnoresListLimit(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20, asJSON: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 25 {
+		t.Errorf("printed %d rows, want 25", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// --json with an explicit --limit prints only up to the limit and sends nothing
+// to stderr (#329).
+func TestChats_JSONWithLimitDoesNotPrintStderr(t *testing.T) {
+	acc := newFakeAccount()
+	for i := 1; i <= 25; i++ {
+		acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+	}
+	var out, errOut bytes.Buffer
+
+	if err := listChats(shortCtx(t), acc, &out, &errOut, chatsQuery{listLimit: 20, limit: 5, asJSON: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 {
+		t.Errorf("printed %d rows, want 5", len(lines))
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr printed %q, want nothing", errOut.String())
+	}
+}
+
+// cli.list_limit is read by each command from its config as it starts: the next
+// tele chats cuts text output at the count the file names, and at 20 when it
+// names none (#329).
+func TestTakesHold_cli_list_limit(t *testing.T) {
+	_, cfgPath := isolatedHome(t)
+	runChats := func() (string, string) {
+		t.Helper()
+		s, err := newSetup(cfgPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		acc := newFakeAccount()
+		for i := 1; i <= 5; i++ {
+			acc.chats = append(acc.chats, project.ChatRow{ID: int64(i), Title: fmt.Sprintf("Chat %d", i)})
+		}
+		a := heldAccount{accountSurface: acc, me: me, cfg: s.store.Current()}
+		var out, errOut bytes.Buffer
+		if err := listChats(shortCtx(t), a, &out, &errOut, chatsQuery{listLimit: a.cfg.CLI.ListLimit}); err != nil {
+			t.Fatal(err)
+		}
+		return out.String(), errOut.String()
+	}
+
+	out, errOut := runChats()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 5 {
+		t.Errorf("got %d rows, want 5", len(lines))
+	}
+	if errOut != "" {
+		t.Errorf("default stderr %q, want empty", errOut)
+	}
+
+	body := "telegram:\n  api_id: 1\n  api_hash: x\ncli:\n  list_limit: 2\n"
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut = runChats()
+	lines = strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 {
+		t.Errorf("got %d rows, want 2", len(lines))
+	}
+	wantNote := "2 of 5 chats; --all for the rest\n"
+	if errOut != wantNote {
+		t.Errorf("stderr %q, want %q", errOut, wantNote)
 	}
 }

@@ -15,6 +15,130 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 - Chat and folder titles with keycap emoji stay within their row width, leaving room for badges (#333).
 
+## [2.1.4] - 2026-11-25
+
+### Added
+
+- `cli.list_limit` sets how many rows `tele chats` and `tele topics` print as
+  text when no `--limit` is given (20 by default; 0 prints them all). `--all`
+  lifts it for one run. When the list is cut short, a note on stderr says so
+  (#329).
+- Rich messages render their structure instead of collapsing to their plain
+  text: paragraphs, headings, subtitles and footers, bulleted and numbered
+  lists, block quotes and pull quotes, details, preformatted code, tables with
+  bold header cells and bordered grids, dividers, bylines, related-article
+  suggestions and channel references. A media block inside a rich message - a
+  photo, video, audio, map or embed - shows as a labelled placeholder, since
+  its bytes still come through the classic media pipeline, and details always
+  render expanded, as a terminal has no collapse control (#308).
+
+### Changed
+
+- tele now runs on gotd v0.166.1, the library it talks to Telegram with.
+  Recovering a gap in a busy supergroup, and the updates of a missed
+  stretch, are gotd's own work now, so tele no longer carries its own
+  workarounds for them (#352).
+- A window and a service from before this release speak different versions
+  of their protocol, so the newer one restarts the service, as it does after
+  any upgrade (#352).
+- On macOS, a desktop notification the terminal does not draw itself (one
+  from the service, or from a terminal without notifications) is posted by
+  tele's own process and shows as coming from Terminal. It used to go
+  through `terminal-notifier` or `osascript`.
+
+### Fixed
+
+- A local clock minutes off no longer stops tele: it connects, and new
+  messages still notify, because their age, the end of a mute and the life
+  of a QR code are measured by Telegram's clock. The status bar no longer
+  shows how far the clock is off (#352).
+- An app key Telegram refuses outright ends the connection with "app key
+  blocked" on the login screen, instead of connecting forever (#352).
+- A call the host answered just before it went away, as a service
+  restarting or a tele quitting does, could still report a network error:
+  the answer and the end of the connection arrived together, and the end
+  sometimes won. `tele send` could say it failed after the message was
+  sent.
+- A window moved while its history was still loading, such as scrolling up
+  right after jumping to a message, is filled once that load ends. Before,
+  the move was dropped and nothing more loaded until the next scroll.
+
+## [2.1.3] - 2026-11-13
+
+### Added
+
+- `tele search TEXT` asks Telegram which messages hold a text, over the
+  whole history: in one chat with `--chat`, one topic of a forum with
+  `--topic`, or every chat of the main list. Each message comes with its
+  id, chat and topic, as text or as `--json` (#348).
+- `tele show --around ID` prints a message with the messages around it, so
+  one `tele search` found can be read in its conversation (#348).
+- Jump to original (`g`) opens the original of a reply however old it is,
+  instead of saying "Not in buffer". Moving up or down from it loads more
+  history (#347).
+- Scrolled up in a chat, messages from others that arrive below the screen
+  are counted at the bottom, as `↓ 3 new · G`, and `G` goes down to them
+  (#347).
+- Message search in a window: `/` in the chat pane asks Telegram which
+  messages of the open chat (or topic) hold a text, `g /` asks every chat,
+  and `Tab` switches between the two. Results show who wrote each message,
+  when, and where the text is; `Enter` opens the chat at the message. More
+  results load as you scroll, and the window remembers its last search
+  (#349).
+
+### Changed
+
+- The local history keeps every stretch of a chat it fetched, not only the
+  newest, and remembers where each one ends across restarts. What
+  `tele show --before` and `tele show --around` fetch is kept as well, so
+  asking again needs no network (#347).
+- A long scrollback is held while you look at it and trimmed back to the
+  newest 500 messages once you leave the chat, instead of staying as deep as
+  you once scrolled (#347).
+- Commands may only read by default: `cli.account_commands` is now `read`,
+  so a script or an AI agent allowed to run `tele` cannot send or mark chats
+  read until you set it to `all`. If you use `tele send` or
+  `tele show --mark-read`, set `cli.account_commands: all` in the config of
+  the `tele` holding the account. A refused command says what the setting is
+  and what to set it to.
+- A new message toast stays for 8 seconds instead of 5, so it is still there
+  to open the chat after a click on the desktop notification brought the
+  terminal forward.
+- `/` in the chat pane searches the chat's messages; elsewhere it still
+  finds a chat. The key action for finding a chat is now `chat_search`, and
+  a config that binds `search` keeps working (#349).
+- In the chat search, the forward picker, the menus and the file picker the
+  cursor walks to the second-to-last row before the list scrolls, instead of
+  staying in the middle.
+
+### Fixed
+
+- Reactions such as the red heart, the writing hand, the dove and the
+  shrugging man are drawn as emoji, not as text symbols, and picking one
+  again takes it back, also on messages stored by an earlier version (#294).
+
+### Security
+
+- Official builds are made with Go 1.26.11 and updated network, image and
+  compression libraries, closing known vulnerabilities in the code tele
+  calls.
+
+## [2.1.2] - 2026-11-06
+
+### Fixed
+
+- `tele daemon install` over a running service on macOS and Windows waits
+  for the old service to stop before it starts the new one. It used to fail
+  with `Bootstrap failed: 5` on macOS, or start nothing on Windows, and leave
+  the account with no host. `tele daemon uninstall` waits too, so an install
+  right after it works (#327).
+- Inline GIFs and the video player no longer blink or jump back and forth in
+  Ghostty. Each frame replaced the picture on screen, which Ghostty draws as
+  nothing until the new frame is decoded, and large frames were encoded
+  several at a time and arrived out of order. A frame now loads off screen
+  and is shown once it is ready, one frame at a time, and encodes about three
+  times faster (#331).
+
 ## [2.1.1] - 2026-11-04
 
 ### Fixed

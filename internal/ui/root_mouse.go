@@ -51,7 +51,7 @@ func (m RootModel) mouseBlocked() bool {
 	if m.screen == ScreenLogin {
 		return true
 	}
-	return m.searchModel != nil || m.filePicker != nil || m.contextMenu != nil ||
+	return m.searchModel != nil || m.messageSearch != nil || m.filePicker != nil || m.contextMenu != nil ||
 		m.chatMenu != nil || m.reactionPicker != nil || m.photoViewer != nil ||
 		m.videoPlayer != nil || m.openPicker != nil || m.mentionPopup != nil
 }
@@ -101,6 +101,7 @@ func (m RootModel) handleMouseWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	case regionMessages:
 		newPane, cmd := m.chat.Update(keys.ActionMsg{Action: action})
 		m.chat = newPane.(*screens.ChatModel)
+		m.showNewCount()
 		return m, tea.Batch(cmd, m.markReadCmd())
 	case regionFolders:
 		if m.folderBar != nil {

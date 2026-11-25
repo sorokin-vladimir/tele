@@ -29,14 +29,27 @@ type Client interface {
 	// how a gap is closed: the update stream fills the tail of a chat and
 	// nothing else does, so a range it missed can only come back by asking for
 	// it. A page whose newest message is not past afterID means there is
-	// nothing newer to fetch.
-	GetHistoryAfter(ctx context.Context, peer domain.Peer, afterID int, limit int) ([]domain.Message, error)
+	// nothing newer to fetch. With topicID it is one topic of a forum, which
+	// is how a person scrolling down a topic's run far back reaches newer
+	// history (#347).
+	GetHistoryAfter(ctx context.Context, peer domain.Peer, topicID, afterID, limit int) ([]domain.Message, error)
 	// GetForumTopics fetches a page of a forum's topics, the first for a zero
 	// offset (#275).
 	GetForumTopics(ctx context.Context, peer domain.Peer, after TopicsOffset, limit int) (ForumTopicsPage, error)
 	// GetReplies fetches a page of one forum topic's history older than
 	// offsetID, or the newest when offsetID is zero.
 	GetReplies(ctx context.Context, peer domain.Peer, topicID, offsetID, limit int) ([]domain.Message, error)
+	// GetHistoryAround fetches up to limit messages around id, oldest first,
+	// in one topic of a forum when topicID is not zero (#348).
+	GetHistoryAround(ctx context.Context, peer domain.Peer, topicID, id, limit int) ([]domain.Message, error)
+	// SearchMessages asks Telegram which messages hold text: in the chat peer
+	// names (one topic of it when topicID is not zero), or in every chat of
+	// the main list when peer is nil (#348), from after down; the zero position
+	// is the first page (#349).
+	SearchMessages(ctx context.Context, peer *domain.Peer, topicID int, text string, after SearchPosition, limit int) (FoundMessages, error)
+	// FetchChat asks Telegram for the chat an address names, one the account
+	// has no dialog with; one it does not answer with is PeerNotFound (#348).
+	FetchChat(ctx context.Context, peer domain.Peer) (domain.Chat, error)
 	// GetForumTopicsByID fetches the current state of named topics of a forum.
 	GetForumTopicsByID(ctx context.Context, peer domain.Peer, ids []int) (ForumTopicsPage, error)
 	// RefreshMessage re-fetches a single message to obtain fresh media file

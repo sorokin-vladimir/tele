@@ -3,7 +3,6 @@ package tg
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +27,12 @@ import (
 // It exists because this class of defect is invisible from the inside. The
 // account's position ends up exactly where the server says it should, every
 // counter agrees, and the only thing that is wrong is the text on screen.
+//
+// tele used to deliver the updates of a recovered difference itself, because
+// gotd fed them back through the sequence the gap was stuck in and then
+// discarded them as outdated. gotd v0.164.0 applies them directly
+// (gotd/td#1853), so the manager now talks to the API straight, and this stand
+// holds that behaviour against any later gotd. The outbox stand reuses its API.
 const (
 	standChatID  = int64(10)
 	standMsgID   = 5
@@ -109,17 +114,22 @@ func standEdit(pts int, text string) *tg.Updates {
 	}
 }
 
+func editUpdate(msgID, pts int, text string) *tg.UpdateEditMessage {
+	msg := &tg.Message{ID: msgID, Message: text, PeerID: &tg.PeerUser{UserID: 10}}
+	msg.FromID = &tg.PeerUser{UserID: 10}
+	return &tg.UpdateEditMessage{Message: msg, Pts: pts, PtsCount: 1}
+}
+
 // stand wires the real manager to the real dispatcher and store, with the API
-// faked at the wire. withWrapper says whether the manager talks to the API
-// through the recovery wrapper or straight to it.
-func stand(t *testing.T, withWrapper bool) (*updates.Manager, *standAPI, store.Store) {
+// faked at the wire.
+func stand(t *testing.T) (*updates.Manager, *standAPI, store.Store) {
 	t.Helper()
 
 	events := make(chan store.Event, 256)
 	droppable := make(chan store.Event, 64)
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, events, droppable, zap.NewNop(),
-		func(int) bool { return false }, newNameCache())
+		func(int) bool { return false }, newNameCache(), time.Now)
 
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: standChatID, Peer: domain.Peer{ID: standChatID, Type: domain.PeerUser}})
@@ -150,15 +160,10 @@ func stand(t *testing.T, withWrapper bool) (*updates.Manager, *standAPI, store.S
 		State: tg.UpdatesState{Pts: standEndPts, Date: int(time.Now().Unix())},
 	}}
 
-	var raw updates.API = api
-	if withWrapper {
-		raw = newCommonDiffAPI(api, dispatcher, zap.NewNop())
-	}
-
 	manager := updates.New(updates.Config{Handler: dispatcher})
 	started := make(chan struct{})
 	go func() {
-		_ = manager.Run(ctx, raw, 1, updates.AuthOptions{
+		_ = manager.Run(ctx, api, 1, updates.AuthOptions{
 			OnStart: func(context.Context) { close(started) },
 		})
 	}()
@@ -195,7 +200,7 @@ func storedText(st store.Store) string {
 }
 
 func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
-	manager, api, st := stand(t, true)
+	manager, api, st := stand(t)
 	api.arm()
 
 	streamWithAGap(t, manager)
@@ -209,30 +214,4 @@ func TestStand_TheFinalTextSurvivesACommonPtsGap(t *testing.T) {
 		"the text must come from the catch-up the gap asked for, not the one at startup")
 	assert.False(t, st.Messages(domain.HistoryKey{ChatID: standChatID})[0].ShowsEdited(),
 		"and a bot's rewrite still carries no edited label")
-}
-
-// The same stand with the manager talking straight to the API, which is what
-// gotd does on its own. It reproduces the defect: the recovered edit goes back
-// through the sequence the gap is stuck in, the position then jumps past it,
-// and the message keeps the text it had before the gap.
-//
-// When this test starts failing, gotd/td#1854 has landed: delete the wrapper,
-// this test, and the entry both have in docs/gotd-workarounds.md (#270).
-func TestStand_WithoutTheWrapperTheFinalTextIsLost(t *testing.T) {
-	manager, api, st := stand(t, false)
-	api.arm()
-
-	streamWithAGap(t, manager)
-
-	require.Eventually(t, func() bool {
-		return slices.Contains(api.askedFrom(), standStartTS+1)
-	}, 5*time.Second, 20*time.Millisecond, "the gap was never chased")
-	// Long enough for the catch-up to finish and for anything it recovered to
-	// have been applied.
-	time.Sleep(time.Second)
-
-	// Frozen at the last edit that arrived before the gap, which is the symptom
-	// the issue was reported with.
-	assert.Equal(t, "th", storedText(st),
-		"upstream has fixed the gap handling; the wrapper and this test can go")
 }

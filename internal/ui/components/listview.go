@@ -1,15 +1,24 @@
 package components
 
 // ListView is a dumb vertical list selector. It owns the cursor for a list of
-// `count` items and derives the scroll window from the cursor at render time. It
-// knows nothing about item content: rows are produced by a caller-supplied
+// `count` items and the scroll window, which follows the cursor at render time.
+// It knows nothing about item content: rows are produced by a caller-supplied
 // render function. wrap controls whether cursor movement wraps at the ends.
 type ListView struct {
 	cursor     int
 	count      int
 	wrap       bool
 	selectable func(i int) bool // nil => every row is selectable
+	// offset is the first row the window showed last; it moves only when the
+	// cursor goes past scrollMargin rows from an edge of it.
+	offset int
 }
+
+// scrollMargin is how many rows stay between the cursor and an edge of the
+// window while there is more of the list past that edge: the cursor walks to
+// the second-to-last row going down, the second going up, and then the list
+// moves.
+const scrollMargin = 1
 
 // NewListView creates a list selector. wrap enables wrap-around movement.
 func NewListView(wrap bool) *ListView {
@@ -110,18 +119,28 @@ func (l *ListView) move(dir int) {
 }
 
 // windowOffset returns the index of the first visible row for a window of
-// maxRows: the cursor is centered and the window is clamped at the list ends.
+// maxRows. The window stays where it was until the cursor goes past
+// scrollMargin rows from its edge, then moves just enough to keep it there;
+// it is clamped at the list ends, where the cursor reaches the first or last
+// row.
 func (l *ListView) windowOffset(maxRows int) int {
 	if l.count <= maxRows || maxRows <= 0 {
+		l.offset = 0
 		return 0
 	}
-	offset := l.cursor - maxRows/2
-	if max := l.count - maxRows; offset > max {
-		offset = max
+	margin := scrollMargin
+	if maxRows < 2*margin+1 {
+		margin = 0 // too few rows to keep a margin on both sides
 	}
-	if offset < 0 {
-		offset = 0
+	offset := l.offset
+	if top := l.cursor - margin; top < offset {
+		offset = top
 	}
+	if bottom := l.cursor + margin - maxRows + 1; bottom > offset {
+		offset = bottom
+	}
+	offset = max(0, min(offset, l.count-maxRows))
+	l.offset = offset
 	return offset
 }
 

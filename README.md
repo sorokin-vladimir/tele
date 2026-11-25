@@ -38,7 +38,8 @@ Telegram Desktop, the web client and the mobile apps are built around the mouse.
 If you live in the terminal, with Neovim, yazi, k9s or tmux, switching to a GUI messenger breaks your flow.
 
 `tele` keeps Telegram in the terminal.
-You drive it from the keyboard the way you drive lazygit, it works over SSH, and it uses about 50 MB of memory at idle, where desktop clients take several hundred.
+You drive it from the keyboard the way you drive lazygit, and it works over SSH.
+At startup the background service and a window take about 50 MB of memory each, more once media is cached, where desktop clients take several hundred.
 Its author uses it every day.
 
 The same `tele` answers on the command line: you, or an AI agent you let run it, can list chats, read one and send a message without opening a window.
@@ -55,6 +56,7 @@ The same `tele` answers on the command line: you, or an AI agent you let run it,
 - **One account, many windows.**
   A second `tele` joins the running one instead of connecting again.
 - **Chats, groups, channels and forums**, with folders, replies, reactions, edits, forwards, and drafts synced with Telegram.
+- **Rich messages** render headings, lists, tables, block quotes and detail blocks with their layout intact.
 - **Photos inline** at full quality in kitty, Ghostty and iTerm2 3.7.0+, as block art everywhere else.
 - **Voice messages play in the app**, with a waveform and a moving playhead.
 - **Video, round notes (кружки) and GIFs** as inline previews.
@@ -106,7 +108,7 @@ On a Claude Code older than 2.1.275, add the marketplace first: `claude plugin m
 
 </details>
 
-`cli.account_commands` decides how far commands may go: `read` lets them read and not send, `none` keeps them out.
+`cli.account_commands` decides how far commands may go: by default, `read`, they read and do not send, `all` lets them send as well, and `none` keeps them out.
 [docs/cli.md](docs/cli.md#keeping-commands-out-of-your-chats)
 
 ---
@@ -214,7 +216,8 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-Signed `.deb` files are also attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+This repository is installed without a signature check: apt takes whatever it serves ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.deb` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo apt install ./tele_<version>_amd64.deb`.
 
 </details>
 
@@ -232,7 +235,8 @@ EOF
 sudo dnf install tele   # or: sudo zypper install tele
 ```
 
-Signed `.rpm` files are also attached to every [release](https://github.com/sorokin-vladimir/tele/releases/latest).
+This repository is installed without a signature check: dnf and zypper take whatever it serves ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.rpm` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo dnf install ./tele-<version>-1.x86_64.rpm`.
 
 </details>
 
@@ -243,6 +247,9 @@ Signed `.rpm` files are also attached to every [release](https://github.com/soro
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
+
+`--allow-untrusted` turns off apk's signature check: the package is not signed yet ([#342](https://github.com/sorokin-vladimir/tele/issues/342)).
+For a checked install, take the `.apk` from the [latest release](https://github.com/sorokin-vladimir/tele/releases/latest), check it as in [Checking a download](#checking-a-download), then run `sudo apk add --allow-untrusted ./tele_<version>_x86_64.apk`.
 
 </details>
 
@@ -318,6 +325,21 @@ environment.systemPackages = [
 
 AUR and Snap packages are planned but not published yet.
 
+### Checking a download
+
+Every release carries `checksums.txt`, with the SHA-256 of every binary, archive and package in it, signed by the release workflow with [Sigstore](https://www.sigstore.dev/).
+To check a file you downloaded, put it next to `checksums.txt` and `checksums.txt.sigstore.json` from the same release, and run:
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sorokin-vladimir/tele/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+The first command shows that `checksums.txt` came from tele's release workflow, the second that your file matches it.
+
 ---
 
 ## Getting started
@@ -345,7 +367,8 @@ The first launch, the service, the app key and upgrading from 1.11: [docs/gettin
 | `O`                 | Open video in the external player                 |
 | `p`                 | Play voice message in-app                         |
 | `s`                 | Download the selected file                        |
-| `/`                 | Search chats                                      |
+| `/`                 | Search chats; in a chat, search its messages      |
+| `g /`               | Search the messages of every chat                 |
 | `space`             | Message context menu                              |
 | `0` / `1` / `2`     | Focus panes                                       |
 | `,`                 | Settings                                          |
@@ -381,9 +404,9 @@ Milestones track minor lines (`v1.11`, `v2.0`, …); patch releases ship increme
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.11` _(done)_    | Settings & people: in-app settings overlay, user profile overlay, avatars, themes shipped inside the binary, plus the distribution and audit gaps left behind                                                                            |
 | `v2.0` _(done)_     | Single owner of the Telegram connection: windows that join one `tele`, a service that keeps it running at login, notifications with no window open, one budget for calls to Telegram; in 2.0.1, commands that list chats and topics, read a chat and send to it, and a guide for AI agents |
-| `v2.1`              | Rendering and layout: rich messages (tables, headings, lists), names with emoji drawn at their real width, a focused pane that takes the whole screen, an emoji picker in the composer                                                 |
-| `v2.2`              | More of the command line: logging in, search, sending files and reactions, following a chat as messages arrive                                                                                                                          |
-| `Backlog`           | Power-user & platform: search (full-text history, command palette, in-chat grep), scheduled sending, bot commands & inline keyboards, secret chats, polls, extended vim motions, notification click routing |
+| `v2.1`              | Rendering and layout: rich messages (tables, headings, lists), names with emoji drawn at their real width, a focused pane that takes the whole screen, an emoji picker in the composer; message search in a chat or everywhere, in a window and on the command line, and opening a chat at any message, however old |
+| `v2.2`              | More of the command line: logging in, sending files and reactions, following a chat as messages arrive                                                                                                                                  |
+| `Backlog`           | Power-user & platform: search filters (sender, type, date, archive) and paging, command palette, scheduled sending, bot commands & inline keyboards, secret chats, polls, extended vim motions, notification click routing |
 
 Work is also categorized by theme (Security & Reliability, Architecture & Performance, Feature Completeness, Power User & Polish) via the board's **Theme** field.
 

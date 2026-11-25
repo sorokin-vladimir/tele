@@ -58,7 +58,7 @@ func (s *socksServer) serve() {
 			return
 		}
 		go func() {
-			defer conn.Close() //nolint:errcheck
+			defer conn.Close() //nolint:errcheck // a test's connection, nothing depends on closing it
 			_ = s.handle(conn)
 		}()
 	}
@@ -98,12 +98,12 @@ func (s *socksServer) handle(conn net.Conn) error {
 		_, _ = conn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return err
 	}
-	defer upstream.Close() //nolint:errcheck
+	defer upstream.Close() //nolint:errcheck // a test's connection, nothing depends on closing it
 	if _, err := conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
 		return err
 	}
 
-	go io.Copy(upstream, conn) //nolint:errcheck
+	go io.Copy(upstream, conn) //nolint:errcheck // ends with the connection, the other direction reports
 	_, err = io.Copy(conn, upstream)
 	return err
 }

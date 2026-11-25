@@ -67,6 +67,15 @@ func (m RootModel) globalAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
 	case keys.ActionReloadConfig, keys.ActionReloadThemes:
 		next, cmd := m.reloadFromDisk()
 		return next, cmd, true
+	case keys.ActionChatSearch, keys.ActionSearch:
+		next, cmd := m.openSearch()
+		return next, cmd, true
+	case keys.ActionMessageSearch:
+		next, cmd := m.openMessageSearch(false)
+		return next, cmd, true
+	case keys.ActionMessageSearchAll:
+		next, cmd := m.openMessageSearch(true)
+		return next, cmd, true
 	}
 	return m, nil, false
 }
@@ -180,6 +189,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// While the message search window is open it owns all keys (#349).
+	if m.messageSearch != nil {
+		_, cmd := m.messageSearch.Update(msg)
+		return m, cmd
+	}
+
 	// While the file picker is open it owns all keys.
 	if m.filePicker != nil {
 		if keyStr == "ctrl+v" {
@@ -232,14 +247,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Global bindings take priority, unless the focused context explicitly binds
 	// the key — a context-specific override (e.g. chatlist "confirm: l") must win
 	// over a conflicting global binding (issue #132).
-	if !m.matcher.ContextOwns(m.focusedContext(), keyStr) {
+	// A key finishing a chord is the chord's, not a global binding of its own:
+	// after g, / is g / and not /. The context resolves global chords too.
+	if !m.matcher.Pending() && !m.matcher.ContextOwns(m.focusedContext(), keyStr) {
 		if next, cmd, ok := m.globalAction(m.keyMap.Resolve(keys.ContextGlobal, keyStr)); ok {
 			return next, cmd
 		}
-	}
-
-	if keyStr == "/" {
-		return m.openSearch()
 	}
 
 	if m.focus == FocusFolders {
@@ -478,6 +491,8 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m, gifCmd = m.reconcileGifAnim()
 		}
 		m.showOutboxReason()
+		// Scrolling down to the newest message clears what was counted below.
+		m.showNewCount()
 		return m, tea.Batch(cmd, m.markReadCmd(), gifCmd)
 	}
 

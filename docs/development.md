@@ -25,10 +25,12 @@ go build \
 
 ## Nix
 
-A `nix develop` shell is available in the repo for local development: go, golangci-lint, lefthook.
+A `nix develop` shell is available in the repo for local development: go, lefthook, mise.
+The linters and the other tools the git hooks run come from mise, so run `mise trust && mise install` once inside the shell.
 
-If you touch the flake and change `go.mod` or `go.sum`, `vendorHash` in `flake.nix` needs regenerating too.
-Run `nix build`, then copy the `got: sha256-...` hash it reports into `flake.nix`.
+Whenever `go.mod` or `go.sum` changes, `vendorHash` in `flake.nix` needs regenerating too.
+Run `mise run vendor-hash`: it builds the flake's Go modules with nix in Docker, so it needs Docker but not nix, and prints the hash to put into `flake.nix`.
+With nix installed, `nix build` does the same: copy the `got: sha256-...` hash it reports.
 
 ## Upgrading gotd
 

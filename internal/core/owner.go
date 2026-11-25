@@ -55,9 +55,12 @@ type Owner struct {
 	// health is how the connection is doing, for whoever asks the host.
 	health health
 	// now is the owner's clock.
-	now      func() time.Time
-	readyCh  chan struct{}
-	onAuthFn func(userID int64, username string)
+	now func() time.Time
+	// telegramOffset is how far Telegram's clock is from now, nil while
+	// nobody has said (see SetTelegramOffset).
+	telegramOffset func() time.Duration
+	readyCh        chan struct{}
+	onAuthFn       func(userID int64, username string)
 	// selfName is the logged-in user's username, once known: a log out names
 	// whose account it ends (#297).
 	selfName atomic.Pointer[string]
@@ -81,10 +84,21 @@ type Owner struct {
 	// named by its client too: two clients choose their ids apart.
 	fetchMu  sync.Mutex
 	fetching map[subKey]bool
+	// fetchAgain marks a subscription whose window asked for a fetch while
+	// one was in flight: the guard turned it away, so the fetch in flight
+	// looks at the window again once it ends.
+	fetchAgain map[subKey]bool
 	// repairing guards one in-flight gap repair per chat. A repair belongs to
 	// the chat rather than to a window: it is started by opening one, and also
 	// by Telegram saying a channel fell behind while nobody was looking at it.
 	repairing map[int64]bool
+
+	// reading is what commands are reading right now, each under a token of
+	// its own: shown to the store like a window, so the cap does not take a
+	// page away from a command that has just fetched it (#347).
+	readingMu   sync.Mutex
+	reading     map[int]readHold
+	readingNext int
 
 	// topics coalesces the forum topic reads owed to Telegram (#275).
 	topicsMu sync.Mutex
@@ -134,7 +148,9 @@ func New(cfg *config.Config, log *zap.Logger, st *state.State, client Connection
 		now:           time.Now,
 		readyCh:       make(chan struct{}),
 		fetching:      make(map[subKey]bool),
+		fetchAgain:    make(map[subKey]bool),
 		repairing:     make(map[int64]bool),
+		reading:       make(map[int]readHold),
 		focus:         newFocusRegistry(),
 		outboxWake:    make(chan struct{}, 1),
 		uploadCancels: make(map[string]context.CancelFunc),

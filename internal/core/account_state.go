@@ -15,8 +15,7 @@ import (
 
 // accountState is where the account stands, as the account projection shows
 // it. It is state rather than a stream of happenings: a client attaching in the
-// middle of a login, or while the clock is skewed, sees the step and the skew,
-// not nothing (#309).
+// middle of a login sees the step, not nothing (#309).
 type accountState struct {
 	mu sync.Mutex
 	c  project.AccountContents

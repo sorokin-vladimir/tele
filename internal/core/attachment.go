@@ -278,6 +278,7 @@ func (a *Attachment) Unsubscribe(id project.SubID) {
 	a.mu.Unlock()
 	if s != nil {
 		s.registry.Unsubscribe(id)
+		s.syncShown()
 	}
 }
 
@@ -412,6 +413,18 @@ func (a *Attachment) ResolveChat(ctx context.Context, name ChatName) (project.Ch
 
 func (a *Attachment) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
 	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) { return s.History(ctx, h, before, limit) })
+}
+
+func (a *Attachment) HistoryAround(ctx context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) ([]domain.Message, error) {
+		return s.HistoryAround(ctx, h, id, limit)
+	})
+}
+
+func (a *Attachment) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	return call(a, ctx, func(ctx context.Context, s *seat) (project.SearchPage, error) {
+		return s.SearchMessages(ctx, scope, text, after, limit)
+	})
 }
 
 func (a *Attachment) FolderFilters(ctx context.Context) ([]domain.FolderFilter, error) {

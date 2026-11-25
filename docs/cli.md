@@ -22,7 +22,7 @@ A command names a chat in one of three ways, the same in every command:
 
 | Name        | Which chat                                                                     |
 | ----------- | ------------------------------------------------------------------------------ |
-| `42`        | The chat with that id, as `tele chats` prints it                               |
+| `42`        | The chat with that id, as `tele chats` or `tele search` prints it              |
 | `@username` | The user, bot or channel with that username, in any case. One that is not among your chats is asked of Telegram |
 | `me`        | Your own chat, Saved Messages                                                  |
 
@@ -35,11 +35,11 @@ Anything else exits 2, and a name that is no chat exits 5.
 
 | Value  | What commands may do                                                           |
 | ------ | ------------------------------------------------------------------------------ |
-| `all`  | Everything, the default                                                        |
-| `read` | List and show, and change nothing: `tele send` and `tele show --mark-read` are refused |
+| `all`  | Everything                                                                     |
+| `read` | List and show, and change nothing: `tele send` and `tele show --mark-read` are refused. The default |
 | `none` | Nothing: every command acting on the account is refused                        |
 
-What is refused exits 7.
+What is refused exits 7, with a message that says what the setting is and what to set it to.
 It is meant for a script or an AI agent you let run `tele`: with `read` it can read your chats and not write to them, with `none` it gets nothing.
 It is the setting of the `tele` holding the account, not of the command, so a command given another config file is held to it all the same, and a command can never change the settings of the `tele` it asks.
 `tele daemon status` says what is allowed.
@@ -57,11 +57,19 @@ Keeping a program away from those is the job of file permissions or a sandbox.
    A short form exists only for what is typed by hand: `-c` for `--config`, `-h` for `--help`, `-e` for `--debug`.
 4. A flag that does something hard to undo has no short form.
 5. Machine output is `--json`, in every command that has any.
-6. The same meaning has the same name in every command, such as `--limit`.
+6. The same meaning has the same name in every command, such as `--limit` and `--all`.
 7. A chat is named the same way in every command.
 8. An action is a command; a flag only shapes one.
    That is why it is `tele version` and `tele theme check`, not `--version` and `--theme-check`.
    Those two flags, and `--theme-dump`, still answer for the package managers that run them, but are not offered.
+
+## Default list limit
+
+`tele chats` and `tele topics` print at most `cli.list_limit` rows (20 by default; 0 for all) when no `--limit` is specified.
+`--limit N` overrides the setting.
+`--all` prints the entire list for one run; `--all` and `--limit` are mutually exclusive.
+When text output is cut short, a note is sent to stderr (`20 of 143 chats; --all for the rest`).
+`--json` always prints the full list unless an explicit `--limit` is given.
 
 ## Exit codes
 
@@ -72,7 +80,7 @@ Keeping a program away from those is the job of file permissions or a sandbox.
 | 2    | The command line could not be read: an unknown flag, command or argument        |
 | 3    | No `tele` holds the account to ask                                              |
 | 4    | The account is not logged in                                                    |
-| 5    | No such chat, topic or folder                                                   |
+| 5    | No such chat, topic, folder or message                                          |
 | 6    | A message could not be sent, and trying again will not change that              |
 | 7    | The `tele` holding the account does not let commands do this: see `cli.account_commands` |
 | 75   | Gave up waiting while a message was still queued, or Telegram asked to wait; it may work later |
@@ -87,6 +95,7 @@ One that got 6 stays in the chat, for a person to retry or discard in a window.
   For YAML, `| yq -P`.
 - A command answering with one thing prints one object.
   One answering with a list prints JSON Lines: an object per line, oldest first where order means time.
+  `tele search` is the one exception: it prints newest first, as Telegram finds them.
 - Field names are `snake_case`.
   Times are RFC 3339.
 - A field that does not apply is left out rather than given as zero or null.
@@ -139,13 +148,30 @@ One that got 6 stays in the chat, for a person to retry or discard in a window.
 
 | Field       | What it is                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------------- |
-| `id`        | The message's id, what `--before` takes                                                     |
+| `id`        | The message's id, what `--before` and `--around` take                                       |
 | `date`      | When it was sent                                                                            |
 | `sender_id`, `sender` | Who sent it, by id and by name; your own messages carry yours. In a channel, the channel |
 | `out`       | Whether you sent it                                                                         |
 | `text`      | Its text, or a media message's caption; left out when there is none                         |
 | `reply_to`  | The id of the message it answers; left out when it answers none                             |
 | `media`     | What media it carries, left out when it carries none: `kind` (`photo`, `video`, `round_video`, `voice`, `audio`, `sticker`, `gif`, `file`, `location` or `other`) and what the media says about itself: `duration` in seconds, `file_name`, `size` in bytes, `title`, `performer`, `emoji`. Never where a file is: nothing is downloaded |
+
+## `tele search --json`
+
+```json
+{"chat_id":300,"chat":"Gophers","topic_id":17,"id":900,"date":"2026-10-25T09:14:00+03:00","sender_id":42,"sender":"Bob","out":false,"text":"hello there"}
+{"chat_id":42,"chat":"Bob","id":512,"date":"2026-10-24T21:58:00+03:00","sender_id":77,"sender":"Ada Lovelace","out":true,"text":"hello"}
+```
+
+Newest first.
+Each line is the chat the message was found in, then the message in the shape of [`tele show --json`](#tele-show---json), whatever was searched:
+
+| Field      | What it is                                                                      |
+| ---------- | ------------------------------------------------------------------------------- |
+| `chat_id`  | The chat it was found in, what names it in every command                        |
+| `chat`     | That chat's title, or the person's name                                         |
+| `topic_id` | The topic of a forum it is in, what `tele show --topic` takes; left out outside a forum |
+| the rest   | As in `tele show --json`: `id` is what `tele show --around` takes               |
 
 ## `tele send --json`
 
@@ -184,7 +210,7 @@ A message that did not go prints nothing: the exit code (6 or 75) and stderr say
   "since": "2026-10-21T09:00:00Z",
   "windows": 1,
   "commands": 0,
-  "account_commands": "all",
+  "account_commands": "read",
   "account": {
     "phase": "ready",
     "user": "ada",

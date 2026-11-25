@@ -33,7 +33,7 @@ func namesColor(src []byte) bool {
 // place a color literal is allowed to appear. This is what makes "all colors in
 // one place" a property of the codebase rather than a state it was briefly in.
 func TestNoColorsOutsideThemePackage(t *testing.T) {
-	root := filepath.Join("..") // internal/ui
+	root := ".." // internal/ui
 	var offenders []string
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

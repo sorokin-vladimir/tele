@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -32,6 +33,7 @@ func setupDispatcher(
 	log *zap.Logger,
 	shouldSuppress func(id int) bool,
 	names *nameCache,
+	telegramNow func() time.Time,
 ) {
 	var drops atomic.Int64
 
@@ -343,7 +345,7 @@ func setupDispatcher(
 		case mustDeliver <- store.Event{
 			Kind:   store.EventMuteUpdate,
 			ChatID: chatID,
-			Muted:  mutedFromSettings(upd.NotifySettings),
+			Muted:  mutedFromSettings(upd.NotifySettings, telegramNow()),
 		}:
 		case <-ctx.Done():
 		}

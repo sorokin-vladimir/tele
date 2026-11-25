@@ -18,8 +18,10 @@ type Renderer interface {
 	Reset()
 }
 
-// blockKey keys a rendered result by photo and target width.
+// blockKey keys a rendered result by photo and target width, and for Kitty by
+// the image id drawn, which an animated photo changes at every frame (#331).
 type blockKey struct {
 	photoID int64
 	cols    int
+	kittyID uint32
 }

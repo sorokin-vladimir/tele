@@ -38,6 +38,8 @@ type testOwner struct {
 	// moves records the windows the client asked for, so a test can assert that
 	// scrolling repositions a window rather than fetching anything itself.
 	moves []project.Window
+	// subscribed records the windows the client subscribed to, in order.
+	subscribed []project.Window
 	// lastSub is the last subscription id handed out: ids are the client's to
 	// choose and are never reused (#309).
 	lastSub project.SubID
@@ -77,6 +79,11 @@ type testOwner struct {
 	searchResult    []project.ChatRow
 	participants    []domain.ChatMember
 	lastSearchQuery string
+	// messageSearches records the message searches asked, with the context
+	// each was asked under; foundPage and foundErr are the answer (#349).
+	messageSearches []messageSearchCall
+	foundPage       project.SearchPage
+	foundErr        error
 	// mediaPaths is what FetchMedia and SaveMedia serve; a slot with no entry
 	// answers NotFound, standing in for a download failure. fetched records what
 	// the client asked for, invalidated what it asked to drop.
@@ -136,6 +143,7 @@ func (o *testOwner) enqueue(d project.Delta) bool {
 }
 
 func (o *testOwner) Subscribe(w project.Window) project.SubID {
+	o.subscribed = append(o.subscribed, w)
 	o.lastSub++
 	o.reg.Subscribe(o.lastSub, w)
 	if _, ok := w.(project.AccountWindow); ok {
@@ -167,6 +175,17 @@ func (o *testOwner) lastChatWindow() (project.HistoryWindow, bool) {
 		}
 	}
 	return project.HistoryWindow{}, false
+}
+
+// lastSubscribedHistory returns the most recent history window the client
+// subscribed to.
+func (o *testOwner) lastSubscribedHistory() project.HistoryWindow {
+	for i := len(o.subscribed) - 1; i >= 0; i-- {
+		if w, ok := o.subscribed[i].(project.HistoryWindow); ok {
+			return w
+		}
+	}
+	return project.HistoryWindow{}
 }
 
 // lastChatListWindow returns the most recent chatlist window the client asked for.
@@ -239,6 +258,27 @@ func (o *testOwner) ResolveChat(context.Context, core.ChatName) (project.ChatRow
 
 func (o *testOwner) History(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
 	return nil, nil
+}
+
+func (o *testOwner) HistoryAround(context.Context, domain.HistoryKey, int, int) ([]domain.Message, error) {
+	return nil, nil
+}
+
+// messageSearchCall is one message search a client asked the owner for.
+type messageSearchCall struct {
+	ctx   context.Context
+	scope project.SearchScope
+	text  string
+	after project.SearchPosition
+	limit int
+}
+
+func (o *testOwner) SearchMessages(ctx context.Context, scope project.SearchScope, text string, after project.SearchPosition, limit int) (project.SearchPage, error) {
+	o.messageSearches = append(o.messageSearches, messageSearchCall{ctx, scope, text, after, limit})
+	if o.foundErr != nil {
+		return project.SearchPage{}, o.foundErr
+	}
+	return o.foundPage, nil
 }
 
 func (o *testOwner) Chat(_ context.Context, chatID int64) (project.ChatRow, bool, error) {

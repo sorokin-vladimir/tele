@@ -9,7 +9,7 @@
 # RELEASE_HEADER (set by scripts/changelog-notes.sh).
 set -uo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 # shellcheck source=scripts/release-summary-lib.sh
 source scripts/release-summary-lib.sh
 

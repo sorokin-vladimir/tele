@@ -1,0 +1,6 @@
+# Follow sourced files, so a script checked alone (the pre-commit hook passes
+# only staged files) still sees its library. Sources are written from the repo
+# root; scripts live in scripts/ and scripts/test/.
+external-sources=true
+source-path=SCRIPTDIR/..
+source-path=SCRIPTDIR/../..

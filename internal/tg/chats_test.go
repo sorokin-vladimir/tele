@@ -226,3 +226,15 @@ func TestParseDialogs_SetsArchivedFlag(t *testing.T) {
 	assert.True(t, byID[7].IsArchived, "folder_id 1 dialog is archived")
 	assert.False(t, byID[8].IsArchived, "leaked pinned main dialog is not archived")
 }
+
+// mute_until is a date by Telegram's clock, so whether it has passed is judged
+// by Telegram's clock too: a local clock five minutes fast must not end a mute
+// that has a minute to run.
+func TestMutedFromSettings_JudgesTheEndOfAMuteByTelegramsClock(t *testing.T) {
+	telegramNow := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	var s tg.PeerNotifySettings
+	s.SetMuteUntil(int(telegramNow.Add(time.Minute).Unix()))
+
+	assert.True(t, mutedFromSettings(s, telegramNow), "a mute with a minute to run")
+	assert.False(t, mutedFromSettings(s, telegramNow.Add(2*time.Minute)), "a mute that has run out")
+}

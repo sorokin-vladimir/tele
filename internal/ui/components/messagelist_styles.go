@@ -28,6 +28,13 @@ func senderPaletteColor(userID int64) (color.Color, bool) {
 }
 
 func (ml *MessageList) senderNameStyle(senderID int64) lipgloss.Style {
+	return SenderStyle(senderID)
+}
+
+// SenderStyle is how a sender's name is drawn: bold, in their colour from
+// sender_palette, or in the body colour when the theme sets no palette. A
+// name in a chat and in a search result look the same (#349).
+func SenderStyle(senderID int64) lipgloss.Style {
 	c, ok := senderPaletteColor(senderID)
 	if !ok {
 		return theme.S().BodyBold

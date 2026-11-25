@@ -34,9 +34,6 @@ func (m RootModel) handleAccountDelta(next project.AccountContents) (RootModel, 
 	if next.LoggedInUser != prev.LoggedInUser {
 		components.SetSelfIdentity(next.LoggedInUser.ID, next.LoggedInUser.Username)
 	}
-	if next.ClockSkew != prev.ClockSkew {
-		m = m.handleClockSkew(next.ClockSkew)
-	}
 	if next.Throttle != prev.Throttle {
 		updated, cmd := m.handleThrottle(next.Throttle.Until, time.Now())
 		m = updated

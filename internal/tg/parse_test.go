@@ -118,3 +118,44 @@ func TestConvertMessageNoGroupedID(t *testing.T) {
 		t.Fatalf("GroupedID = %d, want 0", got.GroupedID)
 	}
 }
+
+// Every reaction set from Telegram enters the app through convertReactions,
+// and leaves it in emoji presentation, the way the picker spells a pick: a
+// text-default emoji, ZWJ sequences included, gains U+FE0F, the rest are kept
+// as they are, and a reaction that is not an emoji is skipped (#294).
+func TestConvertReactions_SpellsEveryEmojiInEmojiPresentation(t *testing.T) {
+	mr := tg.MessageReactions{
+		Results: []tg.ReactionCount{
+			{Reaction: &tg.ReactionEmoji{Emoticon: "\U00002764"}, Count: 3},
+			{Reaction: &tg.ReactionEmoji{Emoticon: "\U00002764\U0000200D\U0001F525"}, Count: 2},
+			{Reaction: &tg.ReactionEmoji{Emoticon: "👍"}, Count: 5},
+			{Reaction: &tg.ReactionPaid{}, Count: 1},
+		},
+	}
+
+	got := convertReactions(mr)
+
+	require.Len(t, got, 3)
+	assert.Equal(t, "\U00002764\U0000FE0F", got[0].Emoji)
+	assert.Equal(t, 3, got[0].Count)
+	assert.Equal(t, "\U00002764\U0000FE0F\U0000200D\U0001F525", got[1].Emoji)
+	assert.Equal(t, 2, got[1].Count)
+	assert.Equal(t, "👍", got[2].Emoji)
+	assert.Equal(t, 5, got[2].Count)
+}
+
+// The notification path reads the newest unread reaction on its own, and
+// spells it the same way (#294).
+func TestNewestUnreadReaction_SpellsTheEmojiInEmojiPresentation(t *testing.T) {
+	mr := tg.MessageReactions{
+		RecentReactions: []tg.MessagePeerReaction{
+			{Unread: true, Date: 1700000000, Reaction: &tg.ReactionEmoji{Emoticon: "\U0001F54A"}},
+		},
+	}
+
+	emoji, date, ok := newestUnreadReaction(mr)
+
+	require.True(t, ok)
+	assert.Equal(t, "\U0001F54A\U0000FE0F", emoji)
+	assert.Equal(t, int64(1700000000), date.Unix())
+}

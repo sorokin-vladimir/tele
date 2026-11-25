@@ -33,10 +33,10 @@ func TestHostEnd_StatusCountsWindowsAndCommandsButTheOneAsking(t *testing.T) {
 // The host says what it lets commands do with the account, so that a script
 // refused with exit 7 can be told why (#181).
 func TestHostEnd_StatusSaysWhatCommandsMayDo(t *testing.T) {
-	all, _, _ := hostEndAt(t, "")
+	read, _, _ := hostEndAt(t, "")
 	none, _, _ := hostEndAt(t, "cli:\n  account_commands: none\n")
 
-	assert.Equal(t, wire.CommandsAll, all.Status().AccountCommands)
+	assert.Equal(t, wire.CommandsRead, read.Status().AccountCommands)
 	assert.Equal(t, wire.CommandsNone, none.Status().AccountCommands)
 }
 

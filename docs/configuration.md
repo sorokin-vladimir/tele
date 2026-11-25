@@ -72,7 +72,8 @@ avatars:
 
 cli:
   name_width: 20 # columns a command gives a name or title before cutting it short
-  account_commands: all # all | read | none: what commands may do with your chats
+  list_limit: 20 # rows tele chats and tele topics print as text when no --limit is given; 0 for all
+  account_commands: read # all | read | none: what commands may do with your chats
 
 # keybindings: see keybindings.md
 ```

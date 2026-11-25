@@ -61,7 +61,9 @@ func DiffHistory(prev, next HistoryContents) []HistoryDelta {
 	}
 
 	out := diffWindow(prev, next)
-	if headerChanged(prev, next) {
+	// A reset carries the whole contents, header included.
+	reset := len(out) > 0 && out[0].Kind == HistoryReset
+	if headerChanged(prev, next) && !reset {
 		out = append(out, HistoryDelta{Kind: HistoryHeaderUpdate, Contents: next})
 	}
 
@@ -87,7 +89,9 @@ func headerChanged(prev, next HistoryContents) bool {
 	return prev.Title != next.Title || prev.TopicTitle != next.TopicTitle || prev.IsUser != next.IsUser ||
 		prev.IsGroup != next.IsGroup || prev.Online != next.Online ||
 		prev.UnreadReactions != next.UnreadReactions ||
-		prev.UnreadMentions != next.UnreadMentions
+		prev.UnreadMentions != next.UnreadMentions ||
+		prev.AtTail != next.AtTail || prev.AtBeginning != next.AtBeginning ||
+		prev.NewCount != next.NewCount
 }
 
 func diffWindow(prev, next HistoryContents) []HistoryDelta {

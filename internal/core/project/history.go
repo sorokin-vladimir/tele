@@ -14,12 +14,22 @@ type HistoryContents struct {
 	IsUser     bool
 	// IsGroup covers groups and channels: the message list shows sender names
 	// there and not in a 1:1 chat.
-	IsGroup         bool
-	Online          bool
-	Messages        []domain.Message
-	AnchorMsgID     int
-	HasOlder        bool
-	HasNewer        bool
+	IsGroup     bool
+	Online      bool
+	Messages    []domain.Message
+	AnchorMsgID int
+	// HasOlder and HasNewer report what the window's run holds outside the
+	// window. A window never reaches into another run: what lies between two
+	// runs was never fetched.
+	HasOlder bool
+	HasNewer bool
+	// AtTail reports that the window's run ends at the history's newest
+	// message, and AtBeginning that it reaches the oldest one there is.
+	AtTail      bool
+	AtBeginning bool
+	// NewCount is how many messages landed at the tail since the window left
+	// it, and zero while the window's run is the tail run.
+	NewCount        int
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int
 	// UnreadReactions is the chat's unread-reaction count. It is per-chat state,
@@ -85,20 +95,23 @@ func BuildHistory(r Reader, w HistoryWindow) HistoryContents {
 	// still hold a queued send, and that is the only thing it has to show.
 	out.Outbox = r.Outbox(w.History())
 
-	all := r.Messages(w.History())
-	if len(all) == 0 {
-		return out
-	}
-
-	idx, anchorID := resolveAnchor(all, read, w.Anchor)
+	runs := r.Runs(w.History())
+	run, idx, anchorID := resolveAnchor(runs, read, w.Anchor)
 	out.AnchorMsgID = anchorID
 	if idx < 0 {
-		// The anchor names a message the store does not hold, so the window
-		// cannot be sliced at all. HasOlder stays false: it reports what the
-		// store holds outside the window, and the store holds nothing usable
-		// here. The shortfall is what tells the core to fetch.
+		// The anchor names a message the store does not hold, or the history
+		// holds nothing to anchor on, so the window cannot be sliced at all.
+		// HasOlder stays false: it reports what the store holds outside the
+		// window, and the store holds nothing usable here. The shortfall is
+		// what tells the core to fetch.
 		return out
 	}
+	out.AtTail = run.AtTail
+	out.AtBeginning = run.AtBeginning
+	if !run.AtTail {
+		out.NewCount = newSince(runs, w.TailMark)
+	}
+	all := run.Messages
 
 	start := idx - w.Before
 	if start < 0 {
@@ -131,34 +144,33 @@ type readState struct {
 	draft      string
 }
 
-// resolveAnchor returns the index of the anchor message in all, oldest first,
-// and its id. An index of -1 means the anchor names a message the store does not
-// hold.
-func resolveAnchor(all []domain.Message, read readState, a Anchor) (int, int) {
+// resolveAnchor finds the anchor among a history's runs: the run holding it,
+// its index in that run's messages, oldest first, and its id. An index of -1
+// means the store holds no message to anchor on: the anchor names one it does
+// not hold, or the history has no tail run for a window anchored at the tail.
+func resolveAnchor(runs []domain.Run, read readState, a Anchor) (domain.Run, int, int) {
 	switch a.Kind {
 	case AnchorMessage:
-		for i, m := range all {
-			if m.ID == a.MsgID {
-				return i, m.ID
-			}
+		if run, i, ok := domain.FindMessage(runs, a.MsgID); ok {
+			return run, i, a.MsgID
 		}
-		return -1, a.MsgID
+		return domain.Run{}, -1, a.MsgID
 
 	case AnchorFirstUnread:
 		// Once pinned by the registry the window stops following the read
 		// pointer. A pin that no longer names a stored message (deleted, or
 		// trimmed by the store cap) resolves afresh rather than emptying.
 		if a.MsgID != 0 {
-			for i, m := range all {
-				if m.ID == a.MsgID {
-					return i, m.ID
-				}
+			if run, i, ok := domain.FindMessage(runs, a.MsgID); ok {
+				return run, i, a.MsgID
 			}
 		}
-		if read.unread > 0 {
-			for i, m := range all {
+		// Unread messages are the newest ones, so the first of them is looked
+		// for on the tail run.
+		if tail, ok := domain.TailRun(runs); ok && read.unread > 0 {
+			for i, m := range tail.Messages {
 				if m.ID > read.readInbox {
-					return i, m.ID
+					return tail, i, m.ID
 				}
 			}
 		}
@@ -167,7 +179,42 @@ func resolveAnchor(all []domain.Message, read readState, a Anchor) (int, int) {
 		fallthrough
 
 	default: // AnchorNewest
-		last := len(all) - 1
-		return last, all[last].ID
+		tail, ok := domain.TailRun(runs)
+		if !ok {
+			return domain.Run{}, -1, 0
+		}
+		last := len(tail.Messages) - 1
+		return tail, last, tail.Messages[last].ID
 	}
+}
+
+// newestHeld is the newest id any run of the history reaches: the tail run's
+// newest message when there is one. Whatever lands at the tail later is newer
+// than it, which is what lets a history holding no tail run count its first
+// arrival as new.
+func newestHeld(runs []domain.Run) int {
+	newest := 0
+	for _, r := range runs {
+		newest = max(newest, r.UpTo)
+		if n := len(r.Messages); n > 0 {
+			newest = max(newest, r.Messages[n-1].ID)
+		}
+	}
+	return newest
+}
+
+// newSince counts the messages of the tail run newer than mark: what landed at
+// the tail since a window left it. A window with no mark yet counts nothing.
+func newSince(runs []domain.Run, mark int) int {
+	tail, ok := domain.TailRun(runs)
+	if !ok || mark == 0 {
+		return 0
+	}
+	n := 0
+	for _, m := range tail.Messages {
+		if m.ID > mark {
+			n++
+		}
+	}
+	return n
 }

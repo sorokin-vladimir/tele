@@ -77,6 +77,15 @@ CREATE TABLE IF NOT EXISTS topics (
 	data     TEXT    NOT NULL,
 	PRIMARY KEY (chat_id, topic_id)
 );
+CREATE TABLE IF NOT EXISTS runs (
+	chat_id      INTEGER NOT NULL,
+	topic_id     INTEGER NOT NULL,
+	lo           INTEGER NOT NULL,
+	hi           INTEGER NOT NULL,
+	at_tail      INTEGER NOT NULL DEFAULT 0,
+	at_beginning INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (chat_id, topic_id, lo)
+);
 CREATE TABLE IF NOT EXISTS chat_gap (
 	chat_id      INTEGER PRIMARY KEY,
 	after_msg_id INTEGER NOT NULL
@@ -143,9 +152,16 @@ type SQLiteStore struct {
 	// ID space and are deleted with an explicit ChatID. See issue #72.
 	msgChat map[int]int64
 
-	// msgFloor is how many messages a history was last filled with outright, so
-	// the per-history cap does not trim a scrollback the user deliberately loaded.
-	msgFloor map[domain.HistoryKey]int
+	// shown is what windows show of each history, as the owner last said: the
+	// cap never drops it (see capMessagesLocked).
+	shown map[domain.HistoryKey][]Shown
+	// runs records where each history's runs lie, oldest first. A history
+	// with messages and no span recorded is one run ending at the tail.
+	runs map[domain.HistoryKey][]span
+	// writtenRuns is what the runs table holds, or will once the flush in
+	// flight commits, for each history loaded this session. A flush writes the
+	// histories whose runs differ from it.
+	writtenRuns map[domain.HistoryKey][]span
 
 	// dirtyPersist holds chat IDs whose row changed via a high-frequency
 	// write-behind mutation (read state, last message) and awaits a coalesced
@@ -176,6 +192,10 @@ type SQLiteStore struct {
 	// changed under them (#275).
 	purgeMsgs   map[int64]struct{}
 	purgingMsgs map[int64]struct{}
+	// purgeTopics queues chats whose topic rows go with the purge of their
+	// messages: a chat whose shape changed. A tail reload purges messages and
+	// keeps the topics.
+	purgeTopics map[int64]struct{}
 
 	// topics holds every forum's known topics, and pinRank the order the first
 	// page put its pinned ones in (#275). dirtyTopics and deletedTopics queue
@@ -240,7 +260,8 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		chats:              make(map[int64]domain.Chat),
 		messages:           make(map[domain.HistoryKey][]domain.Message),
 		histories:          make(map[int64]map[int]struct{}),
-		msgFloor:           make(map[domain.HistoryKey]int),
+		runs:               make(map[domain.HistoryKey][]span),
+		writtenRuns:        make(map[domain.HistoryKey][]span),
 		unreadReactionMsgs: make(map[int64]map[int]struct{}),
 		unreadMentionMsgs:  make(map[int64]map[int]struct{}),
 		baselineUnread:     make(map[int64]int),
@@ -255,6 +276,7 @@ func NewSQLite(path string, log *zap.Logger) (*SQLiteStore, error) {
 		deletingMsgs:       make(map[int64]map[int]struct{}),
 		purgeMsgs:          make(map[int64]struct{}),
 		purgingMsgs:        make(map[int64]struct{}),
+		purgeTopics:        make(map[int64]struct{}),
 		topics:             make(map[int64]map[int]domain.Topic),
 		pinRank:            make(map[int64]map[int]int),
 		dirtyTopics:        make(map[int64]map[int]struct{}),

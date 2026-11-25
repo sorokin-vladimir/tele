@@ -60,3 +60,44 @@ func messageBefore(a, b Message) bool {
 	}
 	return a.ID < b.ID
 }
+
+// Run is one unbroken stretch of a history as it is stored: every message
+// between its two ends is there. A history is stored as one run or several,
+// with history nobody fetched between them, and two runs are never adjacent.
+type Run struct {
+	// Messages are the run's messages, oldest first.
+	Messages []Message
+	// AtTail marks the run live messages land on: it ends at the history's
+	// newest message.
+	AtTail bool
+	// AtBeginning marks a run with no history below it: older history was
+	// asked for there and Telegram had none.
+	AtBeginning bool
+	// UpTo is the newest id the run reaches. It can name a message the store
+	// does not hold: a page fetched older than a message reaches up to it,
+	// whether that message is kept or not.
+	UpTo int
+}
+
+// FindMessage finds a message among a history's runs: the run holding it and
+// its index in that run's messages.
+func FindMessage(runs []Run, id int) (Run, int, bool) {
+	for _, r := range runs {
+		for i, m := range r.Messages {
+			if m.ID == id {
+				return r, i, true
+			}
+		}
+	}
+	return Run{}, -1, false
+}
+
+// TailRun is the run of a history live messages land on, when it holds one.
+func TailRun(runs []Run) (Run, bool) {
+	for _, r := range runs {
+		if r.AtTail && len(r.Messages) > 0 {
+			return r, true
+		}
+	}
+	return Run{}, false
+}

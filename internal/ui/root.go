@@ -68,6 +68,24 @@ type RootModel struct {
 	// slice rather than applying edits itself.
 	chatWindow project.HistoryWindow
 	chatMsgs   []domain.Message
+	// chatAtTail is whether the window's run ends at the newest message, from
+	// the projection: away from it, the bottom of the window asks for newer
+	// history and the window is not following the tail (#347).
+	chatAtTail bool
+	// jumpTo is a message the window was moved onto and that is highlighted
+	// once it arrives; zero when none is awaited. beforeJump is the window as
+	// it was, to go back to if the message turns out to be gone.
+	jumpTo     int
+	beforeJump project.HistoryWindow
+	// openAtMsg is the message the next history opened is opened on, read
+	// and cleared by subscribeChat; zero opens it at its first unread.
+	openAtMsg int
+	// farNew is what the owner counts as landed at the tail while the window
+	// is on a run far back. belowNew is what this client counts as arrived
+	// below the screen while the window is on the tail run but scrolled up,
+	// as the official clients count it. Either is drawn as "N new".
+	farNew   int
+	belowNew int
 	// chatUnreadReactions is the open chat's unread-reaction count, from the
 	// projection. Kept so focusing the pane can mark them read: a reaction that
 	// arrived while you were elsewhere is only seen when you look.
@@ -103,9 +121,6 @@ type RootModel struct {
 	// logPath is where this run's log is written, named on the login screen
 	// when something goes wrong there. Empty in tests.
 	logPath string
-	// clockSkew is how far the local clock is from Telegram's, zero when it is
-	// close enough to be accepted (#277).
-	clockSkew time.Duration
 	// throttleUntil is when the flood wait somebody's call ran into is over,
 	// and throttleTicking whether its countdown is running (#212).
 	throttleUntil   time.Time
@@ -173,6 +188,17 @@ type RootModel struct {
 	lastPhotoCols  int
 	lastPaneHeight int
 	retransmitGen  int
+
+	// gifBehind is the frame sent under the active GIF's back id, shown at a
+	// later tick once it is written (#331). gifInFlight says it is being
+	// encoded or written, and gifWrittenAt when it was written.
+	gifBehind    image.Image
+	gifInFlight  bool
+	gifWrittenAt time.Time
+
+	// now is the clock animations are timed by; time.Now when nil.
+	now func() time.Time
+
 	// Kitty placements are a bounded terminal resource: transmitting every chat
 	// image at once overruns the terminal and corrupts some. kittyLive tracks the
 	// photo ids currently transmitted (or in flight); kittyLRU orders them by last
@@ -183,21 +209,27 @@ type RootModel struct {
 	kittyResetPending bool
 	kittyCap          int // max live placements; from config, 0 → default
 	searchModel       *screens.SearchModel
-	contextMenu       *components.ContextMenu
-	chatMenu          *components.ChatContextMenu
-	reactionPicker    *components.ReactionPicker
-	help              *components.HelpModal
-	settings          *components.SettingsModal
-	confirmQuit       *components.ConfirmModal
-	profile           *components.Profile
-	profileAsk        int // numbers profile requests; only the latest one's answer opens an overlay
-	openPicker        *components.OpenPicker
-	reactionTargetID  int
-	mentionPopup      *components.MentionPopup
-	mentionMembers    map[int64][]domain.ChatMember
-	folderBar         *screens.FoldersModel
-	logo              components.LogoLoader
-	typingSerial      int
+	// messageSearch is the open message search window, one of those
+	// searchMemory keeps (#349).
+	messageSearch *screens.MessageSearchModel
+	searchMemory  messageSearchMemory
+	// cancelSearch cancels the message search call in flight, nil when none.
+	cancelSearch     context.CancelFunc
+	contextMenu      *components.ContextMenu
+	chatMenu         *components.ChatContextMenu
+	reactionPicker   *components.ReactionPicker
+	help             *components.HelpModal
+	settings         *components.SettingsModal
+	confirmQuit      *components.ConfirmModal
+	profile          *components.Profile
+	profileAsk       int // numbers profile requests; only the latest one's answer opens an overlay
+	openPicker       *components.OpenPicker
+	reactionTargetID int
+	mentionPopup     *components.MentionPopup
+	mentionMembers   map[int64][]domain.ChatMember
+	folderBar        *screens.FoldersModel
+	logo             components.LogoLoader
+	typingSerial     int
 	// msgHighlightSerial guards the jump-to message-highlight fade loop so a
 	// newer highlight or a stale tick is ignored.
 	msgHighlightSerial int
@@ -564,6 +596,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleNotification(msg)
 	case core.Failure:
 		return m.handleFailure(msg)
+	case core.MessageGone:
+		return m.handleMessageGone(msg), nil
 	case core.Typing:
 		return m.handleTyping(msg)
 	case screens.SendMsgRequest:
@@ -590,12 +624,21 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGifFramesReady(msg)
 	case gifTickMsg:
 		return m.handleGifTick(msg)
+	case gifFrameFailedMsg:
+		if msg.photoID == m.gifActiveID {
+			m.gifInFlight = false
+		}
+		return m, nil
 	case videoFileReadyMsg:
 		return m.handleVideoFileReady(msg)
 	case videoProbedMsg:
 		return m.handleVideoProbed(msg)
 	case videoTickMsg:
 		return m.handleVideoTick(msg)
+	case videoFrameEncodedMsg:
+		return m.handleVideoFrameEncoded(msg)
+	case videoFrameWrittenMsg:
+		return m.handleVideoFrameWritten(msg)
 	case reactionFailedMsg:
 		return m.handleReactionFailed(msg)
 	case reactionNotKeptMsg:
@@ -626,6 +669,14 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleForwardToChat(msg)
 	case screens.SearchUsersRequest:
 		return m.handleSearchUsers(msg)
+	case screens.MessageSearchRequest:
+		return m.handleMessageSearchRequest(msg)
+	case messageSearchAnswer:
+		return m.handleMessageSearchAnswer(msg)
+	case screens.MessageSearchClose:
+		return m.closeMessageSearch(), nil
+	case screens.MessageSearchJump:
+		return m.handleMessageSearchJump(msg)
 	case searchChatsMsg:
 		return m.handleSearchChats(msg)
 	case chatMenuFoldersMsg:
@@ -734,6 +785,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		screens.OpenTopicMsg,
 		screens.LeaveForumMsg,
 		screens.LoadMoreMsg,
+		screens.LoadNewerMsg,
+		screens.GoToLatestMsg,
 		PhotoReadyMsg,
 		FullPhotoReadyMsg,
 		kittyEncodedMsg,

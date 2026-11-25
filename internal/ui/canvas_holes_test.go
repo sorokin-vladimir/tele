@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -12,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/core"
-	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
@@ -221,18 +219,6 @@ func TestCanvas_MainScreenHasNoHoles(t *testing.T) {
 	}
 }
 
-// The clock-skew segment adds a run of its own to the status bar (#277).
-func TestCanvas_ClockSkewInTheStatusBarHasNoHoles(t *testing.T) {
-	paintedSlots(t)
-
-	m := newPopulatedRoot(t, 120, 40)
-	next, _ := m.Update(accountIs(m, project.AccountContents{Phase: project.AccountReady, ClockSkew: 8 * time.Minute}))
-	m = next.(ui.RootModel)
-
-	found := holes(m.View().Content, 120, 40)
-	require.Empty(t, found, report(found, "background"))
-}
-
 // Overlays are where the seams are: each one is stamped into the composed screen
 // by hand, and the stamping pads the base row out to meet it.
 //
@@ -344,7 +330,6 @@ func TestCanvas_LoginStatesHaveNoHoles(t *testing.T) {
 
 	states := map[string]tea.Msg{
 		"still connecting": screens.SlowConnectMsg{},
-		"clock skew":       accountIs(ui.NewRootModel(false), project.AccountContents{ClockSkew: 8 * time.Minute}),
 		"error": core.HostFailure{Err: &telerr.Error{
 			Kind: telerr.Network, Op: "dial", Detail: "connection refused",
 		}},

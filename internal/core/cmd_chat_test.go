@@ -28,12 +28,19 @@ type stubClient struct {
 	byUsername domain.Chat
 	resolved   []string
 
+	// byPeer is what FetchChat answers with; fetched is every address it was
+	// asked.
+	byPeer  domain.Chat
+	fetched []domain.Peer
+
 	mutedWith     *bool
 	archivedWith  *bool
 	unreadWith    *bool
 	readTo        int
 	editedTo      string
 	deletedIDs    []int
+	deleteCalls   [][]int // the ids of each DeleteMessages call, in order
+	deleteFailsOn int     // 1-based call that answers err; 0 means every call does
 	revoked       bool
 	reactedWith   string
 	reactionSent  bool

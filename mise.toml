@@ -6,6 +6,7 @@ golangci-lint = "2.15.0"
 lefthook = "2.2.3"
 "aqua:jdx/jactionlint" = "2.6.0"
 "aqua:betterleaks/betterleaks" = "1.10.1"
+"aqua:crate-ci/typos" = "1.52.2"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -66,6 +67,10 @@ run = "betterleaks git --no-banner --redact --verbose -c .betterleaks.toml ."
 [tasks.renovate-check]
 description = "Validate .github/renovate.json (needs node)"
 run = "npx --yes --package renovate@44.262.2 -- renovate-config-validator --strict"
+
+[tasks.typos]
+description = "Check spelling in code, comments and docs"
+run = "typos"
 
 [tasks.tidy]
 description = "Tidy go modules"

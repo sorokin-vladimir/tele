@@ -8,7 +8,7 @@
 # index with `git diff --cached --quiet`. This test pins that behavior for the
 # three cases: new file, modified file, unchanged file.
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
 fail=0
 check() { # check <description> <expected> <actual>

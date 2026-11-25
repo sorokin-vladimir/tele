@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for scripts/release-summary-lib.sh. Run: bash scripts/test/release-summary_lib_test.sh
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 source scripts/release-summary-lib.sh
 
 fail=0

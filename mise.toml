@@ -3,6 +3,7 @@ go = "1.26.11"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
 golangci-lint = "2.15.0"
 "aqua:koalaman/shellcheck" = "0.11.0"
+lefthook = "2.2.3"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -41,8 +42,8 @@ description = "Run go vet"
 run = "go vet ./..."
 
 [tasks.check]
-description = "Full check: vet + lint (every OS) + test + vulnerabilities"
-run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test ./...", "govulncheck ./..."]
+description = "Full check: vet + lint (every OS) + test + vulnerabilities + shellcheck"
+run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test ./...", "govulncheck ./...", { task = "shellcheck" }]
 
 [tasks.vuln]
 description = "Report known vulnerabilities in the code the build calls"

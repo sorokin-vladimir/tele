@@ -2,6 +2,7 @@
 go = "1.26.11"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
 golangci-lint = "2.15.0"
+"aqua:koalaman/shellcheck" = "0.11.0"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -46,6 +47,10 @@ run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test
 [tasks.vuln]
 description = "Report known vulnerabilities in the code the build calls"
 run = "govulncheck ./..."
+
+[tasks.shellcheck]
+description = "Run ShellCheck over every tracked shell script"
+run = "git ls-files -z '*.sh' | xargs -0 shellcheck"
 
 [tasks.tidy]
 description = "Tidy go modules"

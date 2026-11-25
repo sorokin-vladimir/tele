@@ -1,0 +1,15 @@
+# Secret scan for tele. The default rules stay on; the additions below
+# cover what is specific to this repository. Not loaded on its own: pass
+# `-c .betterleaks.toml` (mise run secrets does).
+[extend]
+useDefault = true
+
+# The injected app key reaches the release build from CI secrets and must
+# never be committed. An api_hash is 32 hex digits; the published key in
+# internal/appkey is stored as base64 fragments and does not match.
+[[rules]]
+id = "telegram-api-hash"
+description = "Telegram api_hash"
+regex = '''(?i)(?:api_?hash|TG_API_HASH|buildAPIHash)\W{0,8}([0-9a-f]{32})\b'''
+secretGroup = 1
+keywords = ["api_hash", "apihash", "tg_api_hash", "buildapihash"]

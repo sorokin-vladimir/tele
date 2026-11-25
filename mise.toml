@@ -5,6 +5,7 @@ golangci-lint = "2.15.0"
 "aqua:koalaman/shellcheck" = "0.11.0"
 lefthook = "2.2.3"
 "aqua:jdx/jactionlint" = "2.6.0"
+"aqua:betterleaks/betterleaks" = "1.10.1"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -57,6 +58,10 @@ run = "git ls-files -z '*.sh' | xargs -0 shellcheck"
 [tasks.actions]
 description = "Lint the GitHub Actions workflows and composite actions"
 run = "jactionlint"
+
+[tasks.secrets]
+description = "Scan the git history for secrets (values redacted)"
+run = "betterleaks git --no-banner --redact --verbose -c .betterleaks.toml ."
 
 [tasks.tidy]
 description = "Tidy go modules"

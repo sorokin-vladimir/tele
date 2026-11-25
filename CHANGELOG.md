@@ -11,6 +11,8 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-11-25
+
 ### Added
 
 - `cli.list_limit` sets how many rows `tele chats` and `tele topics` print as

@@ -12,6 +12,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Newer history is asked for by paging forward from afterID: a negative
+// add_offset of the whole limit puts the page past it.
+func TestBuildAfterRequest_PagesForwardFromTheMessage(t *testing.T) {
+	peer := &tg.InputPeerUser{UserID: 5}
+
+	req := buildAfterRequest(peer, 100, 20)
+
+	assert.Equal(t, peer, req.Peer)
+	assert.Equal(t, 100, req.OffsetID)
+	assert.Equal(t, -20, req.AddOffset)
+	assert.Equal(t, 20, req.Limit)
+}
+
+// The same holds in one topic of a forum, whose history is its replies.
+func TestBuildAfterRepliesRequest_PagesForwardInItsTopic(t *testing.T) {
+	peer := &tg.InputPeerChannel{ChannelID: 7}
+
+	req := buildAfterRepliesRequest(peer, 12, 100, 20)
+
+	assert.Equal(t, 12, req.MsgID)
+	assert.Equal(t, 100, req.OffsetID)
+	assert.Equal(t, -20, req.AddOffset)
+	assert.Equal(t, 20, req.Limit)
+}
+
 func TestSelectMessageByID(t *testing.T) {
 	msgs := []domain.Message{{ID: 1}, {ID: 2}, {ID: 3}}
 	got, ok := selectMessageByID(msgs, 2)

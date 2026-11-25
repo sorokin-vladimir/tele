@@ -121,6 +121,11 @@ func (m RootModel) openHistory(h domain.HistoryKey, title string) (RootModel, te
 		result, cmd := m.focusPane(FocusChat)
 		return result.(RootModel), cmd
 	}
+	// A message search of the chat being left is kept until another one is
+	// opened, and this is that moment (#349).
+	if m.searchMemory.chatFor != h {
+		m.searchMemory.chat = nil
+	}
 	// Persist the history we are leaving as a Telegram draft before switching
 	// (#62). Captured here while the current history still points at the old one.
 	draftFlush := m.flushCurrentDraftCmd()

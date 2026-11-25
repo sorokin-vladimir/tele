@@ -9,6 +9,73 @@ linters:
     - errcheck
     - staticcheck
     - misspell
+    - copyloopvar
+    - depguard
+    - errorlint
+    - exhaustive
+    - forbidigo
+    - gocritic
+    - nilerr
+    - nolintlint
+    - usestdlibvars
+
+  settings:
+    depguard:
+      rules:
+        # A client renders from projections and asks the owner everything else;
+        # reaching into persistence or into the Telegram layer is how that
+        # boundary erodes. Direct imports are what is checked: store and tg
+        # types still arrive through what the client takes from core. Tests
+        # may build fixtures from them.
+        ui:
+          files:
+            - "**/internal/ui/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/sorokin-vladimir/tele/internal/store
+              desc: take it from a projection or an owner query
+            - pkg: github.com/sorokin-vladimir/tele/internal/tg
+              desc: the UI reaches Telegram only through the owner
+
+    # %v at a boundary is deliberate: the error kinds are a closed list, and
+    # wrapping would expose causes that are not part of it.
+    errorlint:
+      errorf: false
+
+    # Most switches over an enum are partial by design, a menu handles a few of
+    # the key actions. A switch whose every member matters says so with
+    # //exhaustive:enforce.
+    exhaustive:
+      explicit-exhaustive: true
+      ignore-constants: "MediaKindCount"
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^reflect\.(Type|Value)\.(Method|MethodByName)$'
+          msg: a method looked up by reflection makes the linker keep every method, and the binary doubles
+        - pattern: '^fmt\.Print(f|ln)?$'
+          msg: the TUI owns the terminal; write to a given io.Writer or to the log
+
+    gocritic:
+      disabled-checks:
+        - appendAssign # reports reslicing a field's own slice, which is safe here
+        - argOrder # reports strings.Contains("..", q), a filter on a fixed name
+        - offBy1 # reports strings.Index on test output known to hold the text
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+  exclusions:
+    rules:
+      # A command prints its answer, and that is what its stdout is for.
+      - path: ^cmd/
+        linters: [forbidigo]
+        text: fmt\.Print
+      # Tests are not linked into the binary and do not draw in the terminal.
+      - path: _test\.go$
+        linters: [forbidigo]
 
 formatters:
   enable:

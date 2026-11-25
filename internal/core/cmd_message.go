@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -139,9 +138,8 @@ func (o *Owner) SendReaction(ctx context.Context, chatID int64, msgID int, emoji
 }
 
 // holdsOnlyOurs reports whether set marks exactly sent as ours, or nothing as
-// ours when sent is empty (a retract). The picker sends some emoji with a
-// variation selector that Telegram's reply leaves out ("❤️" comes back as
-// "❤"), so the two are compared without it.
+// ours when sent is empty (a retract). Both are spelled in emoji presentation:
+// the reply's set by the tg boundary, the pick by the picker (#294).
 func holdsOnlyOurs(set []domain.Reaction, sent string) bool {
 	var ours []string
 	for _, r := range set {
@@ -152,11 +150,7 @@ func holdsOnlyOurs(set []domain.Reaction, sent string) bool {
 	if sent == "" {
 		return len(ours) == 0
 	}
-	return len(ours) == 1 && withoutVariationSelector(ours[0]) == withoutVariationSelector(sent)
-}
-
-func withoutVariationSelector(emoji string) string {
-	return strings.ReplaceAll(emoji, "️", "")
+	return len(ours) == 1 && ours[0] == sent
 }
 
 // reactionToSend is the emoji sent to Telegram: empty retracts, which is what
@@ -213,8 +207,14 @@ func optimisticReactions(current []domain.Reaction, emoji string) []domain.React
 	return out
 }
 
+// deleteBatchSize is the most ids Telegram takes in one delete call.
+const deleteBatchSize = 100
+
 // DeleteMessages deletes messages, for everyone when revoke is set. They leave
-// the window at once and come back if Telegram refuses.
+// the window at once and come back if Telegram refuses. The ids go out in
+// batches of at most deleteBatchSize, one after another and in the order
+// given. The first refusal stops the run: the refused batch and the batches
+// not yet sent come back, the ones already deleted stay deleted.
 func (o *Owner) DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, revoke bool) error {
 	peer, err := o.peer(chatID)
 	if err != nil {
@@ -229,11 +229,21 @@ func (o *Owner) DeleteMessages(ctx context.Context, chatID int64, msgIDs []int, 
 		removed = append(removed, m)
 	}
 	o.state.ApplyDelete(chatID, msgIDs)
-	if err := o.client.DeleteMessages(ctx, peer, msgIDs, revoke); err != nil {
-		for _, m := range removed {
-			o.state.ApplyRestore(m)
+	// A call with no ids is still made once, as it was before batching.
+	for start := 0; start == 0 || start < len(msgIDs); start += deleteBatchSize {
+		end := min(start+deleteBatchSize, len(msgIDs))
+		if err := o.client.DeleteMessages(ctx, peer, msgIDs[start:end], revoke); err != nil {
+			unsent := make(map[int]bool, len(msgIDs)-start)
+			for _, id := range msgIDs[start:] {
+				unsent[id] = true
+			}
+			for _, m := range removed {
+				if unsent[m.ID] {
+					o.state.ApplyRestore(m)
+				}
+			}
+			return err
 		}
-		return err
 	}
 	return nil
 }
@@ -254,6 +264,10 @@ func (o *Owner) EditMessage(ctx context.Context, chatID int64, msgID int, text s
 	edited := prev
 	edited.Text = text
 	edited.Entities = entities
+	// The composed edit is plain text, so it has no structured blocks. Clearing
+	// Rich stops the bubble drawing the pre-edit blocks until Telegram echoes
+	// the edited message back.
+	edited.Rich = nil
 	now := time.Now()
 	edited.EditDate = &now
 	o.state.ApplyEdit(edited)

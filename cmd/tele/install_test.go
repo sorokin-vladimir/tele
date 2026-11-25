@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,13 +29,15 @@ type managed struct {
 	// runs is the command the installed service runs, empty when none is
 	// installed.
 	runs string
+	// failing is what Install fails with.
+	failing error
 }
 
 func (m *managed) Installed(string) (string, bool, error) { return m.runs, m.runs != "", nil }
 
 func (m *managed) Install(u service.Unit) error {
 	m.installed = append(m.installed, u)
-	return nil
+	return m.failing
 }
 
 func (m *managed) Uninstall(name string) (bool, error) {
@@ -95,6 +98,26 @@ func TestInstall_RegistersTheServiceOfThisConfig(t *testing.T) {
 		t.Errorf("the service logs to %q", u.LogPath)
 	}
 	assertSays(t, out.String(), "Installed", onPath)
+}
+
+// A service that outlasted the wait for it to stop left the new one written
+// and not started: installing again is what starts it, and the error says so
+// (#327).
+func TestInstall_AnOldServiceThatStaysAsksForAnotherInstall(t *testing.T) {
+	_, cfg := isolatedHome(t)
+	running, _ := teleOnPath(t)
+	m := &managed{failing: fmt.Errorf("%w: launchctl: Bootstrap failed: 5: Input/output error", service.ErrStillRunning)}
+	var out bytes.Buffer
+
+	err := installing(m, running, &out).install(context.Background(), options{cfgPath: cfg}, "")
+
+	if err == nil {
+		t.Fatal("installed over a service that did not stop")
+	}
+	assertSays(t, err.Error(), "did not stop in 30s", "Input/output error", "run `tele daemon install` again")
+	if out.Len() != 0 {
+		t.Errorf("said %q", out.String())
+	}
 }
 
 // The default config's service is named after the build alone.

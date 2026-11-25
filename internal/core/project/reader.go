@@ -7,7 +7,9 @@ import "github.com/sorokin-vladimir/tele/internal/domain"
 type Reader interface {
 	Chats() []domain.Chat
 	GetChat(id int64) (domain.Chat, bool)
-	Messages(h domain.HistoryKey) []domain.Message
+	// Runs returns a history's runs, oldest first: the unbroken stretches it
+	// is stored as. A window is built inside one of them.
+	Runs(h domain.HistoryKey) []domain.Run
 	FolderFilters() []domain.FolderFilter
 	// Topics and Topic answer for a forum's topics (#275).
 	Topics(chatID int64) []domain.Topic

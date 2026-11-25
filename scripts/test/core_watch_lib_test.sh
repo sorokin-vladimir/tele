@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for scripts/core-watch-lib.sh. Run: bash scripts/test/core_watch_lib_test.sh
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 source scripts/core-watch-lib.sh
 
 fail=0

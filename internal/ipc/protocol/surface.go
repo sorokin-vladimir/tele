@@ -46,6 +46,8 @@ var surface = map[string]any{
 	"Chat":             core.Surface.Chat,
 	"ResolveChat":      core.Surface.ResolveChat,
 	"History":          core.Surface.History,
+	"HistoryAround":    core.Surface.HistoryAround,
+	"SearchMessages":   core.Surface.SearchMessages,
 	"FolderFilters":    core.Surface.FolderFilters,
 	"GetParticipants":  core.Surface.GetParticipants,
 	"KnownUser":        core.Surface.KnownUser,
@@ -66,7 +68,7 @@ var surface = map[string]any{
 var (
 	Reads = set(
 		"Subscribe", "MoveWindow", "Unsubscribe", "LogOutPreview",
-		"SearchContacts", "Chats", "Topics", "Chat", "ResolveChat", "History",
+		"SearchContacts", "Chats", "Topics", "Chat", "ResolveChat", "History", "HistoryAround", "SearchMessages",
 		"FolderFilters", "GetParticipants", "KnownUser", "GetUser",
 		"FetchMedia", "SaveMedia", "InvalidateMedia", "FetchAvatar", "InvalidateAvatar",
 		"AwaitSend",

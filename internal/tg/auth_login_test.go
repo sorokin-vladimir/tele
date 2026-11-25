@@ -63,6 +63,8 @@ func (s *scriptedLogin) ExportLoginToken(context.Context) (qrlogin.Token, error)
 	return tokenN(s.exportN), nil
 }
 
+func (s *scriptedLogin) ServerTimeOffset() time.Duration { return 0 }
+
 func (s *scriptedLogin) ImportLoginToken(context.Context) error {
 	s.importN++
 	return next(s.imports, s.importN-1)
@@ -426,4 +428,14 @@ func TestAuthorize_ABannedAccountIsOfferedNoLogin(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, telerr.AccountBanned, telerr.Of(err))
 	assert.Zero(t, client.sends)
+}
+
+// A token's expiry is a date by Telegram's clock, so how long it has left is
+// measured by Telegram's clock: on a local clock five minutes fast it would
+// read as expired and be replaced at once, every second.
+func TestTokenRenewal_MeasuresTheTokenByTelegramsClock(t *testing.T) {
+	telegramNow := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	token := qrlogin.NewToken([]byte("t"), int(telegramNow.Add(30*time.Second).Unix()))
+
+	assert.Equal(t, 30*time.Second-qrRenewAhead, tokenRenewal(token, telegramNow))
 }

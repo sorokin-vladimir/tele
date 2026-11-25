@@ -124,6 +124,15 @@ type notifyOpenMsg struct {
 	serial     int
 }
 
+// desktopBannerLife is about how long a desktop notification banner stays on
+// screen (macOS shows one for about five seconds).
+const desktopBannerLife = 5 * time.Second
+
+// notifyToastLife is how long a notify toast stays. A click on the desktop
+// banner only brings the terminal forward, and the toast is what opens the
+// chat, so it must still be there after the banner is gone.
+const notifyToastLife = desktopBannerLife + 3*time.Second
+
 // showInAppNotify adds a top-right notify toast for a decision the owner made
 // and returns its auto-dismiss command. The whole toast is a click target that
 // opens the chat.
@@ -134,7 +143,7 @@ func (m RootModel) showInAppNotify(n core.Notification) tea.Cmd {
 	}
 	serial := m.toasts.Add(components.ToastNotify, title+"\n"+n.Body)
 	m.toasts.SetClick(serial, notifyOpenMsg{chatID: n.ChatID, topicID: n.TopicID, title: n.ChatTitle, topicTitle: n.TopicTitle, serial: serial})
-	return tea.Tick(durationFor(components.SeverityInfo), func(time.Time) tea.Msg {
+	return tea.Tick(notifyToastLife, func(time.Time) tea.Msg {
 		return ClearStatusErrMsg{Serial: serial}
 	})
 }

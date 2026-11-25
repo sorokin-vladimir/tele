@@ -8,7 +8,6 @@ import (
 
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
@@ -22,6 +21,12 @@ import (
 // manager subscribes to the channel. Everything below the wire is real - the
 // gotd manager, our dispatcher, the store - so what it measures is whether the
 // message behind the gap reaches the chat while a person is still looking.
+//
+// tele used to strip the timeout from every channel difference, because gotd
+// obeyed it as a ban on recovering the gap. gotd v0.164.0 reads it as a
+// polling hint for an idle channel only (gotd/td#1852), so the manager now
+// talks to the API straight, and this stand holds that behaviour against any
+// later gotd.
 const (
 	chanStandID      = int64(20)
 	chanStandHash    = int64(77)
@@ -105,16 +110,15 @@ func chanStandUpdate(msgID, pts int) *tg.Updates {
 }
 
 // chanStand wires the real manager to the real dispatcher and store, with the
-// API faked at the wire. withWrapper says whether the manager talks to the API
-// through the cooldown-stripping wrapper or straight to it.
-func chanStand(t *testing.T, withWrapper bool) (*updates.Manager, *chanStandAPI, store.Store) {
+// API faked at the wire.
+func chanStand(t *testing.T) (*updates.Manager, *chanStandAPI, store.Store) {
 	t.Helper()
 
 	events := make(chan store.Event, 256)
 	droppable := make(chan store.Event, 64)
 	dispatcher := tg.NewUpdateDispatcher()
 	setupDispatcher(&dispatcher, events, droppable, zap.NewNop(),
-		func(int) bool { return false }, newNameCache())
+		func(int) bool { return false }, newNameCache(), time.Now)
 
 	st := store.NewMemory()
 	st.SetChat(domain.Chat{ID: chanStandID, Peer: domain.Peer{
@@ -137,15 +141,10 @@ func chanStand(t *testing.T, withWrapper bool) (*updates.Manager, *chanStandAPI,
 	}()
 
 	api := &chanStandAPI{}
-	var raw updates.API = api
-	if withWrapper {
-		raw = newChannelDiffAPI(api, zap.NewNop())
-	}
-
 	manager := updates.New(updates.Config{Handler: dispatcher})
 	started := make(chan struct{})
 	go func() {
-		_ = manager.Run(ctx, raw, 1, updates.AuthOptions{
+		_ = manager.Run(ctx, api, 1, updates.AuthOptions{
 			OnStart: func(context.Context) { close(started) },
 		})
 	}()
@@ -179,7 +178,7 @@ func holdsMessage(st store.Store, id int) bool {
 }
 
 func TestStand_AChannelGapClosesDespiteTheCooldown(t *testing.T) {
-	manager, api, st := chanStand(t, true)
+	manager, api, st := chanStand(t)
 
 	subscribeThenGap(t, manager, api)
 
@@ -187,25 +186,4 @@ func TestStand_AChannelGapClosesDespiteTheCooldown(t *testing.T) {
 		"the message behind the gap must reach the chat within the gap timer, not after the cooldown")
 	require.Eventually(t, func() bool { return holdsMessage(st, 13) }, 5*time.Second, 20*time.Millisecond,
 		"and so must the one that revealed the gap")
-}
-
-// The same stand with the manager talking straight to the API, which is what
-// gotd does on its own. It reproduces the defect: the subscribe catch-up arms a
-// five-minute ban, the gap timer fires inside it, and the manager sits the ban
-// out instead of asking, discarding the channel's updates meanwhile.
-//
-// When this test starts failing, gotd/td#1852 has landed: delete the wrapper,
-// this test, and the entry both have in docs/gotd-workarounds.md (#270).
-func TestStand_WithoutTheWrapperAChannelGapWaitsOutTheCooldown(t *testing.T) {
-	manager, api, st := chanStand(t, false)
-
-	subscribeThenGap(t, manager, api)
-
-	// Well past the manager's 500ms gap timer: with nothing holding it back the
-	// gap would have been chased by now.
-	time.Sleep(2 * time.Second)
-
-	assert.Equal(t, 1, api.asks(),
-		"upstream no longer treats the timeout as a ban; the wrapper and this test can go")
-	assert.False(t, holdsMessage(st, 12), "the message behind the gap is still missing")
 }

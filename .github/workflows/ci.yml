@@ -9,17 +9,27 @@ on:
   # pull_request:
   #   branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      # Full history: the secret scan reads every commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: true
+
+      # The checking tools at the versions mise.toml pins, the same ones the
+      # git hooks run.
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
 
       - name: vet
         run: go vet ./...
@@ -29,10 +39,20 @@ jobs:
       - name: test
         run: go test -race -timeout 5m ./...
 
+      - name: vulnerabilities
+        run: govulncheck ./...
+
       - name: lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
+        run: golangci-lint run ./...
+
+      - name: shellcheck
+        run: mise run shellcheck
+
+      - name: actions
+        run: mise run actions
+
+      - name: secrets
+        run: mise run secrets
 
   # Verify the cgo-free static build and tests on the other target OSes. Audio
   # output is platform-specific (oto on macOS/Windows, PulseAudio on Linux), so
@@ -48,9 +68,9 @@ jobs:
     env:
       CGO_ENABLED: 0
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: true
@@ -80,9 +100,9 @@ jobs:
       GOOS: ${{ matrix.goos }}
       GOARCH: amd64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: true

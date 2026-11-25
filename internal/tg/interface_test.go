@@ -57,8 +57,20 @@ func (m *mockClient) GetForumTopicsByID(_ context.Context, _ domain.Peer, _ []in
 	return internaltg.ForumTopicsPage{}, nil
 }
 
-func (m *mockClient) GetHistoryAfter(_ context.Context, _ domain.Peer, _ int, _ int) ([]domain.Message, error) {
+func (m *mockClient) GetHistoryAfter(_ context.Context, _ domain.Peer, _, _, _ int) ([]domain.Message, error) {
 	return m.history, nil
+}
+
+func (m *mockClient) GetHistoryAround(_ context.Context, _ domain.Peer, _, _, _ int) ([]domain.Message, error) {
+	return m.history, nil
+}
+
+func (m *mockClient) FetchChat(_ context.Context, peer domain.Peer) (domain.Chat, error) {
+	return domain.Chat{ID: peer.ID, Peer: peer}, nil
+}
+
+func (m *mockClient) SearchMessages(_ context.Context, _ *domain.Peer, _ int, _ string, _ internaltg.SearchPosition, _ int) (internaltg.FoundMessages, error) {
+	return internaltg.FoundMessages{}, nil
 }
 
 func (m *mockClient) RefreshMessage(_ context.Context, _ domain.Peer, _ int) (domain.Message, error) {

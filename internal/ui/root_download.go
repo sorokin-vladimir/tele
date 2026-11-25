@@ -23,7 +23,7 @@ func decodeImageFile(path string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close() //nolint:errcheck
+	defer f.Close() //nolint:errcheck // opened for reading, closing cannot lose data
 	img, _, err := image.Decode(f)
 	if err != nil {
 		return nil, err

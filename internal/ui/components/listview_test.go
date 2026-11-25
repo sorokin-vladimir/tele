@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/ui/components"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListView_SetCount_ClampsCursor(t *testing.T) {
@@ -62,19 +63,59 @@ func TestListView_Render_AllRowsWhenFits(t *testing.T) {
 	assert.Equal(t, []string{"*", ".", "."}, rows)
 }
 
-func TestListView_Render_CentersCursor_WhenScrolling(t *testing.T) {
+// visible is the indexes of the rows a window of maxRows shows.
+func visible(l *components.ListView, maxRows int) []int {
+	var out []int
+	l.Render(maxRows, func(i int, _ bool) string {
+		out = append(out, i)
+		return ""
+	})
+	return out
+}
+
+// Going down, the cursor walks to the second-to-last row on screen, and only
+// then does the list move, a row at a time; at the end of the list it reaches
+// the last row.
+func TestListView_Render_ScrollsDownFromTheSecondToLastRow(t *testing.T) {
 	l := components.NewListView(false)
 	l.SetCount(10)
-	l.SetCursor(5)
-	rows := l.Render(4, func(i int, selected bool) string {
-		if selected {
-			return "X"
-		}
-		return "o"
-	})
-	// maxRows=4, cursor=5 -> offset = 5 - 2 = 3 -> rows for i=3,4,5,6
-	assert.Len(t, rows, 4)
-	assert.Equal(t, "X", rows[2]) // cursor (i=5) is the 3rd visible row
+
+	for range 4 {
+		l.MoveDown()
+	}
+	assert.Equal(t, []int{0, 1, 2, 3, 4, 5}, visible(l, 6), "the cursor on row 4 of 0-5 moves nothing")
+
+	l.MoveDown()
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6}, visible(l, 6), "past the second-to-last row the list moves by one")
+
+	for range 4 {
+		l.MoveDown()
+	}
+	assert.Equal(t, 9, l.Cursor())
+	assert.Equal(t, []int{4, 5, 6, 7, 8, 9}, visible(l, 6), "at the end the cursor reaches the last row")
+}
+
+// Going up is the mirror: the cursor walks to the second row on screen before
+// the list moves, and reaches the first row at the top of the list.
+func TestListView_Render_ScrollsUpFromTheSecondRow(t *testing.T) {
+	l := components.NewListView(false)
+	l.SetCount(10)
+	l.SetCursor(9)
+	require.Equal(t, []int{4, 5, 6, 7, 8, 9}, visible(l, 6))
+
+	for range 4 {
+		l.MoveUp()
+	}
+	assert.Equal(t, []int{4, 5, 6, 7, 8, 9}, visible(l, 6), "the cursor on row 5 of 4-9 moves nothing")
+
+	l.MoveUp()
+	assert.Equal(t, []int{3, 4, 5, 6, 7, 8}, visible(l, 6), "past the second row the list moves by one")
+
+	for range 4 {
+		l.MoveUp()
+	}
+	assert.Equal(t, 0, l.Cursor())
+	assert.Equal(t, []int{0, 1, 2, 3, 4, 5}, visible(l, 6), "at the top the cursor reaches the first row")
 }
 
 func TestListView_Render_ClampsAtBottom(t *testing.T) {

@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `bfe07cb`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `f8de3a6`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -39,7 +39,7 @@
 
 Telegram Desktop、网页版和手机应用都是围绕鼠标设计的。如果你的日常工作都在终端里，用着 Neovim、yazi、k9s 或 tmux，切换到图形界面的聊天软件会打断你的节奏。
 
-`tele` 让 Telegram 留在终端里。你可以像用 lazygit 一样用键盘操作它，它能通过 SSH 使用，空闲时只占约 50 MB 内存，而桌面客户端要占几百 MB。作者每天都在用它。
+`tele` 让 Telegram 留在终端里。你可以像用 lazygit 一样用键盘操作它，它能通过 SSH 使用。刚启动时，后台服务和一个窗口各占约 50 MB 内存，缓存媒体后会更多，而桌面客户端要占几百 MB。作者每天都在用它。
 
 同一个 `tele` 也能在命令行中使用：你，或者你允许运行它的 AI 代理，可以列出聊天、读取聊天并发送消息，而无需打开窗口。
 
@@ -52,6 +52,7 @@ Telegram Desktop、网页版和手机应用都是围绕鼠标设计的。如果�
 - **没有窗口也能收到通知。** `tele daemon install` 让账号从登录系统起保持在线。
 - **一个账号，多个窗口。** 第二个 `tele` 会连接到正在运行的那个，而不是重新建立连接。
 - **聊天、群组、频道和论坛**，支持文件夹、回复、反应、编辑、转发，以及与 Telegram 同步的草稿。
+- **富文本消息** 渲染标题、列表、表格、引用和详情块，并保留其布局。
 - **聊天内图片**：在 kitty、Ghostty 和 iTerm2 3.7.0+ 中以原画质显示，其他终端中显示为字符块画。
 - **语音消息在应用内播放**，带有波形和移动的播放位置。
 - **视频、圆形视频和 GIF** 在聊天中显示预览。选中的 GIF 会在原位循环播放。
@@ -95,7 +96,7 @@ Claude Code 低于 2.1.275 时，先添加市场：`claude plugin marketplace ad
 
 </details>
 
-命令能做到哪一步由 `cli.account_commands` 决定：设为 `read` 时它们可以读取但不能发送，设为 `none` 时它们什么也拿不到。[docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)
+命令能做到哪一步由 `cli.account_commands` 决定：默认值为 `read`，此时它们可以读取但不能发送；设为 `all` 时它们还可以发送；设为 `none` 时它们什么也拿不到。[docs/zh-CN/cli.md](docs/zh-CN/cli.md#keeping-commands-out-of-your-chats)
 
 ---
 
@@ -200,7 +201,7 @@ echo 'deb [trusted=yes] https://apt.fury.io/sorokin-vladimir/ /' \
 sudo apt update && sudo apt install tele
 ```
 
-每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.deb` 文件。
+这个软件源在添加时不检查签名：它提供什么，apt 就安装什么（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.deb`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo apt install ./tele_<版本>_amd64.deb`。
 
 </details>
 
@@ -218,7 +219,7 @@ EOF
 sudo dnf install tele   # 或：sudo zypper install tele
 ```
 
-每个[版本](https://github.com/sorokin-vladimir/tele/releases/latest)也附带了签名的 `.rpm` 文件。
+这个软件源在添加时不检查签名：它提供什么，dnf 和 zypper 就安装什么（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.rpm`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo dnf install ./tele-<版本>-1.x86_64.rpm`。
 
 </details>
 
@@ -229,6 +230,8 @@ sudo dnf install tele   # 或：sudo zypper install tele
 echo 'https://alpine.fury.io/sorokin-vladimir/' | sudo tee -a /etc/apk/repositories
 sudo apk add --allow-untrusted tele
 ```
+
+`--allow-untrusted` 会关闭 apk 的签名检查：软件包目前尚未签名（[#342](https://github.com/sorokin-vladimir/tele/issues/342)）。如需安装经过检查的软件包，请从[最新版本](https://github.com/sorokin-vladimir/tele/releases/latest)下载 `.apk`，按[检查下载的文件](#checking-a-download)中的方法检查，然后运行 `sudo apk add --allow-untrusted ./tele_<版本>_x86_64.apk`。
 
 </details>
 
@@ -301,6 +304,21 @@ environment.systemPackages = [
 
 AUR 和 Snap 软件包已在计划中，但尚未发布。
 
+<a id="checking-a-download"></a>
+### 检查下载的文件
+
+每个版本都附带 `checksums.txt`，其中列出所有二进制文件、压缩包和软件包的 SHA-256，并由发布工作流通过 [Sigstore](https://www.sigstore.dev/) 签名。要检查下载的文件，请把同一版本的 `checksums.txt` 和 `checksums.txt.sigstore.json` 放在它旁边，然后运行：
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sorokin-vladimir/tele/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+第一条命令证明 `checksums.txt` 来自 tele 的发布工作流，第二条证明你的文件与它一致。
+
 ---
 
 <a id="getting-started"></a>
@@ -329,7 +347,8 @@ AUR 和 Snap 软件包已在计划中，但尚未发布。
 | `O`                 | 在外部播放器中打开视频                            |
 | `p`                 | 在应用内播放语音消息                              |
 | `s`                 | 下载选中的文件                                    |
-| `/`                 | 搜索聊天                                          |
+| `/`                 | 搜索聊天；在聊天中则搜索其中的消息                |
+| `g /`               | 搜索所有聊天的消息                                |
 | `space`             | 消息的上下文菜单                                  |
 | `0` / `1` / `2`     | 聚焦面板                                          |
 | `,`                 | 设置                                              |
@@ -361,9 +380,9 @@ AUR 和 Snap 软件包已在计划中，但尚未发布。
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v1.11` _(已完成)_  | 设置与用户：应用内设置面板、用户资料面板、头像、内置于二进制文件的主题，以及遗留的分发和审查问题                                                                                                                                         |
 | `v2.0` _(已完成)_   | Telegram 连接的唯一持有者：连接到同一个 `tele` 的多个窗口、从登录起保持其运行的服务、没有窗口也能收到的通知、对 Telegram 调用的统一额度；2.0.1 加入了列出聊天和话题、读取聊天并向其发送消息的命令，以及给 AI 代理的指南                 |
-| `v2.1`              | 渲染与布局：富文本消息（表格、标题、列表）、按实际宽度显示含 emoji 的名字、让聚焦的面板占满整个屏幕、撰写消息时选择 emoji                                                                                                               |
-| `v2.2`              | 更多命令行功能：登录、搜索、发送文件和反应、随新消息到达持续跟踪聊天                                                                                                                                                                     |
-| `Backlog`           | 进阶用户与平台：搜索（全文历史搜索、命令面板、聊天内搜索）、定时发送、机器人命令和内联键盘、私密聊天、投票、更多 vim 动作、点击通知跳转                                                                              |
+| `v2.1`              | 渲染与布局：富文本消息（表格、标题、列表）、按实际宽度显示含 emoji 的名字、让聚焦的面板占满整个屏幕、撰写消息时选择 emoji；在聊天内或所有聊天中搜索消息（窗口和命令行均可），以及在任意一条消息处打开聊天，无论它有多早 |
+| `v2.2`              | 更多命令行功能：登录、发送文件和反应、随新消息到达持续跟踪聊天                                                                                                                                                                           |
+| `Backlog`           | 进阶用户与平台：搜索筛选（发送者、类型、日期、归档）和分页、命令面板、定时发送、机器人命令和内联键盘、私密聊天、投票、更多 vim 动作、点击通知跳转                                                                              |
 
 工作还按看板上的 **Theme** 字段分类（Security & Reliability、Architecture & Performance、Feature Completeness、Power User & Polish）。
 

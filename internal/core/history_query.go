@@ -5,30 +5,32 @@ import (
 	"slices"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 // History answers with up to limit messages of history h older than before,
 // or the newest when before is zero, oldest first. It is a command's way to
-// read: what the store holds answers, and what it lacks is fetched page by
-// page back from the oldest message held, as a window's backfill fetches it,
-// and kept (#181).
+// read: the run that reaches up to before answers, the tail run for zero, and
+// what it lacks is fetched page by page back from its oldest message, as a
+// window's backfill fetches it, and kept (#181).
 //
-// Only a stretch that joins what is held is kept. Messages older than
-// anything held are fetched from before itself and not kept: the store would
-// hold them with the stretch between missing, and a window would draw them as
-// adjacent. Neither is a chat known by its address alone kept, since the
-// account has no dialog with it.
+// With no run reaching up to before, the page older than before is fetched and
+// kept as a run of its own: the stretch between it and the rest stays
+// unclaimed, so nothing reads it as adjacent, and the next command asking for
+// it is answered from the store (#347). A chat known by its address alone is
+// not kept, since the account has no dialog with it.
 func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
-	peer, err := o.peer(h.ChatID)
+	chat, err := o.chatOf(ctx, h.ChatID)
 	if err != nil {
 		return nil, err
 	}
-	st := o.state.Store()
-	chat, held := st.GetChat(h.ChatID)
-	if held && chat.IsForum && h.TopicID == 0 {
-		return nil, &telerr.Error{Kind: telerr.NotFound, Op: "history", Detail: "a forum's messages are its topics'"}
+	if chat.IsForum && h.TopicID == 0 {
+		return nil, &telerr.Error{Kind: telerr.NotFound, Op: OpNoTopic, Detail: "a forum's messages are its topics'"}
 	}
+	peer := chat.Peer
+	st := o.state.Store()
+	_, held := st.GetChat(h.ChatID)
 	fetch := func(offsetID int) ([]domain.Message, error) {
 		page := max(limit, o.Config().UI.HistoryLimit)
 		if h.TopicID != 0 {
@@ -43,30 +45,58 @@ func (o *Owner) History(ctx context.Context, h domain.HistoryKey, before, limit 
 
 	st.LoadMessages(h)
 	o.forwardFill(ctx, h.ChatID)
+	defer o.holdReading(h, store.Shown{Anchor: before, Before: limit})()
 	for {
-		stored := st.Messages(h)
-		if before != 0 && (len(stored) == 0 || before <= stored[0].ID) {
-			// Older than anything held: a page that would not join it.
+		run, ok := runUpTo(st.Runs(h), before)
+		if !ok {
+			// Nothing held reaches up to before: the page under it reaches up
+			// to before, and joins the run holding before or is a run of its
+			// own; for zero it is the newest page of a history holding no tail
+			// run.
 			page, err := fetch(before)
-			return newestOf(page, before, limit), err
+			if err != nil {
+				return nil, err
+			}
+			o.state.MergeOlder(h, before, page)
+			if len(page) == 0 {
+				return nil, nil
+			}
+			continue
 		}
-		got := newestOf(stored, before, limit)
-		if len(got) == limit {
+		got := newestOf(run.Messages, before, limit)
+		if len(got) == limit || run.AtBeginning {
 			return got, nil
 		}
-		offset := 0
-		if len(stored) > 0 {
-			offset = stored[0].ID
-		}
-		page, err := fetch(offset)
+		oldest := run.Messages[0].ID
+		page, err := fetch(oldest)
 		if err != nil {
 			return nil, err
 		}
-		if _, added := o.state.MergeHistory(h, page); !added {
-			// Nothing new: the history has no more to give.
+		if _, added := o.state.MergeOlder(h, oldest, page); !added {
+			// Nothing new: the run reaches the beginning now.
 			return got, nil
 		}
 	}
+}
+
+// runUpTo is the run whose messages older than before reach up to it with
+// nothing missing between: the tail run when before is zero, else the run
+// holding a message older than before that reaches up to before, or ends at
+// the tail. A run that ends below before is not it, since what lies between
+// was never fetched.
+func runUpTo(runs []domain.Run, before int) (domain.Run, bool) {
+	if before == 0 {
+		return domain.TailRun(runs)
+	}
+	for _, r := range runs {
+		if len(r.Messages) == 0 {
+			continue
+		}
+		if r.Messages[0].ID < before && (before <= r.UpTo || r.AtTail) {
+			return r, true
+		}
+	}
+	return domain.Run{}, false
 }
 
 // newestOf is the newest limit messages of msgs older than before, every one

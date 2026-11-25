@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
@@ -29,6 +30,37 @@ func TestEditMessage_ShowsTheNewTextBeforeTheServerAnswers(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "after", got[0].Text)
 	assert.Equal(t, "after", c.editedTo)
+}
+
+func TestEditMessage_ClearsRichContentBeforeTheServerAnswers(t *testing.T) {
+	c := &stubClient{}
+	o, st := newCmdOwner(t, c)
+	st.SetMessages(1, []domain.Message{{
+		ID: 5, ChatID: 1, Text: "before", Date: time.Unix(1, 0),
+		Rich: &domain.RichMessage{Blocks: []domain.RichBlock{
+			{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+		}},
+	}})
+
+	require.NoError(t, o.EditMessage(context.Background(), 1, 5, "after", nil))
+
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Nil(t, got.Rich, "a plain-text edit must stop drawing the old blocks")
+}
+
+func TestEditMessage_RestoresRichContentOnFailure(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}}
+	o, st := newCmdOwner(t, c)
+	rich := &domain.RichMessage{Blocks: []domain.RichBlock{
+		{Kind: domain.RichParagraph, Text: domain.RichText{Kind: domain.RichTextPlain, Text: "structured"}},
+	}}
+	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Text: "before", Date: time.Unix(1, 0), Rich: rich}})
+
+	err := o.EditMessage(context.Background(), 1, 5, "after", nil)
+
+	require.Error(t, err)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Equal(t, rich, got.Rich, "a refused edit puts the old blocks back")
 }
 
 // A refused edit must leave no trace: neither the new text, nor the "edited"
@@ -57,7 +89,106 @@ func TestEditMessage_UnknownMessageIsNotFound(t *testing.T) {
 
 func (s *stubClient) DeleteMessages(_ context.Context, _ domain.Peer, ids []int, revoke bool) error {
 	s.deletedIDs, s.revoked = ids, revoke
+	s.deleteCalls = append(s.deleteCalls, append([]int(nil), ids...))
+	if s.deleteFailsOn != 0 && s.deleteFailsOn != len(s.deleteCalls) {
+		return nil
+	}
 	return s.err
+}
+
+// seedNumbered stores messages 1..n in chat 1 and returns their ids in order.
+func seedNumbered(st store.Store, n int) []int {
+	msgs := make([]domain.Message, n)
+	ids := make([]int, n)
+	for i := range msgs {
+		ids[i] = i + 1
+		msgs[i] = domain.Message{ID: i + 1, ChatID: 1, Text: "m", Date: time.Unix(int64(i+1), 0)}
+	}
+	st.SetMessages(1, msgs)
+	return ids
+}
+
+func TestDeleteMessages_SendsAtMostOneHundredIDsPerCall(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		count int
+		sizes []int
+	}{
+		{"one", 1, []int{1}},
+		{"exactly a batch", 100, []int{100}},
+		{"one over", 101, []int{100, 1}},
+		{"two and a half batches", 250, []int{100, 100, 50}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &stubClient{}
+			o, st := newCmdOwner(t, c)
+			ids := seedNumbered(st, tc.count)
+
+			require.NoError(t, o.DeleteMessages(context.Background(), 1, ids, true))
+
+			require.Len(t, c.deleteCalls, len(tc.sizes))
+			var sent []int
+			for i, call := range c.deleteCalls {
+				assert.Len(t, call, tc.sizes[i])
+				sent = append(sent, call...)
+			}
+			assert.Equal(t, ids, sent, "every id goes out once, in the order given")
+			assert.True(t, c.revoked)
+			assert.Empty(t, st.Messages(domain.HistoryKey{ChatID: 1}))
+		})
+	}
+}
+
+// The window shows all of them gone at once; only the refused batch and the
+// ones after it are put back.
+func TestDeleteMessages_StopsAtTheFirstRefusedBatch(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}, deleteFailsOn: 2}
+	o, st := newCmdOwner(t, c)
+	ids := seedNumbered(st, 250)
+
+	err := o.DeleteMessages(context.Background(), 1, ids, false)
+
+	require.Error(t, err)
+	assert.Equal(t, telerr.Forbidden, telerr.Of(err))
+	require.Len(t, c.deleteCalls, 2, "nothing is sent after the refusal")
+	got := st.Messages(domain.HistoryKey{ChatID: 1})
+	require.Len(t, got, 150)
+	assert.Equal(t, 101, got[0].ID, "the first batch stays deleted")
+	assert.Equal(t, 250, got[len(got)-1].ID)
+}
+
+func TestDeleteMessages_RefusalOfTheFirstBatchRestoresEverything(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}}
+	o, st := newCmdOwner(t, c)
+	ids := seedNumbered(st, 150)
+
+	require.Error(t, o.DeleteMessages(context.Background(), 1, ids, true))
+
+	assert.Len(t, c.deleteCalls, 1)
+	assert.Len(t, st.Messages(domain.HistoryKey{ChatID: 1}), 150)
+}
+
+// A message that was already gone has nothing to put back, whatever batch it
+// was in.
+func TestDeleteMessages_RefusalDoesNotResurrectMissingMessages(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.Forbidden}, deleteFailsOn: 2}
+	o, st := newCmdOwner(t, c)
+	ids := seedNumbered(st, 120)
+	var kept []domain.Message
+	for _, m := range st.Messages(domain.HistoryKey{ChatID: 1}) {
+		if m.ID != 110 {
+			kept = append(kept, m)
+		}
+	}
+	st.SetMessages(1, kept)
+
+	require.Error(t, o.DeleteMessages(context.Background(), 1, ids, true))
+
+	got := st.Messages(domain.HistoryKey{ChatID: 1})
+	require.Len(t, got, 19, "messages 101..120 come back, except the one that was gone")
+	for _, m := range got {
+		assert.NotEqual(t, 110, m.ID)
+	}
 }
 
 func TestDeleteMessages_RemovesBeforeTheServerAnswers(t *testing.T) {
@@ -187,7 +318,6 @@ func TestSendReaction_JudgesTheSetTheReplyStates(t *testing.T) {
 		{"retracted and gone", chosen("👍"), "👍", chosen(), true},
 		{"retracted but still ours", chosen("👍"), "👍", chosen("👍"), false},
 		{"empty set stated", nil, "👍", []domain.Reaction{}, false},
-		{"kept without the variation selector", nil, "❤️", chosen("❤"), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1,0 +1,18 @@
+[files]
+extend-exclude = [
+  "go.mod",
+  "go.sum",
+  "flake.lock",
+]
+
+[default]
+extend-ignore-re = [
+  # Short commit hashes in prose, such as `ba129a5`.
+  "`[0-9a-f]{7,12}`",
+  # base64 fragments of the published app key.
+  "Fragments\\s*=\\s*\\[\\]string\\{[^}]*\\}",
+  # macOS pasteboard type, as in «class PNGf».
+  "PNGf",
+  # Test input that differs from "abc" by one letter on purpose.
+  "RandomIDFor\\(\"abd\"\\)",
+]

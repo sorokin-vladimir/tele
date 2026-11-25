@@ -115,6 +115,7 @@ func TestEvents_EachCrossesUnderItsName(t *testing.T) {
 			ChatTitle: "Club", TopicTitle: "Rules", Body: "hello",
 		},
 		"account_ended": core.AccountEnded{Reason: core.EndLoggedOutElsewhere, Discarded: 2},
+		"message_gone":  core.MessageGone{ChatID: -1001, TopicID: 7, MsgID: 500, Nearest: 499},
 		"host_failure": core.HostFailure{Err: &telerr.Error{
 			Kind: telerr.Internal, Detail: "the account that ended could not be removed",
 		}},

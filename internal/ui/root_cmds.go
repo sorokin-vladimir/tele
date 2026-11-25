@@ -68,7 +68,7 @@ func logoTickCmd() tea.Cmd {
 }
 
 func requestBGColorCmd() tea.Cmd {
-	return func() tea.Msg { return tea.RequestBackgroundColor() }
+	return tea.RequestBackgroundColor
 }
 
 // enableColorSchemeReportsCmd turns on DEC private mode 2031 so a supporting

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,12 +14,21 @@ import (
 	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/telerr"
 )
 
 var me = project.LoggedInUser{ID: 77, Username: "ada", Name: "Ada Lovelace"}
 
 func (f *fakeAccount) History(_ context.Context, h domain.HistoryKey, before, limit int) ([]domain.Message, error) {
 	f.historyAsked = append(f.historyAsked, historyAsk{h, before, limit})
+	return f.history, nil
+}
+
+func (f *fakeAccount) HistoryAround(_ context.Context, h domain.HistoryKey, id, limit int) ([]domain.Message, error) {
+	f.aroundAsked = append(f.aroundAsked, historyAsk{h, id, limit})
+	if f.aroundErr != nil {
+		return nil, f.aroundErr
+	}
 	return f.history, nil
 }
 
@@ -59,7 +69,7 @@ func TestTakesHold_cli_name_width(t *testing.T) {
 		if err := showMessages(shortCtx(t), a, &showOut, "42", showQuery{limit: 1}); err != nil {
 			t.Fatal(err)
 		}
-		if err := listChats(shortCtx(t), a, &chatsOut, chatsQuery{nameWidth: a.cfg.CLI.NameWidth}); err != nil {
+		if err := listChats(shortCtx(t), a, &chatsOut, nil, chatsQuery{nameWidth: a.cfg.CLI.NameWidth}); err != nil {
 			t.Fatal(err)
 		}
 		return showOut.String(), chatsOut.String()
@@ -161,6 +171,62 @@ func TestShow_AForumNeedsATopicAndOnlyAForumHasOne(t *testing.T) {
 	}
 	if len(acc.historyAsked) != 0 {
 		t.Errorf("asked for a history anyway: %+v", acc.historyAsked)
+	}
+}
+
+// --around asks for the history around the message named, and not for the
+// newest (#348).
+func TestShow_AroundAsksAroundTheMessage(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 42}: {ID: 42, Title: "Bob"}}
+	acc.history = []domain.Message{{ID: 49, Date: at(25, 9, 0), Text: "before"}, {ID: 50, Date: at(25, 9, 1), Text: "found"}}
+	var out bytes.Buffer
+
+	if err := showMessages(shortCtx(t), held(acc), &out, "42", showQuery{limit: 7, around: 50}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []historyAsk{{h: domain.HistoryKey{ChatID: 42}, before: 50, limit: 7}}
+	if !reflect.DeepEqual(acc.aroundAsked, want) {
+		t.Errorf("asked %+v, want %+v", acc.aroundAsked, want)
+	}
+	if len(acc.historyAsked) != 0 {
+		t.Errorf("asked for the newest too: %+v", acc.historyAsked)
+	}
+	assertSays(t, out.String(), "before", "found")
+}
+
+// A message that is not there exits 5 and says which.
+func TestShow_AroundAMessageNotThereExitsFive(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 42}: {ID: 42, Title: "Bob"}}
+	acc.aroundErr = &telerr.Error{Kind: telerr.NotFound, Op: core.OpNoMessage}
+
+	err := showMessages(shortCtx(t), held(acc), &bytes.Buffer{}, "42", showQuery{limit: 7, around: 50})
+
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != notFoundCode {
+		t.Fatalf("got %v, want exit %d", err, notFoundCode)
+	}
+	assertSays(t, code.msg, "No message 50", "Bob")
+}
+
+// A topic that is not there exits 5 and says it is the topic, not the
+// message, that is missing (#348).
+func TestShow_AroundInATopicNotThereSaysTheTopic(t *testing.T) {
+	acc := newFakeAccount()
+	acc.byName = map[core.ChatName]project.ChatRow{{ID: 300}: {ID: 300, Title: "Gophers", IsForum: true}}
+	acc.aroundErr = &telerr.Error{Kind: telerr.NotFound, Op: core.OpNoTopic}
+
+	err := showMessages(shortCtx(t), held(acc), &bytes.Buffer{}, "300", showQuery{limit: 7, around: 50, topic: 999})
+
+	var code *exitCode
+	if !errors.As(err, &code) || code.code != notFoundCode {
+		t.Fatalf("got %v, want exit %d", err, notFoundCode)
+	}
+	assertSays(t, code.msg, "No topic 999", "Gophers")
+	if strings.Contains(code.msg, "message") {
+		t.Errorf("blames the message: %q", code.msg)
 	}
 }
 

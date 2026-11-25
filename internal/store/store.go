@@ -19,16 +19,36 @@ type Store interface {
 	// SetMessages replaces everything a chat holds with a page, laid out among
 	// its histories: in a forum, every topic at once.
 	SetMessages(chatID int64, msgs []domain.Message)
-	// MergeMessages merges a fetched page into one history under a single hold
-	// of the store's lock and reports how many messages it added. It is how a
-	// page fetched from Telegram is applied: SetMessages after a read outside
-	// the lock would drop anything that arrived in between.
-	MergeMessages(h domain.HistoryKey, msgs []domain.Message) int
-	// RepairMessages merges a page the way MergeMessages does, laid out among
-	// the chat's histories, but leaves each no deeper than it found it: a page
-	// nobody asked for must not raise what the chat costs to hold. It takes a
-	// chat rather than a history because a gap is the chat's.
+	// Runs returns a history's runs, oldest first: the unbroken stretches it
+	// is stored as, each with the messages it holds.
+	Runs(h domain.HistoryKey) []domain.Run
+	// MergeAround, MergeOlder and MergeNewer each merge a page fetched from
+	// Telegram under a single hold of the store's lock: SetMessages after a
+	// read outside the lock would drop anything that arrived in between. They
+	// differ in where the page lies against what is held.
+	//
+	// MergeAround stores a page fetched around one message as a run of its
+	// own, joined to whichever runs it meets, and reports how many messages it
+	// added.
+	MergeAround(h domain.HistoryKey, msgs []domain.Message) int
+	// MergeOlder stores a page fetched older than message below, growing the
+	// run that holds below; zero for below means the newest page, which ends
+	// at the tail. A page with nothing older than below marks the run as
+	// reaching the beginning. It reports how many messages it added.
+	MergeOlder(h domain.HistoryKey, below int, msgs []domain.Message) int
+	// MergeNewer stores a page fetched newer than message above, growing the
+	// run that holds above. A page with nothing newer than above marks the
+	// run as ending at the tail. It reports how many messages it added.
+	MergeNewer(h domain.HistoryKey, above int, msgs []domain.Message) int
+	// RepairMessages merges a page fetched to close a gap, laid out among the
+	// chat's histories on their tail runs. It takes a chat rather than a
+	// history because a gap is the chat's.
 	RepairMessages(chatID int64, msgs []domain.Message) int
+	// SetShown records what windows show of each history, replacing what was
+	// recorded before. The cap never drops what is shown, so a scrollback
+	// somebody loaded is held while somebody looks at it, and given up at the
+	// next write once nobody does.
+	SetShown(shown map[domain.HistoryKey][]Shown)
 	// Gap reports the message a chat's missing range opens after, if it has
 	// one. A gap is recorded when it opens rather than noticed later: once
 	// updates resume the tail moves past the hole and nothing can see it.
@@ -67,6 +87,10 @@ type Store interface {
 	// without appending to its message slice (e.g. a forward target).
 	BumpChatLastMessage(chatID int64, msg domain.Message)
 	UpdateMessageText(chatID int64, msgID int, text string, entities []domain.MessageEntity)
+	// UpdateMessageRich replaces a message's structured rich content. It takes a
+	// nil for a message whose new version has no blocks, so an edit can clear
+	// the old structure as well as replace it.
+	UpdateMessageRich(chatID int64, msgID int, rich *domain.RichMessage)
 	// MarkMessageEdited records when a message was last edited and whether
 	// Telegram asked for the "edited" label to be hidden. It is separate from
 	// the text write because a hidden edit changes the text without earning the

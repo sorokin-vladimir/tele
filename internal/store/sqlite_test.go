@@ -47,6 +47,37 @@ func TestSQLite_SetChat_PersistsSurvivesReopen(t *testing.T) {
 	assert.Equal(t, int64(999), chat.Peer.AccessHash)
 }
 
+// A build from before #294 stored reactions as Telegram spells them, a red
+// heart without U+FE0F. Read back, such a row is spelled the way every set
+// from Telegram now is, so picking the heart again still takes it back.
+func TestSQLite_LoadMessages_SpellsReactionsStoredByAnOlderBuild(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+
+	s, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	s.SetChat(domain.Chat{ID: 7, Peer: domain.Peer{ID: 7, Type: domain.PeerUser}})
+	s.SetMessages(7, []domain.Message{{
+		ID: 1, ChatID: 7, Text: "hi", Date: time.Unix(1, 0),
+		Reactions: []domain.Reaction{
+			{Emoji: "\U00002764", Count: 2, IsChosen: true},
+			{Emoji: "👍", Count: 1},
+		},
+	}})
+	require.NoError(t, s.Close())
+
+	s2, err := store.NewSQLite(path, zap.NewNop())
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+	s2.LoadMessages(domain.HistoryKey{ChatID: 7})
+
+	got := s2.Messages(domain.HistoryKey{ChatID: 7})
+	require.Len(t, got, 1)
+	assert.Equal(t, []domain.Reaction{
+		{Emoji: "\U00002764\U0000FE0F", Count: 2, IsChosen: true},
+		{Emoji: "👍", Count: 1},
+	}, got[0].Reactions)
+}
+
 func TestSQLite_LastMessage_PersistsSurvivesReopen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.db")
@@ -205,10 +236,9 @@ func TestSQLite_AppendMessage_CapsHistory(t *testing.T) {
 	assert.Empty(t, s.RemoveMessagesByID([]int{1}))
 }
 
-// SetMessages is the owner saying what a chat's history is, and how deep it goes
-// is driven by how far the reader scrolled. Capping it would cap the scrollback:
-// the view is built from what the store holds.
-func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
+// SetMessages is a tail reload: a fresh page nobody is looking at yet, capped
+// like anything else. Only what a window shows is held past the cap.
+func TestSQLite_SetMessages_KeepsTheNewestWithNobodyLooking(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
 	msgs := make([]domain.Message, total)
@@ -219,12 +249,13 @@ func TestSQLite_SetMessages_KeepsWhatItIsGiven(t *testing.T) {
 	s.SetMessages(1, msgs)
 
 	got := s.Messages(domain.HistoryKey{ChatID: 1})
-	require.Len(t, got, total)
-	assert.Equal(t, 1, got[0].ID)
+	require.Len(t, got, store.MaxMessagesPerChat)
+	assert.Equal(t, 101, got[0].ID)
 	assert.Equal(t, total, got[len(got)-1].ID)
 }
 
-// An arriving message must not trim a scrollback the reader deliberately loaded.
+// An arriving message must not trim a scrollback the reader deliberately loaded
+// and is looking at.
 func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 	s := newTestSQLite(t)
 	const total = store.MaxMessagesPerChat + 100
@@ -232,6 +263,7 @@ func TestSQLite_AppendMessage_DoesNotTrimALoadedScrollback(t *testing.T) {
 	for i := range msgs {
 		msgs[i] = domain.Message{ID: i + 1, ChatID: 1}
 	}
+	s.SetShown(map[domain.HistoryKey][]store.Shown{{ChatID: 1}: {{Anchor: total, Before: total}}})
 	s.SetMessages(1, msgs)
 
 	s.AppendMessage(domain.Message{ID: total + 1, ChatID: 1})

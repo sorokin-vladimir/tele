@@ -27,9 +27,10 @@
 
           src = ./.;
 
-          # Must be regenerated whenever go.mod/go.sum changes: run `nix build`,
-          # copy the "got: sha256-..." hash it reports, and paste it here.
-          vendorHash = "sha256-eCWK0KmDdsZWMx4RIXyJ8chbG6wGfXTuS0jTF4eB02M=";
+          # Must be regenerated whenever go.mod/go.sum changes: run
+          # `mise run vendor-hash` (nix in Docker) or `nix build`, and paste
+          # the hash it reports here.
+          vendorHash = "sha256-qS5ble9z/Xur76+kq2nl1S9vH0rahVMUaN6w39Jesps=";
 
           subPackages = [ "cmd/tele" ];
 
@@ -67,15 +68,20 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             go
-            golangci-lint
             lefthook
+            mise
             gotools
             xclip
             wl-clipboard
           ];
 
+          # The git hooks run tools nixpkgs lacks or holds at another version.
+          # mise installs those; its shims go last, so what this shell provides
+          # keeps priority.
           shellHook = ''
+            export PATH="$PATH:''${MISE_DATA_DIR:-''${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
             echo "tele dev shell — go $(go version | cut -d' ' -f3)"
+            echo "  mise trust && mise install                           # tools the git hooks run"
             echo "  go run ./cmd/tele/ --config .config/tele/config.yml   # run (dev config)"
             echo "  go test ./...                                        # test"
             echo "  golangci-lint run ./...                              # lint"

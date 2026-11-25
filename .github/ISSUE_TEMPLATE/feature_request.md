@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+<!-- If you would like to build this yourself, say so here and wait for an answer before opening a pull request. -->
+
 **Is your feature request related to a problem? Please describe.**
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 

@@ -3,6 +3,8 @@ package core
 import (
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/core/state"
+	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/store"
 )
 
 // projectionReader is what every projection is built from: the store plus the
@@ -39,6 +41,65 @@ func (o *Owner) Refresh() {
 	for _, a := range o.attached() {
 		a.registry.Refresh()
 	}
+	// A rebuild can pin a first-unread window to the message it opened on,
+	// which moves what that window shows.
+	o.syncShown()
+}
+
+// syncShown tells the store what every attached client's windows show, and
+// what commands are reading, so the cap never drops it: a scrollback somebody
+// loaded is held while somebody looks at it and given up once nobody does. It
+// runs whenever a window opens, moves, closes or is pinned, and before any
+// fetch made for that window.
+func (o *Owner) syncShown() {
+	shown := make(map[domain.HistoryKey][]store.Shown)
+	for _, a := range o.attached() {
+		for _, w := range a.registry.HistoryWindows() {
+			shown[w.History()] = append(shown[w.History()], shownOf(w))
+		}
+	}
+	o.readingMu.Lock()
+	for _, r := range o.reading {
+		shown[r.h] = append(shown[r.h], r.shown)
+	}
+	o.readingMu.Unlock()
+	o.state.Store().SetShown(shown)
+}
+
+// readHold is what one command is reading of a history.
+type readHold struct {
+	h     domain.HistoryKey
+	shown store.Shown
+}
+
+// holdReading shows the store what a command is reading, for as long as it
+// reads: a page it fetched must still be there when it reads it back, which
+// the cap would not otherwise promise with the store full and no window open.
+// The returned func lets go of it; the next write may then trim it, as the cap
+// trims any run nobody looks at.
+func (o *Owner) holdReading(h domain.HistoryKey, shown store.Shown) func() {
+	o.readingMu.Lock()
+	o.readingNext++
+	token := o.readingNext
+	o.reading[token] = readHold{h: h, shown: shown}
+	o.readingMu.Unlock()
+	o.syncShown()
+	return func() {
+		o.readingMu.Lock()
+		delete(o.reading, token)
+		o.readingMu.Unlock()
+		o.syncShown()
+	}
+}
+
+// shownOf is what a window shows, in the store's terms: its anchor, the newest
+// message for a window anchored there or a first-unread window not pinned yet,
+// and how far back it reaches.
+func shownOf(w project.HistoryWindow) store.Shown {
+	if w.Anchor.Kind == project.AnchorNewest {
+		return store.Shown{Before: w.Before}
+	}
+	return store.Shown{Anchor: w.Anchor.MsgID, Before: w.Before}
 }
 
 // maybeFetch goes to Telegram when the store cannot answer a chat window on its
@@ -58,18 +119,10 @@ func (o *Owner) maybeFetch(a *seat, id project.SubID, w project.Window) {
 		return
 	}
 	_, hasGap := o.state.Store().Gap(cw.ChatID)
-	if !hasGap && !needsBackfill(project.BuildHistory(o.reader(), cw), cw) {
+	if !hasGap && !shortfallOf(project.BuildHistory(o.reader(), cw), cw).any() {
 		return
 	}
 	o.spawn(func() { o.fill(o.ctx, a, id, cw) })
-}
-
-// needsBackfill reports that the store could not fill the window: it returned
-// fewer messages than were asked for and has nothing older left to give. This is
-// deliberately not HasOlder, which reports the opposite — that the store does
-// hold more, so no fetch is needed.
-func needsBackfill(c project.HistoryContents, w project.HistoryWindow) bool {
-	return !c.HasOlder && len(c.Messages) < w.Before+w.After+1
 }
 
 // publishChange turns one applied domain change into whatever the current

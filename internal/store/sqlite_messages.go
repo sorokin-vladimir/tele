@@ -95,12 +95,15 @@ func (s *SQLiteStore) findLocked(chatID int64, msgID int) (domain.HistoryKey, in
 
 // SetMessages replaces everything a chat holds with a page, laid out among the
 // chat's histories. In a forum that is every topic at once: it is how a tail
-// reload discards a forum whose gap lay across all of them.
+// reload discards a forum whose gap lay across all of them. What is on disk
+// goes too, rows of histories this session never opened included, or the old
+// history would come back the next time one is opened.
 func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	held := s.heldReactionsLocked(chatID)
 	defer s.traceHeldReactionsLocked(chatID, "SetMessages", held)
+	s.purgeRowsLocked(chatID)
 
 	// What survives is decided across the chat rather than per history: a
 	// message the page puts in another topic has moved, and its row must not be
@@ -111,12 +114,19 @@ func (s *SQLiteStore) SetMessages(chatID int64, msgs []domain.Message) {
 	}
 	pages := s.byHistoryLocked(msgs)
 	for _, h := range s.chatHistoriesLocked(chatID) {
+		delete(s.runs, h)
 		if _, kept := pages[h]; !kept {
-			s.setMessagesLocked(h, nil, 0, keep)
+			s.setMessagesLocked(h, nil, keep)
 		}
 	}
 	for h, page := range pages {
-		s.setMessagesLocked(h, page, len(page), keep)
+		s.setMessagesLocked(h, page, keep)
+		// The page is the newest Telegram has: whatever else the history held
+		// is gone, and this is its one run.
+		if spans := tailRunOf(page); spans != nil {
+			s.runs[h] = spans
+		}
+		s.capMessagesLocked(h)
 	}
 }
 
@@ -139,50 +149,10 @@ func (s *SQLiteStore) detachMovedLocked(h domain.HistoryKey, msgs []domain.Messa
 	}
 }
 
-// MergeMessages merges a fetched page into one history and reports how many
-// messages it added. Reading the held history, merging and storing the result
-// happen under one hold of the lock, which is what keeps a message arriving
-// mid-fetch from being written back out of existence: read and write as two
-// calls leave a window where the arrival lands between them and is lost when
-// the merged page replaces the slice.
-//
-// A page that adds nothing still lands, because a message can come back edited
-// without changing the count. The caller decides what to do about a zero, and
-// what it is told is what the count changed by, not whether anything did.
-//
-// Only the history asked for is filled deeper. A message in the page that
-// belongs elsewhere joins its own history the way a repair would, without
-// raising what that history costs to hold.
-func (s *SQLiteStore) MergeMessages(h domain.HistoryKey, msgs []domain.Message) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	held := s.heldReactionsLocked(h.ChatID)
-	defer s.traceHeldReactionsLocked(h.ChatID, "MergeMessages", held)
-
-	added := 0
-	for key, page := range s.byHistoryLocked(msgs) {
-		s.detachMovedLocked(key, page)
-		before := s.messages[key]
-		merged := domain.MergeMessages(before, page)
-		floor := s.msgFloor[key]
-		if key == h {
-			floor = len(merged)
-		}
-		s.setMessagesLocked(key, merged, floor, nil)
-		added += len(merged) - len(before)
-	}
-	return added
-}
-
-// RepairMessages merges a page in the way MergeMessages does, laying it out
-// among the chat's histories, and leaves each of them no deeper than it found
-// it: the cap applies as if the page had never come, trimming the oldest to
-// make room.
-//
-// The floor exists to protect a scrollback somebody scrolled to, so that an
-// arriving message cannot cap it back down. A page that closes a gap was asked
-// for by nobody, and letting it raise the floor would turn a repair into a
-// permanent rise in what the chat costs to hold, once per hole.
+// RepairMessages merges a page in the way MergeOlder does, laying it out
+// among the chat's histories on their tail runs. The cap then trims the oldest
+// to make room, as it does for an arriving message: a page that closes a gap
+// was asked for by nobody, and only what a window shows is spared.
 func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -192,9 +162,12 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 	added := 0
 	for h, page := range s.byHistoryLocked(msgs) {
 		s.detachMovedLocked(h, page)
+		s.ensureTailSpanLocked(h)
 		before := s.messages[h]
 		merged := domain.MergeMessages(before, page)
-		s.setMessagesLocked(h, merged, s.msgFloor[h], nil)
+		s.setMessagesLocked(h, merged, nil)
+		s.landOnTailLocked(h, page)
+		s.capMessagesLocked(h)
 		// What the page brought, counted before the cap trims the other end: a
 		// repair that adds fifty and pushes fifty older ones out still changed
 		// every window looking at it.
@@ -205,11 +178,11 @@ func (s *SQLiteStore) RepairMessages(chatID int64, msgs []domain.Message) int {
 
 // setMessagesLocked replaces one history with msgs, taking a copy: the slice
 // handed in may be the caller's own, or the store's own held slice come back
-// through a merge. floor is how deep this write claims the history was filled,
-// which is what the cap will not trim below. keep names the messages whose rows
-// survive the write wherever they now live; nil means the ones in msgs. Caller
+// through a merge. keep names the messages whose rows survive the write
+// wherever they now live; nil means the ones in msgs. It does not cap: the
+// caller caps once the history's runs say where the new messages lie. Caller
 // holds the lock.
-func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Message, floor int, keep map[int]struct{}) {
+func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Message, keep map[int]struct{}) {
 	cp := make([]domain.Message, len(msgs))
 	copy(cp, msgs)
 
@@ -230,10 +203,6 @@ func (s *SQLiteStore) setMessagesLocked(h domain.HistoryKey, msgs []domain.Messa
 	}
 	s.messages[h] = cp
 	s.noteHistoryLocked(h)
-	// Remember how deep this history was filled, so an arriving message does not
-	// cap the scrollback back down (see capMessagesLocked).
-	s.msgFloor[h] = floor
-	s.capMessagesLocked(h)
 	if chat, ok := s.chats[h.ChatID]; ok && sharedPtsBox(chat.Peer) {
 		for _, m := range s.messages[h] {
 			s.msgChat[m.ID] = h.ChatID
@@ -292,15 +261,18 @@ type msgDelete struct {
 	msgID  int
 }
 
-// rowWrites is one flush's worth of message and topic rows. purges run first:
-// they drop rows written under a shape the chat no longer has, and an upsert
-// queued after the purge belongs to the new shape.
+// rowWrites is one flush's worth of message, run and topic rows. purges run
+// first: they drop rows written under a shape the chat no longer has, or a
+// history a tail reload discarded, and an upsert queued after the purge belongs
+// to what the chat holds now. topicPurges drop a reshaped chat's topics.
 type rowWrites struct {
 	purges       []int64
+	topicPurges  []int64
 	upserts      []msgUpsert
 	deletes      []msgDelete
 	topicUpserts []topicUpsert
 	topicDeletes []topicDelete
+	runs         []runWrite
 }
 
 // snapshotMessageWritesLocked drains the purge, dirty and deleted message sets
@@ -313,6 +285,11 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() rowWrites {
 		s.purgingMsgs[chatID] = struct{}{}
 	}
 	s.purgeMsgs = make(map[int64]struct{})
+	var topicPurges []int64
+	for chatID := range s.purgeTopics {
+		topicPurges = append(topicPurges, chatID)
+	}
+	s.purgeTopics = make(map[int64]struct{})
 
 	var upserts []msgUpsert
 	for chatID, ids := range s.dirtyMsgs {
@@ -346,7 +323,11 @@ func (s *SQLiteStore) snapshotMessageWritesLocked() rowWrites {
 	}
 	s.deletedMsgs = make(map[int64]map[int]struct{})
 	topicUpserts, topicDeletes := s.snapshotTopicWritesLocked()
-	return rowWrites{purges: purges, upserts: upserts, deletes: deletes, topicUpserts: topicUpserts, topicDeletes: topicDeletes}
+	return rowWrites{
+		purges: purges, topicPurges: topicPurges, upserts: upserts, deletes: deletes,
+		topicUpserts: topicUpserts, topicDeletes: topicDeletes,
+		runs: s.snapshotRunWritesLocked(),
+	}
 }
 
 // clearDeletesInFlight forgets purges and deletes whose flush transaction has
@@ -388,15 +369,15 @@ func (s *SQLiteStore) purgePendingLocked(chatID int64) bool {
 }
 
 // discardChatLocked drops everything a chat holds, in memory and on disk: every
-// history, its floor and its loaded mark, and the rows of histories this
-// session never opened. Caller holds the lock.
+// history, its runs and its loaded mark, its topics, and the rows of histories
+// this session never opened. Caller holds the lock.
 func (s *SQLiteStore) discardChatLocked(chatID int64) {
 	for _, h := range s.chatHistoriesLocked(chatID) {
 		for _, m := range s.messages[h] {
 			delete(s.msgChat, m.ID)
 		}
 		delete(s.messages, h)
-		delete(s.msgFloor, h)
+		delete(s.runs, h)
 	}
 	delete(s.histories, chatID)
 	for h := range s.loaded {
@@ -404,11 +385,23 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 			delete(s.loaded, h)
 		}
 	}
-	// The purge covers every row, so queued per-message writes for the old
-	// shape have nothing left to do.
+	s.purgeRowsLocked(chatID)
+	s.discardTopicsLocked(chatID)
+	s.purgeTopics[chatID] = struct{}{}
+}
+
+// purgeRowsLocked queues every message and run row of a chat to be dropped
+// from disk, of histories this session never opened too. Writes queued before
+// it have nothing left to do; writes queued after it belong to what the chat
+// holds now. Caller holds the lock.
+func (s *SQLiteStore) purgeRowsLocked(chatID int64) {
+	for h := range s.writtenRuns {
+		if h.ChatID == chatID {
+			delete(s.writtenRuns, h)
+		}
+	}
 	delete(s.dirtyMsgs, chatID)
 	delete(s.deletedMsgs, chatID)
-	s.discardTopicsLocked(chatID)
 	s.purgeMsgs[chatID] = struct{}{}
 }
 
@@ -416,8 +409,8 @@ func (s *SQLiteStore) discardChatLocked(chatID int64) {
 // topics in one transaction. Runs off-lock. Logs errors; the Store interface
 // does not propagate them.
 func (s *SQLiteStore) flushMessageRows(w rowWrites) {
-	if len(w.purges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 &&
-		len(w.topicUpserts) == 0 && len(w.topicDeletes) == 0 {
+	if len(w.purges) == 0 && len(w.topicPurges) == 0 && len(w.upserts) == 0 && len(w.deletes) == 0 &&
+		len(w.topicUpserts) == 0 && len(w.topicDeletes) == 0 && len(w.runs) == 0 {
 		return
 	}
 	tx, err := s.db.Begin()
@@ -426,12 +419,19 @@ func (s *SQLiteStore) flushMessageRows(w rowWrites) {
 		return
 	}
 	for _, chatID := range w.purges {
-		for _, q := range []string{`DELETE FROM messages WHERE chat_id = ?`, `DELETE FROM topics WHERE chat_id = ?`} {
+		for _, q := range []string{`DELETE FROM messages WHERE chat_id = ?`, `DELETE FROM runs WHERE chat_id = ?`} {
 			if _, err := tx.Exec(q, chatID); err != nil {
 				_ = tx.Rollback()
 				s.log.Error("purge chat rows failed", zap.Int64("chat_id", chatID), zap.Error(err))
 				return
 			}
+		}
+	}
+	for _, chatID := range w.topicPurges {
+		if _, err := tx.Exec(`DELETE FROM topics WHERE chat_id = ?`, chatID); err != nil {
+			_ = tx.Rollback()
+			s.log.Error("purge chat topics failed", zap.Int64("chat_id", chatID), zap.Error(err))
+			return
 		}
 	}
 	for _, u := range w.topicUpserts {
@@ -463,6 +463,11 @@ func (s *SQLiteStore) flushMessageRows(w rowWrites) {
 			s.log.Error("delete message failed", zap.Int64("chat_id", d.chatID), zap.Int("msg_id", d.msgID), zap.Error(err))
 			return
 		}
+	}
+	if err := writeRuns(tx, w.runs); err != nil {
+		_ = tx.Rollback()
+		s.log.Error("write runs failed", zap.Error(err))
+		return
 	}
 	if err := tx.Commit(); err != nil {
 		s.log.Error("commit message flush failed", zap.Error(err))
@@ -534,6 +539,11 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 		if s.msgDeletePendingLocked(h.ChatID, m.ID) {
 			continue
 		}
+		// A row written before #294 holds reactions as Telegram spells them;
+		// everything past the boundary compares them in emoji presentation.
+		for i := range m.Reactions {
+			m.Reactions[i].Emoji = domain.EmojiPresentation(m.Reactions[i].Emoji)
+		}
 		disk = append(disk, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -541,12 +551,21 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 		return
 	}
 
+	diskRuns, err := s.readRunsLocked(h)
+	if err != nil {
+		s.log.Error("load runs failed", zap.Int64("chat_id", h.ChatID), zap.Int("topic_id", h.TopicID), zap.Error(err))
+		return
+	}
+	// What the history held before it was opened: arrivals, on its tail run.
+	s.ensureTailSpanLocked(h)
+	memRuns := s.runs[h]
 	if mem := s.messages[h]; len(mem) == 0 {
 		s.messages[h] = disk
 	} else {
 		s.messages[h] = mergeMessagesByID(disk, mem)
 	}
 	s.noteHistoryLocked(h)
+	s.settleRunsLocked(h, disk, diskRuns, memRuns)
 	s.capMessagesLocked(h)
 	if chat, ok := s.chats[h.ChatID]; ok && sharedPtsBox(chat.Peer) {
 		for _, m := range s.messages[h] {
@@ -555,29 +574,22 @@ func (s *SQLiteStore) LoadMessages(h domain.HistoryKey) {
 	}
 }
 
-// capMessagesLocked trims a history to the newest MaxMessagesPerChat, dropping
-// the oldest from the front and clearing their index entries. Caller holds the
+// capMessagesLocked bounds a history to MaxMessagesPerChat, clearing the index
+// entries and queueing the row deletes of what it drops. Caller holds the
 // lock. See issue #73.
 //
-// The cap bounds what arriving messages accumulate; it never trims below what
-// was last set outright. Scrolling far into history sets a longer tail on
-// purpose, and one incoming message must not throw that scrollback away — the
-// view is built from what the store holds, so the trim would be visible.
+// It gives up runs that do not end at the tail first, oldest first and each
+// whole, then trims the old end of the tail run. What a window shows is never
+// dropped: the view is built from what the store holds, so the trim would be
+// visible, and a person who scrolled far back is looking at what they scrolled
+// to. A history may therefore hold more than the cap while somebody looks.
 func (s *SQLiteStore) capMessagesLocked(h domain.HistoryKey) {
-	msgs := s.messages[h]
-	limit := MaxMessagesPerChat
-	if floor := s.msgFloor[h]; floor > limit {
-		limit = floor
-	}
-	if len(msgs) <= limit {
+	if len(s.messages[h]) <= MaxMessagesPerChat {
 		return
 	}
-	drop := len(msgs) - limit
-	for _, m := range msgs[:drop] {
-		delete(s.msgChat, m.ID)
-		s.markMsgDeletedLocked(h.ChatID, m.ID)
-	}
-	s.messages[h] = msgs[drop:]
+	shown := s.shownIDsLocked(h)
+	msgs := s.dropFarRunsLocked(h, len(s.messages[h])-MaxMessagesPerChat, shown)
+	s.messages[h] = s.trimTailRunLocked(h, msgs, len(msgs)-MaxMessagesPerChat, shown)
 }
 
 // BumpChatLastMessage updates a chat's last-message preview and moves it up in
@@ -616,8 +628,14 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 				s.messages[h][i] = msg
 			} else {
 				// Moved to another topic: it takes its place in the history it
-				// joined, which need not be the end, since it may be old.
+				// joined, which need not be the end, since it may be old. Outside
+				// every run of that history it is history nobody fetched there.
 				s.detachMovedLocked(h, []domain.Message{msg})
+				s.ensureTailSpanLocked(h)
+				if spanOf(s.runs[h], msg.ID) < 0 {
+					s.forgetMessageLocked(msg.ChatID, msg.ID)
+					return false
+				}
 				s.messages[h] = domain.MergeMessages(s.messages[h], []domain.Message{msg})
 				s.noteHistoryLocked(h)
 			}
@@ -627,12 +645,7 @@ func (s *SQLiteStore) AppendMessage(msg domain.Message) bool {
 	}
 	s.messages[h] = append(s.messages[h], msg)
 	s.noteHistoryLocked(h)
-	// A history holding more than the cap is holding a scrollback someone loaded
-	// on purpose. An arriving message adds to it rather than pushing the oldest
-	// out.
-	if s.msgFloor[h] >= MaxMessagesPerChat {
-		s.msgFloor[h]++
-	}
+	s.landOnTailLocked(h, []domain.Message{msg})
 	s.markMsgDirtyLocked(msg.ChatID, msg.ID)
 	if chat, ok := s.chats[msg.ChatID]; ok {
 		m := msg
@@ -700,6 +713,20 @@ func (s *SQLiteStore) UpdateMessageText(chatID int64, msgID int, text string, en
 	cp := make([]domain.MessageEntity, len(entities))
 	copy(cp, entities)
 	m.Entities = cp
+	s.markMsgDirtyLocked(chatID, msgID)
+}
+
+// UpdateMessageRich replaces a message's rich block content. A nil clears it:
+// an edit carries the message's whole current state, so a new version without
+// blocks must not keep drawing the old ones.
+func (s *SQLiteStore) UpdateMessageRich(chatID int64, msgID int, rich *domain.RichMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, i, ok := s.findLocked(chatID, msgID)
+	if !ok {
+		return
+	}
+	s.messages[h][i].Rich = rich
 	s.markMsgDirtyLocked(chatID, msgID)
 }
 

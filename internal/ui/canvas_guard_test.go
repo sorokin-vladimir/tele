@@ -42,7 +42,7 @@ const guardRoot = "."
 
 // guardExempt is the package the rule cannot apply to, because it is where the
 // replacements are defined.
-var guardExempt = filepath.Join("theme")
+var guardExempt = "theme"
 
 // canvasOK marks a site the rule does not apply to. It must be followed by a
 // reason: an exception nobody had to justify is the discipline this replaces.

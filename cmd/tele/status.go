@@ -186,7 +186,10 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 	}
 
 	fmt.Fprintf(&b, "Windows: %d, commands: %d\n", status.Windows, status.Commands)
+	//exhaustive:enforce
 	switch status.AccountCommands {
+	case wire.CommandsAll:
+		// The usual case, with nothing to point out.
 	case wire.CommandsRead:
 		b.WriteString("Commands may read the account and change nothing: cli.account_commands is read.\n")
 	case wire.CommandsNone:
@@ -212,11 +215,14 @@ func statusText(stateDir string, host wire.Hello, status wire.HostStatus, mismat
 }
 
 func keptBy(k wire.Keeper) string {
+	//exhaustive:enforce
 	switch k {
 	case wire.KeptByService:
 		return "kept running as a service"
 	case wire.KeptByDaemon:
 		return "kept running by tele daemon"
+	case wire.KeptByWindow:
+		fallthrough
 	default:
 		return "kept running by its window"
 	}
@@ -229,6 +235,7 @@ func versions(mine, host wire.Hello) string {
 		return ""
 	}
 	this := "This tele is " + mine.Binary
+	//exhaustive:enforce
 	switch wire.Decide(mine, host) {
 	case wire.RestartHost:
 		return this + ", newer: its next window restarts the service on it."
@@ -236,6 +243,8 @@ func versions(mine, host wire.Hello) string {
 		return this + ", older than the service: update it."
 	case wire.Refuse:
 		return this + " and cannot attach to it: the two speak different protocols."
+	case wire.Proceed:
+		fallthrough
 	default:
 		return this + "."
 	}

@@ -35,9 +35,14 @@ runs:
     # Tag-triggered jobs restore only. Anything they saved would land in their
     # own tag's cache scope, unreadable by the next tag and charged against the
     # repository's 10 GiB budget.
+    #
+    # The release restores what warm-build-cache.yml wrote on main. Only the
+    # repository's own workflows can write that scope: nothing runs for pull
+    # requests from forks, so no outside code reaches the cache.
+    # jactionlint ignore=cache-poisoning
     - id: restore
       if: inputs.save != '1'
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ${{ steps.key.outputs.gocache }}
@@ -45,9 +50,12 @@ runs:
         key: ${{ steps.key.outputs.value }}
         restore-keys: ${{ steps.key.outputs.prefix }}
 
+    # Runs only in warm-build-cache.yml (save: "1"), never in a release job; the
+    # finding comes from the action being called by release.yml at all.
+    # jactionlint ignore=cache-poisoning
     - id: save
       if: inputs.save == '1'
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ${{ steps.key.outputs.gocache }}

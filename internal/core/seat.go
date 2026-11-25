@@ -63,6 +63,7 @@ func (s *seat) leave() {
 	delete(s.clients, s.id)
 	s.clientsMu.Unlock()
 	s.focus.detach(s.id)
+	s.syncShown()
 }
 
 // hasLeft reports whether the seat has ended.
@@ -85,6 +86,9 @@ func (s *seat) subscribe(id project.SubID, w project.Window) {
 		s.state.Store().LoadMessages(cw.History())
 	}
 	s.registry.Subscribe(id, w)
+	// Before the fetch: the page it brings is what the window asked for, and
+	// the store must know that by the time it caps.
+	s.syncShown()
 	s.maybeFetch(s, id, w)
 }
 
@@ -92,6 +96,7 @@ func (s *seat) subscribe(id project.SubID, w project.Window) {
 // a window move cannot be synchronous, so it is not synchronous here either.
 func (s *seat) moveWindow(id project.SubID, w project.Window) {
 	s.registry.MoveWindow(id, w)
+	s.syncShown()
 	s.maybeFetch(s, id, w)
 }
 

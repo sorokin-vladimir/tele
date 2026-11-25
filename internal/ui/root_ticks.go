@@ -36,6 +36,8 @@ func (m *RootModel) spinnerShouldTick() bool {
 		return true
 	case m.photoViewer != nil && m.photoViewer.img == nil:
 		return true
+	case m.messageSearch != nil && m.messageSearch.Waiting():
+		return true
 	}
 	return false
 }

@@ -40,6 +40,17 @@ func TestDiffChat_FirstContentsAreAReset(t *testing.T) {
 	assert.Len(t, got[0].Contents.Messages, 3)
 }
 
+// A reset carries the header with the window, so no header update follows it.
+func TestDiffChat_AResetCarriesTheHeader(t *testing.T) {
+	prev := project.HistoryContents{ChatID: 1}
+	next := chatContents(msgs(3))
+	next.AtTail = true
+
+	got := project.DiffHistory(prev, next)
+
+	assert.Equal(t, []project.HistoryDeltaKind{project.HistoryReset}, kinds(got))
+}
+
 func TestDiffChat_NewMessageAtTheTailIsAnAppend(t *testing.T) {
 	prev := chatContents(msgs(3))
 	next := chatContents(msgs(4))

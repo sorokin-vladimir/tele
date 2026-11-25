@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 
+	"github.com/sorokin-vladimir/tele/internal/core"
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
 	"github.com/sorokin-vladimir/tele/internal/telerr"
@@ -38,6 +39,12 @@ func newShowCmd(o *options) *cobra.Command {
 			if q.limit < 1 || q.limit > maxShowLimit {
 				return &exitCode{code: usageCode, msg: fmt.Sprintf("--limit is from 1 to %d.", maxShowLimit)}
 			}
+			switch {
+			case q.around < 0:
+				return &exitCode{code: usageCode, msg: "--around takes a message id."}
+			case q.around != 0 && q.before != 0:
+				return &exitCode{code: usageCode, msg: "--around and --before do not go together."}
+			}
 			return askAccount(cmd.Context(), *o, readyTimeout, func(ctx context.Context, a heldAccount) error {
 				return showMessages(ctx, a, cmd.OutOrStdout(), args[0], q)
 			})
@@ -47,6 +54,7 @@ func newShowCmd(o *options) *cobra.Command {
 	f.IntVar(&q.topic, "topic", 0, "the topic of a forum to show, by id; `tele topics CHAT` lists them")
 	f.IntVar(&q.limit, "limit", 20, fmt.Sprintf("how many messages, at most %d", maxShowLimit))
 	f.IntVar(&q.before, "before", 0, "show the messages older than this message id")
+	f.IntVar(&q.around, "around", 0, "show this message id with the messages around it, half of --limit either side")
 	f.BoolVar(&q.markRead, "mark-read", false, "mark the chat read up to the last message shown")
 	f.BoolVar(&q.asJSON, "json", false, "print a JSON object a message, as docs/cli.md describes")
 	return cmd
@@ -54,8 +62,8 @@ func newShowCmd(o *options) *cobra.Command {
 
 // showQuery is what `tele show` was asked for.
 type showQuery struct {
-	topic, limit, before int
-	markRead, asJSON     bool
+	topic, limit, before, around int
+	markRead, asJSON             bool
 }
 
 // showMessages prints the messages of the chat named chat that q asks for. It
@@ -75,7 +83,15 @@ func showMessages(ctx context.Context, a heldAccount, out io.Writer, chat string
 		return &exitCode{code: notFoundCode, msg: fmt.Sprintf("%s is not a forum: it has no topics.", row.Title)}
 	}
 	h := domain.HistoryKey{ChatID: row.ID, TopicID: q.topic}
-	msgs, err := a.History(ctx, h, q.before, q.limit)
+	var msgs []domain.Message
+	if q.around != 0 {
+		msgs, err = a.HistoryAround(ctx, h, q.around, q.limit)
+		if core.IsNoMessage(err) {
+			return &exitCode{code: notFoundCode, msg: fmt.Sprintf("No message %d in %s.", q.around, row.Title)}
+		}
+	} else {
+		msgs, err = a.History(ctx, h, q.before, q.limit)
+	}
 	if telerr.Of(err) == telerr.PeerNotFound || telerr.Of(err) == telerr.NotFound {
 		return &exitCode{code: notFoundCode, msg: fmt.Sprintf("No topic %d in %s.", q.topic, row.Title)}
 	}
@@ -159,58 +175,11 @@ func body(m domain.Message) string {
 	if m.Media == nil {
 		return m.Text
 	}
-	label := "[" + mediaLabel(*m.Media) + "]"
+	label := "[" + m.Media.Label() + "]"
 	if m.Text == "" {
 		return label
 	}
 	return label + " " + m.Text
-}
-
-// mediaLabel names a piece of media and what it says about itself, without
-// fetching it.
-func mediaLabel(r domain.MediaRef) string {
-	withTime := func(label string) string {
-		return strings.TrimSpace(label + " " + clock(r.Duration))
-	}
-	switch r.Kind {
-	case domain.MediaPhoto:
-		return "photo"
-	case domain.MediaVideo:
-		return withTime("video")
-	case domain.MediaVideoNote:
-		return withTime("round video")
-	case domain.MediaVoice:
-		return withTime("voice")
-	case domain.MediaAudio:
-		name := r.FileName
-		if r.Title != "" {
-			name = strings.TrimPrefix(r.Performer+" – "+r.Title, " – ")
-		}
-		return withTime(strings.TrimSpace("audio " + name))
-	case domain.MediaSticker:
-		return strings.TrimSpace("sticker " + r.Emoji)
-	case domain.MediaGIF:
-		return "GIF"
-	case domain.MediaFile:
-		return strings.TrimSpace("file " + r.FileName)
-	case domain.MediaLocation:
-		return "location"
-	default:
-		return "media"
-	}
-}
-
-// clock is a duration in seconds as a player shows it, m:ss or h:mm:ss; empty
-// for none.
-func clock(seconds int) string {
-	if seconds <= 0 {
-		return ""
-	}
-	h, m, s := seconds/3600, seconds/60%60, seconds%60
-	if h > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
-	}
-	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 // messageJSON is a message as `tele show --json` prints it, a contract kept
@@ -256,22 +225,27 @@ var mediaKinds = map[domain.MediaKind]string{
 func showJSON(out io.Writer, msgs []domain.Message, me project.LoggedInUser) error {
 	enc := json.NewEncoder(out)
 	for _, m := range msgs {
-		j := messageJSON{
-			ID: m.ID, Date: m.Date, SenderID: m.SenderID, Sender: m.SenderName,
-			Out: m.IsOut, Text: m.Text, ReplyTo: m.ReplyToMsgID,
-		}
-		if m.IsOut {
-			j.SenderID, j.Sender = me.ID, me.Name
-		}
-		if r := m.Media; r != nil {
-			j.Media = &mediaJSON{
-				Kind: mediaKinds[r.Kind], Duration: r.Duration, FileName: r.FileName, Size: r.Size,
-				Title: r.Title, Performer: r.Performer, Emoji: r.Emoji,
-			}
-		}
-		if err := enc.Encode(j); err != nil {
+		if err := enc.Encode(messageOf(m, me)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// messageOf is m as JSON prints it. Your own messages carry your id and name.
+func messageOf(m domain.Message, me project.LoggedInUser) messageJSON {
+	j := messageJSON{
+		ID: m.ID, Date: m.Date, SenderID: m.SenderID, Sender: m.SenderName,
+		Out: m.IsOut, Text: m.Text, ReplyTo: m.ReplyToMsgID,
+	}
+	if m.IsOut {
+		j.SenderID, j.Sender = me.ID, me.Name
+	}
+	if r := m.Media; r != nil {
+		j.Media = &mediaJSON{
+			Kind: mediaKinds[r.Kind], Duration: r.Duration, FileName: r.FileName, Size: r.Size,
+			Title: r.Title, Performer: r.Performer, Emoji: r.Emoji,
+		}
+	}
+	return j
 }

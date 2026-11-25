@@ -7,6 +7,8 @@ pre-push:
       run: golangci-lint run ./...
     test:
       run: go test -race ./...
+    vuln:
+      run: govulncheck ./...
     changelog-reminder:
       run: bash scripts/changelog-reminder.sh
 
@@ -16,3 +18,14 @@ pre-commit:
       run: golangci-lint fmt ./...
     lint-run:
       run: golangci-lint run ./...
+    shellcheck:
+      glob: "*.sh"
+      run: shellcheck {staged_files}
+    actions:
+      glob: ".github/**/*.{yml,yaml}"
+      run: jactionlint
+    renovate:
+      glob: ".github/renovate.json"
+      run: mise run renovate-check
+    secrets:
+      run: betterleaks git --pre-commit --staged --no-banner --redact --verbose -c .betterleaks.toml .

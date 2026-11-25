@@ -43,7 +43,7 @@ func (c *GotdClient) GetForumTopics(ctx context.Context, peer domain.Peer, after
 			c.log.Error("MessagesGetForumTopics failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 			return err
 		}
-		page = parseForumTopics(res, peer.ID)
+		page = parseForumTopics(res, peer.ID, c.telegramNow())
 		return nil
 	})
 	return page, err
@@ -95,7 +95,7 @@ func (c *GotdClient) GetForumTopicsByID(ctx context.Context, peer domain.Peer, i
 			c.log.Error("MessagesGetForumTopicsByID failed", zap.Int64("peer_id", peer.ID), zap.Error(err))
 			return err
 		}
-		page = parseForumTopics(res, peer.ID)
+		page = parseForumTopics(res, peer.ID, c.telegramNow())
 		return nil
 	})
 	return page, err
@@ -179,7 +179,7 @@ type ForumTopicsPage struct {
 // parseForumTopics converts a getForumTopics or getForumTopicsByID answer. The
 // newest message of each topic comes in the same answer, and is converted the
 // way a history page is, so its preview names its sender.
-func parseForumTopics(res *tg.MessagesForumTopics, chatID int64) ForumTopicsPage {
+func parseForumTopics(res *tg.MessagesForumTopics, chatID int64, telegramNow time.Time) ForumTopicsPage {
 	msgs := parseHistory(&tg.MessagesMessages{Messages: res.Messages, Users: res.Users, Chats: res.Chats}, chatID)
 
 	page := ForumTopicsPage{Total: res.Count}
@@ -205,7 +205,7 @@ func parseForumTopics(res *tg.MessagesForumTopics, chatID int64) ForumTopicsPage
 			}
 			if _, own := t.NotifySettings.GetMuteUntil(); own {
 				topic.Mute = domain.TopicUnmuted
-				if mutedFromSettings(t.NotifySettings) {
+				if mutedFromSettings(t.NotifySettings, telegramNow) {
 					topic.Mute = domain.TopicMuted
 				}
 			}

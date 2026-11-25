@@ -35,6 +35,7 @@ func errText(action string, err error) (string, components.Severity, bool) {
 		return action + ": " + err.Error(), components.SeverityWarning, true
 	}
 
+	//exhaustive:enforce
 	switch e.Kind {
 	case telerr.Unauthorized:
 		// Said of this one request. A log out the main data centre confirms
@@ -75,6 +76,8 @@ func errText(action string, err error) (string, components.Severity, bool) {
 		// screen that asked is being replaced by the next login, which says
 		// why (#309).
 		return "", 0, false
+	case telerr.Internal, telerr.CommandsOff:
+		fallthrough
 	default:
 		// Internal keeps the raw Telegram type: "internal error" on its own is
 		// useless to someone about to file an issue, and an error type is not

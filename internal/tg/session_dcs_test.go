@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"maps"
 	"net"
 	"path/filepath"
 	"sync"
@@ -59,9 +60,11 @@ func dialledOnStart(t *testing.T, sessionFile string) map[string]bool {
 	defer cancel()
 	_ = c.Connect(ctx, internaltg.NewAuthFlow(zap.NewNop()), make(chan struct{}), nil)
 
+	// A copy, taken under the lock: gotd dials the addresses of a round at
+	// once, and a dial of the last round can still land after Connect returns.
 	mu.Lock()
 	defer mu.Unlock()
-	return dialled
+	return maps.Clone(dialled)
 }
 
 // gotd keeps the addresses Telegram sent in the session but starts from its

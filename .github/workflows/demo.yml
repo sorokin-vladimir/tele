@@ -5,18 +5,20 @@ on:
   # release:
   #   types: [published]
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   demo:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Pushes the recorded GIF back to the repository.
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@main
+        uses: Homebrew/actions/setup-homebrew@75064b260aea50a4b3dd1352975747d5576aaf05 # main
 
       - name: Install tele
         run: brew install sorokin-vladimir/tele/tele

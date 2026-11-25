@@ -64,6 +64,9 @@ type loginClient interface {
 	ImportLoginToken(ctx context.Context) error
 	// CancelCode tells Telegram the code sent will not be typed.
 	CancelCode(ctx context.Context, phone, hash string) error
+	// ServerTimeOffset is Telegram's clock minus the local one, for measuring
+	// a token's expiry.
+	ServerTimeOffset() time.Duration
 }
 
 // authorize returns the logged-in user, logging in first when there is no
@@ -171,7 +174,7 @@ func (af *AuthFlow) qr(ctx context.Context, client loginClient, reason string) e
 				return af.importToken(ctx, client)
 			}
 			if err == nil {
-				renewIn := tokenRenewal(token)
+				renewIn := tokenRenewal(token, time.Now().Add(client.ServerTimeOffset()))
 				shownUntil, unreachable = time.Now().Add(renewIn+qrRenewAhead), false
 				renew = af.after(renewIn)
 				af.log.Info("login token issued", zap.Duration("expires_in", renewIn+qrRenewAhead))
@@ -211,12 +214,13 @@ func (af *AuthFlow) export(ctx context.Context, client loginClient, shownUntil t
 	return client.ExportLoginToken(ctx)
 }
 
-// tokenRenewal is how long until the token is to be replaced. The expiry is
-// Telegram's clock read against ours, so it is kept within reason: a skewed
-// clock must neither replace a token at once nor leave one on screen long
-// after it expired (#277).
-func tokenRenewal(token qrlogin.Token) time.Duration {
-	d := time.Until(token.Expires()) - qrRenewAhead
+// tokenRenewal is how long until the token is to be replaced. The expiry is a
+// date by Telegram's clock, so it is measured from telegramNow, the time by
+// that clock. The result is still kept within reason, for an offset that is
+// not known yet: a token must neither be replaced at once nor stay on screen
+// long after it expired (#277).
+func tokenRenewal(token qrlogin.Token, telegramNow time.Time) time.Duration {
+	d := token.Expires().Sub(telegramNow) - qrRenewAhead
 	return min(max(d, time.Second), time.Minute)
 }
 

@@ -93,6 +93,41 @@ func TestApplyEdit_RealEditUpdatesText(t *testing.T) {
 	assert.Equal(t, "after", st.Messages(domain.HistoryKey{ChatID: 1})[0].Text)
 }
 
+// An edit carries the message's whole current state, so its rich blocks replace
+// the stored ones, and a later plain edit clears them.
+func TestApplyEdit_ReplacesAndClearsRichContent(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1, Text: "before", Rich: &domain.RichMessage{
+		Blocks: []domain.RichBlock{{Kind: domain.RichParagraph, Text: paraRich("old")}},
+	}})
+	when := time.Now()
+	editedRich := &domain.RichMessage{
+		Blocks: []domain.RichBlock{{Kind: domain.RichParagraph, Text: paraRich("new")}},
+	}
+
+	_, ok := s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "edited", Rich: editedRich,
+		EditDate: &when, AppliedPosition: 10,
+	})
+	require.True(t, ok)
+	got := st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Equal(t, editedRich, got.Rich, "the edit replaces the old blocks")
+
+	when = when.Add(time.Minute)
+	_, ok = s.ApplyEdit(domain.Message{
+		ID: 5, ChatID: 1, Text: "plain",
+		EditDate: &when, AppliedPosition: 11,
+	})
+	require.True(t, ok)
+	got = st.Messages(domain.HistoryKey{ChatID: 1})[0]
+	assert.Nil(t, got.Rich, "an edit with no blocks clears the old ones")
+}
+
+func paraRich(text string) domain.RichText {
+	return domain.RichText{Kind: domain.RichTextPlain, Text: text}
+}
+
 // A reaction on a message that was genuinely edited earlier arrives with a
 // non-nil EditDate: edit_date still carries the original edit time and
 // edit_hide is false, because the "edited" label genuinely should show. The
@@ -331,7 +366,7 @@ func TestApplyDelete_WithoutChatIDResolvesThroughStore(t *testing.T) {
 }
 
 // ApplyHistory is how a page replaces a chat's history outright, and
-// MergeHistory is how one joins what is already there. Both commit through
+// MergeOlder is how one joins what is already there. Both commit through
 // state, so projections rebuild from one place rather than from a client's
 // reply handler.
 func TestApplyHistory_StoresTheWindowAndPublishesOneChange(t *testing.T) {
@@ -365,14 +400,14 @@ func TestApplyHistory_ReplacesTheStoredMessages(t *testing.T) {
 	assert.Len(t, st.Messages(domain.HistoryKey{ChatID: 1}), 2, "the caller merges; state stores what it is given")
 }
 
-func TestMergeHistory_JoinsThePageAndPublishesOneChange(t *testing.T) {
+func TestMergeOlder_JoinsThePageAndPublishesOneChange(t *testing.T) {
 	s, st := newState(t)
 	var seen []state.Change
 	st.SetChat(domain.Chat{ID: 1})
 	st.SetMessages(1, []domain.Message{{ID: 3, ChatID: 1, Date: time.Unix(3, 0)}})
 	s.OnChange(func(c state.Change) { seen = append(seen, c) })
 
-	chg, ok := s.MergeHistory(domain.HistoryKey{ChatID: 1}, []domain.Message{
+	chg, ok := s.MergeOlder(domain.HistoryKey{ChatID: 1}, 3, []domain.Message{
 		{ID: 1, ChatID: 1, Date: time.Unix(1, 0)},
 		{ID: 2, ChatID: 1, Date: time.Unix(2, 0)},
 	})
@@ -384,7 +419,7 @@ func TestMergeHistory_JoinsThePageAndPublishesOneChange(t *testing.T) {
 	assert.Len(t, seen, 1)
 }
 
-func TestMergeHistory_PublishesNothingForAPageThatAddsNothing(t *testing.T) {
+func TestMergeOlder_PublishesNothingForAPageThatAddsNothing(t *testing.T) {
 	s, st := newState(t)
 	var seen []state.Change
 	st.SetChat(domain.Chat{ID: 1})
@@ -392,7 +427,7 @@ func TestMergeHistory_PublishesNothingForAPageThatAddsNothing(t *testing.T) {
 	st.SetMessages(1, held)
 	s.OnChange(func(c state.Change) { seen = append(seen, c) })
 
-	_, ok := s.MergeHistory(domain.HistoryKey{ChatID: 1}, held)
+	_, ok := s.MergeOlder(domain.HistoryKey{ChatID: 1}, 1, held)
 
 	assert.False(t, ok, "reaching history the store already had is not news")
 	assert.Empty(t, seen)

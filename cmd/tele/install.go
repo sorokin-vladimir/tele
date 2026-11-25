@@ -33,18 +33,23 @@ type installer struct {
 }
 
 // newInstaller is the installer of this system, saying what it does on cmd's
-// output.
-func newInstaller(cmd *cobra.Command) installer { return systemInstaller(cmd.OutOrStdout()) }
+// output, and showing a long wait for the running service to stop on its
+// error output (#327).
+func newInstaller(cmd *cobra.Command) installer {
+	return systemInstaller(cmd.OutOrStdout(), newIndicator(cmd.ErrOrStderr()).waiting)
+}
 
-// systemInstaller is the installer of this system, saying what it does on out.
-func systemInstaller(out io.Writer) installer {
+// systemInstaller is the installer of this system, saying what it does on out
+// and telling waiting, if set, of a wait for the running service to stop. A
+// window sets none: it would draw over its own screen.
+func systemInstaller(out io.Writer, waiting func() (done func())) installer {
 	return installer{
 		manager: func() (service.Manager, error) {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return nil, err
 			}
-			return service.ForThisSystem(home)
+			return service.ForThisSystem(home, waiting)
 		},
 		executable: os.Executable,
 		versionOf:  versionOf,
@@ -139,7 +144,11 @@ func (in installer) install(ctx context.Context, o options, given string) error 
 		return err
 	}
 	holder, held := whoHolds(ctx, cfg.StateDir)
-	if err := m.Install(u); err != nil {
+	if err := m.Install(u); errors.Is(err, service.ErrStillRunning) {
+		// The new service is written and not started: an install once the
+		// old one has gone starts it (#327).
+		return fmt.Errorf("installing the service: %w; run `%s daemon install` again", err, appName)
+	} else if err != nil {
 		return fmt.Errorf("installing the service: %w", err)
 	}
 	_, _ = fmt.Fprintf(in.out, "Installed the service %s: it runs %s at every login, and now.\n", u.Name, entry)

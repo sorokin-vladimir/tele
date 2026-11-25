@@ -1,5 +1,5 @@
 [tools]
-go = "1.26.11"
+go = "1.27.4"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
 golangci-lint = "2.15.0"
 "aqua:koalaman/shellcheck" = "0.11.0"

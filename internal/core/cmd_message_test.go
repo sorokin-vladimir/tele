@@ -293,6 +293,25 @@ func TestSendReaction_RestoresThePreviousReactionsOnFailure(t *testing.T) {
 	assert.Equal(t, 2, got[0].Count)
 }
 
+func TestSendReaction_OptimisticAndRollbackLeaveUnreadBadgeUntouched(t *testing.T) {
+	c := &stubClient{err: &telerr.Error{Kind: telerr.RateLimited}}
+	o, st := newCmdOwner(t, c)
+	st.SetChat(domain.Chat{ID: 1})
+	st.SetMessages(1, []domain.Message{{ID: 5, ChatID: 1, Date: time.Unix(1, 0)}})
+	// Track an unread reaction on message 5.
+	st.ApplyUnreadReaction(1, 5, true)
+	chat, _ := st.GetChat(1)
+	require.Equal(t, 1, chat.UnreadReactionsCount)
+
+	// SendReaction fails and triggers rollback.
+	_, err := o.SendReaction(context.Background(), 1, 5, "👍")
+	require.Error(t, err)
+
+	// The chat's unread reaction badge must still be 1.
+	chat, _ = st.GetChat(1)
+	assert.Equal(t, 1, chat.UnreadReactionsCount)
+}
+
 // The reply to messages.sendReaction states the set Telegram ended up with.
 // A request that succeeded but left a set without our pick is reported, never
 // silent (#248); a set with exactly our pick as ours is what was asked for.

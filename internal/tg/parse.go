@@ -358,15 +358,31 @@ func convertMessage(raw tg.MessageClass, chatID int64) (domain.Message, bool) {
 	return out, true
 }
 
+// reactionsUnread reports whether any recent reaction on the message is flagged
+// unread (a not-yet-viewed reaction on one of our messages). It returns nil when
+// the reactions set carries no recent reactions list (a min set or a chat where
+// recent reactions are not shown), so the read state cannot be determined.
+func reactionsUnread(mr tg.MessageReactions) *bool {
+	if mr.Min {
+		return nil
+	}
+	recent, ok := mr.GetRecentReactions()
+	if !ok {
+		return nil
+	}
+	for _, r := range recent {
+		if r.Unread {
+			return new(true)
+		}
+	}
+	return new(false)
+}
+
 // reactionsHaveUnread reports whether any recent reaction on the message is
 // flagged unread (a not-yet-viewed reaction on one of our messages).
 func reactionsHaveUnread(mr tg.MessageReactions) bool {
-	for _, r := range mr.RecentReactions {
-		if r.Unread {
-			return true
-		}
-	}
-	return false
+	u := reactionsUnread(mr)
+	return u != nil && *u
 }
 
 // newestUnreadReaction returns the emoji and timestamp of the most recent unread

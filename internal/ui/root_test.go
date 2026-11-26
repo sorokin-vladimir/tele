@@ -1479,7 +1479,7 @@ func TestRoot_ReactionUpdate_BumpsIndicatorOnOtherChat(t *testing.T) {
 		Kind:            store.EventReactionsUpdate,
 		ChatID:          2,
 		MsgID:           500,
-		ReactionsUnread: true,
+		ReactionsUnread: new(true),
 	})
 	root := newM.(ui.RootModel)
 
@@ -1532,7 +1532,7 @@ func TestRoot_ReactionUpdate_OnOpenChat_ReadsReactions(t *testing.T) {
 		Kind:            store.EventReactionsUpdate,
 		ChatID:          1,
 		MsgID:           500,
-		ReactionsUnread: true,
+		ReactionsUnread: new(true),
 	})
 	_ = newM.(ui.RootModel)
 	require.NotNil(t, cmd)
@@ -1960,7 +1960,7 @@ func TestRoot_ReactionWhileChatOpen_MarksItRead(t *testing.T) {
 
 	_, cmd := applyEvent(t, m, st, store.Event{
 		Kind: store.EventReactionsUpdate, ChatID: 1, MsgID: 10,
-		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: true,
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: new(true),
 	})
 
 	require.NotNil(t, cmd, "an arriving reaction on the open chat must be read")
@@ -1980,7 +1980,7 @@ func TestRoot_ReactionArrivingUnfocused_IsReadOnFocus(t *testing.T) {
 
 	nm, cmd := applyEvent(t, m, st, store.Event{
 		Kind: store.EventReactionsUpdate, ChatID: 1, MsgID: 10,
-		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: true,
+		Reactions: []domain.Reaction{{Emoji: "👍", Count: 1}}, ReactionsUnread: new(true),
 	})
 	m = nm.(ui.RootModel)
 	assert.Nil(t, cmd, "nobody is looking at the chat pane yet")

@@ -302,15 +302,88 @@ func TestApplyReactions_TracksUnreadOnce(t *testing.T) {
 	st.SetChat(domain.Chat{ID: 1})
 	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
 
-	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, true, "reactions update")
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(true), "reactions update")
 	require.True(t, ok)
 	assert.True(t, chg.UnreadReactionChanged)
 
 	// Same message again: the count is already tracked.
-	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 2}}, true, "reactions update")
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 2}}, new(true), "reactions update")
 	require.True(t, ok)
 	assert.False(t, chg.UnreadReactionChanged)
 	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+}
+
+func TestApplyReactions_ClearsUnreadWhenReadRemotely(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
+
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(true), "reactions update")
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	assert.True(t, chg.ReactionsUnread)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// An update with no recent reactions list (nil) does not clear the mark.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, nil, "reactions update")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	assert.False(t, chg.ReactionsUnread)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// Reactions read on another client: recent list present with no unread items (unread is false).
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(false), "reactions update")
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	assert.False(t, chg.ReactionsUnread)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+
+	// Idempotent: repeating the read reaction update does not decrement further.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(false), "reactions update")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+
+	// An untracked message receiving a read reaction update changes nothing.
+	chg, ok = s.ApplyReactions(1, 999, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(false), "reactions update")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 0, c.UnreadReactionsCount)
+}
+
+func TestApplyReactions_OptimisticAndRollbackLeaveUnreadUntouched(t *testing.T) {
+	s, st := newState(t)
+	st.SetChat(domain.Chat{ID: 1})
+	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
+
+	// Message has an unread reaction from someone else.
+	chg, ok := s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, new(true), "reactions update")
+	require.True(t, ok)
+	assert.True(t, chg.UnreadReactionChanged)
+	c, _ := st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// We add our own reaction optimistically (unread is nil): mark must not be touched.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{
+		{Emoji: "👍", Count: 1},
+		{Emoji: "🔥", Count: 1, IsChosen: true},
+	}, nil, "optimistic")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
+	assert.Equal(t, 1, c.UnreadReactionsCount)
+
+	// Rollback after a failure (unread is nil): mark must still not be touched.
+	chg, ok = s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1}}, nil, "rollback")
+	require.True(t, ok)
+	assert.False(t, chg.UnreadReactionChanged)
+	c, _ = st.GetChat(1)
 	assert.Equal(t, 1, c.UnreadReactionsCount)
 }
 
@@ -324,7 +397,7 @@ func TestReactionWrites_NameTheirSource(t *testing.T) {
 	s := state.New(st)
 	st.AppendMessage(domain.Message{ID: 5, ChatID: 1})
 
-	s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}}, false, "optimistic")
+	s.ApplyReactions(1, 5, []domain.Reaction{{Emoji: "👍", Count: 1, IsChosen: true}}, nil, "optimistic")
 	s.ApplyEdit(domain.Message{ID: 5, ChatID: 1, AppliedPosition: 10,
 		Reactions: []domain.Reaction{{Emoji: "👍", Count: 2}}})
 

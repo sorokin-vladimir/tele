@@ -468,7 +468,7 @@ func (o *testOwner) SendReaction(_ context.Context, chatID int64, msgID int, emo
 	}
 	next := append([]domain.Reaction{}, prev...)
 	next = append(next, domain.Reaction{Emoji: emoji, Count: 1, IsChosen: true})
-	o.state.ApplyReactions(chatID, msgID, next, false, "optimistic")
+	o.state.ApplyReactions(chatID, msgID, next, nil, "optimistic")
 	return true, nil
 }
 

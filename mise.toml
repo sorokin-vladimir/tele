@@ -7,6 +7,7 @@ lefthook = "2.2.3"
 "aqua:jdx/jactionlint" = "2.6.0"
 "aqua:betterleaks/betterleaks" = "1.10.1"
 "aqua:crate-ci/typos" = "1.52.2"
+"github:agent-sh/agnix" = "0.61.0"
 
 [tasks.dev]
 description = "Run tele (dev config: .config/tele/config.yml)"
@@ -71,6 +72,11 @@ run = "npx --yes --package renovate@44.262.2 -- renovate-config-validator --stri
 [tasks.typos]
 description = "Check spelling in code, comments and docs"
 run = "typos"
+
+[tasks.agents]
+description = "Lint the Claude Code plugin and its skill"
+# Tracked paths only: on `.` agnix also reads git-excluded local notes.
+run = "agnix --strict plugins .claude-plugin"
 
 [tasks.tidy]
 description = "Tidy go modules"

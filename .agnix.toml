@@ -1,0 +1,7 @@
+# Lints the Claude Code plugin shipped from this repository.
+tools = ["claude-code"]
+
+[rules]
+# No version on purpose: without one, Claude Code takes each commit as a new
+# version of the plugin, so users get updates without a manual bump.
+disabled_rules = ["CC-PL-004"]

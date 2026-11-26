@@ -1,6 +1,6 @@
 # tele
 
-> Перевод [README.md](README.md) на коммит `f8de3a6`. Если перевод расходится с английской версией, верна английская.
+> Перевод [README.md](README.md) на коммит `d855ee6`. Если перевод расходится с английской версией, верна английская.
 
 ```
   _            _
@@ -350,6 +350,16 @@ sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-mi
 ```
 
 Первая команда показывает, что `checksums.txt` сделан release workflow tele, вторая — что ваш файл с ним совпадает.
+
+У каждого из этих файлов есть ещё и аттестация происхождения сборки (build provenance), которую [GitHub CLI](https://cli.github.com/) проверяет без `checksums.txt`:
+
+```sh
+gh attestation verify <файл> --repo sorokin-vladimir/tele \
+  --signer-workflow sorokin-vladimir/tele/.github/workflows/release.yml
+```
+
+Она показывает, что файл собран release workflow tele, и из какого коммита.
+У релизов до 2.1.4 включительно аттестации нет: проверяйте их командами выше.
 
 ---
 

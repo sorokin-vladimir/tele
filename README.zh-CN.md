@@ -1,6 +1,6 @@
 # tele
 
-> 本文译自 [README.md](README.md)，对应提交 `f8de3a6`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
+> 本文译自 [README.md](README.md)，对应提交 `d855ee6`。译文与英文版不一致时，以英文版为准。本译文尚未经过母语者审校。如果发现翻译错误，欢迎[提交 issue](https://github.com/sorokin-vladimir/tele/issues)。
 
 ```
   _            _
@@ -318,6 +318,15 @@ sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-mi
 ```
 
 第一条命令证明 `checksums.txt` 来自 tele 的发布工作流，第二条证明你的文件与它一致。
+
+这些文件每一个还带有构建来源证明（build provenance），[GitHub CLI](https://cli.github.com/) 无需 `checksums.txt` 即可检查：
+
+```sh
+gh attestation verify <文件> --repo sorokin-vladimir/tele \
+  --signer-workflow sorokin-vladimir/tele/.github/workflows/release.yml
+```
+
+它证明该文件由 tele 的发布工作流构建，并给出构建所用的提交。2.1.4 及更早的版本没有这种证明：请用上面的命令检查它们。
 
 ---
 

@@ -138,10 +138,12 @@ jobs:
     needs: [checks, cross-build, bsd-build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # contents to create the release, id-token for cosign's keyless signing.
+    # contents to create the release, id-token for cosign's keyless signing and
+    # the provenance attestation, attestations to store that attestation.
     permissions:
       contents: write
       id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -193,6 +195,18 @@ jobs:
           AUR_KEY: ${{ secrets.AUR_KEY }}
           SCOOP_WINGET_TOKEN: ${{ secrets.SCOOP_WINGET_TOKEN }}
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+
+      # Build provenance for every file checksums.txt lists: the binaries,
+      # archives and packages a person checks, so `gh attestation verify` works
+      # on exactly the set the cosign check covers. Runs whenever goreleaser got
+      # as far as writing checksums.txt, even if a late publisher failed. No
+      # continue-on-error: a failure turns the job red, while the steps below
+      # still run on !cancelled().
+      - name: Attest build provenance
+        if: ${{ !cancelled() && hashFiles('dist/checksums.txt') != '' }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
 
       # Publish the Homebrew formula to both taps from dist/checksums.txt.
       # Independent of the winget/snap pipes; continue-on-error so the gate is

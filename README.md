@@ -340,6 +340,16 @@ sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-mi
 
 The first command shows that `checksums.txt` came from tele's release workflow, the second that your file matches it.
 
+Each of those files also carries a build provenance attestation, which the [GitHub CLI](https://cli.github.com/) checks without `checksums.txt`:
+
+```sh
+gh attestation verify <file> --repo sorokin-vladimir/tele \
+  --signer-workflow sorokin-vladimir/tele/.github/workflows/release.yml
+```
+
+It shows that the file was built by tele's release workflow, and from which commit.
+Releases up to 2.1.4 have no attestation: check them with the commands above.
+
 ---
 
 ## Getting started

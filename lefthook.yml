@@ -27,6 +27,9 @@ pre-commit:
     renovate:
       glob: ".github/renovate.json"
       run: mise run renovate-check
+    agents:
+      glob: "{plugins/**,.claude-plugin/**,.agnix.toml}"
+      run: mise run agents
     typos:
       run: typos --force-exclude {staged_files}
     secrets:

@@ -70,6 +70,9 @@ jobs:
       - name: typos
         run: mise run typos
 
+      - name: agents
+        run: mise run agents
+
   # Verify the cgo-free static build and tests on the other target OSes. Audio
   # output is platform-specific (oto on macOS/Windows, PulseAudio on Linux), so
   # building on real runners catches cross-OS breakage early.

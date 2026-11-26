@@ -46,8 +46,8 @@ description = "Run go vet"
 run = "go vet ./..."
 
 [tasks.check]
-description = "Full check: vet + lint (every OS) + test + vulnerabilities + shellcheck + actions + secrets + typos"
-run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test ./...", "govulncheck ./...", { task = "shellcheck" }, { task = "actions" }, { task = "secrets" }, { task = "typos" }]
+description = "Full check: vet + lint (every OS) + test + vulnerabilities + shellcheck + actions + secrets + typos + agents"
+run = ["go vet ./...", "golangci-lint run ./...", { task = "lint-os" }, "go test ./...", "govulncheck ./...", { task = "shellcheck" }, { task = "actions" }, { task = "secrets" }, { task = "typos" }, { task = "agents" }]
 
 [tasks.vuln]
 description = "Report known vulnerabilities in the code the build calls"

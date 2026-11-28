@@ -345,6 +345,14 @@ func (m *ChatModel) SelectedMessageID() int { return m.msgList.SelectedMessageID
 func (m *ChatModel) SelectedMessageText() (string, bool) {
 	return m.msgList.SelectedMessageText()
 }
+func (m *ChatModel) StartVisualRange() bool            { return m.msgList.StartVisualRange() }
+func (m *ChatModel) StartVisualMark() bool             { return m.msgList.StartVisualMark() }
+func (m *ChatModel) FixOrStartVisualRange()            { m.msgList.FixOrStartVisualRange() }
+func (m *ChatModel) FixRangeOrToggleMark()             { m.msgList.FixRangeOrToggleMark() }
+func (m *ChatModel) ClearVisual()                      { m.msgList.ClearVisual() }
+func (m *ChatModel) InVisual() bool                    { return m.msgList.InVisual() }
+func (m *ChatModel) VisualSelection() []domain.Message { return m.msgList.VisualSelection() }
+func (m *ChatModel) VisualHasGaps() bool               { return m.msgList.VisualHasGaps() }
 func (m *ChatModel) SelectedMessageOpenTargets() []components.OpenTarget {
 	return m.msgList.SelectedMessageOpenTargets()
 }
@@ -664,6 +672,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionGoTop:
 			m.msgList.ScrollToTop()
+			if m.msgList.InVisual() {
+				m.msgList.CursorToOldest()
+			}
 			if m.header.ChatID != 0 && m.msgList.Count() > 0 {
 				chatID := m.header.ChatID
 				offsetID := m.msgList.OldestID()
@@ -671,6 +682,9 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			}
 		case keys.ActionGoBottom:
 			m.msgList.ScrollToBottom()
+			if m.msgList.InVisual() {
+				return m, m.loadNewer()
+			}
 			if m.header.ChatID != 0 {
 				chatID := m.header.ChatID
 				return m, func() tea.Msg { return GoToLatestMsg{ChatID: chatID} }
@@ -680,6 +694,12 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			if n < 1 {
 				n = 1
 			}
+			if m.msgList.InVisual() {
+				if m.msgList.CursorDownByLines(n) {
+					return m, m.loadNewer()
+				}
+				return m, nil
+			}
 			m.msgList.ScrollDownBy(n)
 			if m.msgList.AtBottom() {
 				return m, m.loadNewer()
@@ -688,6 +708,14 @@ func (m *ChatModel) Update(msg tea.Msg) (layout.Pane, tea.Cmd) {
 			n := m.msgList.ViewHeight() * 2 / 3
 			if n < 1 {
 				n = 1
+			}
+			if m.msgList.InVisual() {
+				if m.msgList.CursorUpByLines(n) && m.header.ChatID != 0 && m.msgList.Count() > 0 {
+					chatID := m.header.ChatID
+					offsetID := m.msgList.OldestID()
+					return m, func() tea.Msg { return LoadMoreMsg{ChatID: chatID, OffsetID: offsetID} }
+				}
+				return m, nil
 			}
 			m.msgList.ScrollUpBy(n)
 			if m.msgList.AtTop() && m.header.ChatID != 0 && m.msgList.Count() > 0 {

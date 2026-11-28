@@ -269,3 +269,42 @@ func (ml *MessageList) clampToBounds(vs, lo int) (int, int) {
 	}
 	return vs, lo
 }
+
+// CursorUpByLines steps the cursor toward older messages until it has passed
+// at least n lines. Returns true when it ends on the oldest loaded message.
+func (ml *MessageList) CursorUpByLines(n int) bool {
+	for passed := 0; passed < n; {
+		from := ml.cursorIndex()
+		if ml.CursorUp() {
+			return true
+		}
+		to := ml.cursorIndex()
+		if to < 0 || to >= from {
+			return false
+		}
+		for i := to; i < from; i++ {
+			passed += ml.itemHeight(i)
+		}
+	}
+	return false
+}
+
+// CursorDownByLines steps the cursor toward newer messages until it has passed
+// at least n lines. Returns true when it was already on the newest loaded
+// message and could not move.
+func (ml *MessageList) CursorDownByLines(n int) bool {
+	for passed := 0; passed < n; {
+		from := ml.cursorIndex()
+		if ml.CursorDown() {
+			return true
+		}
+		to := ml.cursorIndex()
+		if from < 0 || to <= from {
+			return false
+		}
+		for i := from; i < to; i++ {
+			passed += ml.itemHeight(i)
+		}
+	}
+	return false
+}

@@ -17,6 +17,9 @@ import (
 // a global chord such as g L is completed by the matcher of the pane it was
 // typed in and would otherwise be handed to that pane, which ignores it (#297).
 func (m RootModel) globalAction(action keys.Action) (tea.Model, tea.Cmd, bool) {
+	if m.vimState.Mode == keys.ModeVisual && visualIgnores(action) {
+		return m, nil, true
+	}
 	switch action {
 	case keys.ActionFocusChatList:
 		next, cmd := m.focusPane(FocusChatList)
@@ -244,6 +247,12 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, mentionCmd, m.markReadCmd())
 	}
 
+	if m.vimState.Mode == keys.ModeVisual && m.isModifiedQuit(msg) {
+		m.matcher.Reset()
+		m.endVisual()
+		return m, nil
+	}
+
 	// Global bindings take priority, unless the focused context explicitly binds
 	// the key — a context-specific override (e.g. chatlist "confirm: l") must win
 	// over a conflicting global binding (issue #132).
@@ -325,6 +334,11 @@ func (m RootModel) handleMainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if next, cmd, ok := m.globalAction(action); ok {
 		return next, cmd
+	}
+	if m.chat != nil {
+		if next, cmd, handled := m.visualAction(action); handled {
+			return next, cmd
+		}
 	}
 	// Mode is a consequence of the resolved action.
 	switch action {

@@ -73,6 +73,12 @@ type DownloadFileRequest struct{}
 // copyable text. The root copies the currently selected message's text.
 type CopyMsgRequest struct{}
 
+// CopySelectionRequest is emitted when the user picks a copy from the menu of a
+// Visual mode selection.
+type CopySelectionRequest struct {
+	WithNames bool
+}
+
 type menuState int
 
 const (
@@ -109,6 +115,7 @@ type ContextMenu struct {
 	// outboxRef addresses a queued send instead of a message. A message menu
 	// leaves it empty; an entry has no ID to be addressed by (#193).
 	outboxRef string
+	selection bool
 }
 
 // NewContextMenu builds the chat message context menu. mediaKind is the kind of
@@ -152,6 +159,18 @@ func NewOutboxContextMenu(ref string, failed bool, km keys.KeyMap) *ContextMenu 
 		items = append(items, menuItem{label: "Retry send", action: keys.ActionConfirm})
 	}
 	items = append(items, menuItem{label: "Discard", action: keys.ActionDelete})
+	cm.setItems(items)
+	return cm
+}
+
+// NewSelectionContextMenu builds the menu of a Visual mode selection: the
+// actions that work on several messages at once.
+func NewSelectionContextMenu(withNames bool, km keys.KeyMap) *ContextMenu {
+	cm := &ContextMenu{selection: true, keyMap: km, list: NewListView(true)}
+	items := []menuItem{{label: "Copy", action: keys.ActionCopyMessage}}
+	if withNames {
+		items = append(items, menuItem{label: "Copy with names", action: keys.ActionCopyWithNames})
+	}
 	cm.setItems(items)
 	return cm
 }
@@ -316,6 +335,10 @@ func (cm *ContextMenu) execute() (*ContextMenu, tea.Cmd) {
 	action := cm.items[cm.list.Cursor()].action
 	if cm.outboxRef != "" {
 		return cm.executeOutbox(action)
+	}
+	if cm.selection {
+		withNames := action == keys.ActionCopyWithNames
+		return nil, func() tea.Msg { return CopySelectionRequest{WithNames: withNames} }
 	}
 	switch action {
 	case keys.ActionJumpToOriginal:

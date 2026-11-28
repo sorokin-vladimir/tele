@@ -123,6 +123,9 @@ func DefaultKeyMap() KeyMap {
 			"x":      ActionCancelUpload,
 			"s":      ActionDownloadFile,
 			"y":      ActionCopyMessage,
+			"Y":      ActionCopyWithNames,
+			"V":      ActionVisualSelect,
+			"m":      ActionVisualMark,
 			"P":      ActionShowProfile,
 		},
 		ContextComposer: {
@@ -150,6 +153,7 @@ func DefaultKeyMap() KeyMap {
 			"p":     ActionPlayVoice,
 			"s":     ActionDownloadFile,
 			"y":     ActionCopyMessage,
+			"Y":     ActionCopyWithNames,
 			"P":     ActionShowProfile,
 		},
 		ContextDeleteSubMenu: {

@@ -15,6 +15,11 @@ Older releases are at <https://github.com/sorokin-vladimir/tele/releases>.
 
 ### Added
 
+- Visual mode in a chat, to copy several messages: `V` selects a range from
+  the focused message and `m` marks messages one by one. `y` copies their
+  text, oldest first, and `Y` copies them with times and names the way
+  `tele show` prints them. `Space` opens a menu with the same copies, and
+  `Esc`, `Ctrl+C` or `Ctrl+Q` leaves (#361).
 - `cli.list_limit` sets how many rows `tele chats` and `tele topics` print as
   text when no `--limit` is given (20 by default; 0 prints them all). `--all`
   lifts it for one run. When the list is cut short, a note on stderr says so

@@ -55,6 +55,9 @@ func (ml *MessageList) bubbleBorderFg(msg domain.Message) color.Color {
 	if msg.IsOut {
 		borderFg = theme.T().BorderBubbleOut
 	}
+	if _, ok := ml.selectedWhileDrawing[msg.ID]; ok {
+		borderFg = theme.T().Indicator
+	}
 	if ml.highlightStep > 0 && msg.ID == ml.highlightedMsgID {
 		accent := theme.T().HighlightAccent
 		if ml.highlightKind == HighlightError {

@@ -563,6 +563,7 @@ func (m RootModel) SettleToastsForTest() {
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.updateInner(msg)
 	rm := next.(RootModel)
+	rm.syncVisual()
 	// Reconcile Kitty placements after every event: the visible set may have
 	// changed (scroll, chat switch, new message, image load, resize), and only
 	// on-screen images should hold a placement (issue: burst transmit corrupts
@@ -747,6 +748,8 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, copyToClipboardCmd(text)
 		}
 		return m, nil
+	case components.CopySelectionRequest:
+		return m.copySelection(msg.WithNames)
 	case components.OpenTargetChosenMsg:
 		m.openPicker = nil
 		return m.openTarget(msg.Target)
@@ -850,7 +853,7 @@ func (m RootModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return next, nil
 		}
 		if m.screen == ScreenLogin {
-			if m.isLoginQuit(msg) {
+			if m.isModifiedQuit(msg) {
 				return m, tea.Quit
 			}
 			if next, cmd, handled := m.handleBannedKey(msg); handled {

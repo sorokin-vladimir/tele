@@ -19,11 +19,11 @@ import (
 // and someone who is has still not reached Telegram.
 const connectFailedAction = "Could not connect to Telegram"
 
-// isLoginQuit reports whether a key pressed on the login screen quits. Only a
-// quit binding that carries ctrl or alt does: a bare key such as q is a
+// isModifiedQuit reports whether a key is a quit binding that carries ctrl or
+// alt. On the login screen only such a key quits: a bare key such as q is a
 // character someone may be typing into the phone or password field, and on this
-// screen it goes to the field (#283).
-func (m RootModel) isLoginQuit(msg tea.KeyPressMsg) bool {
+// screen it goes to the field (#283). In Visual mode such a key leaves the mode.
+func (m RootModel) isModifiedQuit(msg tea.KeyPressMsg) bool {
 	if !msg.Mod.Contains(tea.ModCtrl) && !msg.Mod.Contains(tea.ModAlt) {
 		return false
 	}

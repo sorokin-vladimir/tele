@@ -14,6 +14,7 @@ import (
 
 	"github.com/sorokin-vladimir/tele/internal/core/project"
 	"github.com/sorokin-vladimir/tele/internal/domain"
+	"github.com/sorokin-vladimir/tele/internal/transcript"
 )
 
 // newChatsCmd is `tele chats`: the chats of the account, a line each (#181).
@@ -215,16 +216,6 @@ func chatsText(rows []project.ChatRow, nameWidth int) string {
 	return columnsText(lines, nameWidth)
 }
 
-// cutName cuts a name or title wider than width columns short, so one long
-// one does not push everything after it to the right. The ellipsis follows
-// the last word cut rather than a space. A width of zero cuts nothing.
-func cutName(name string, width int) string {
-	if width <= 0 || ansi.StringWidth(name) <= width {
-		return name
-	}
-	return strings.TrimRight(ansi.Truncate(name, width-1, ""), " ") + "…"
-}
-
 // columnLine is one line of a listing: what it lists by id, username and
 // title, and its badges.
 type columnLine struct {
@@ -239,7 +230,7 @@ type columnLine struct {
 func columnsText(lines []columnLine, nameWidth int) string {
 	idW, userW, titleW := 0, 0, 0
 	for i, l := range lines {
-		lines[i].title = cutName(l.title, nameWidth)
+		lines[i].title = transcript.CutName(l.title, nameWidth)
 		idW = max(idW, len(l.id))
 		userW = max(userW, len(l.username))
 		titleW = max(titleW, ansi.StringWidth(lines[i].title))
